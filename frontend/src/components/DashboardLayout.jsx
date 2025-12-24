@@ -15,6 +15,7 @@ import {
     Clock,
     MapPin
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const SidebarItem = ({ icon, text, to }) => {
     const location = useLocation();
@@ -51,6 +52,7 @@ const SidebarItem = ({ icon, text, to }) => {
 };
 
 const DashboardLayout = ({ children, title = "Dashboard" }) => {
+    const { logout } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Initialize theme from localStorage or default to 'light'
@@ -117,7 +119,9 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-                    <button className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors w-full px-4 py-2 text-sm font-medium">
+                    <button 
+                        onClick={logout}
+                        className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors w-full px-4 py-2 text-sm font-medium">
                         <LogOut size={18} />
                         Logout
                     </button>
