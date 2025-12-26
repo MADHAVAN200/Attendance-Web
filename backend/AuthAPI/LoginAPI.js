@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import * as DB from "../Database.js";
+import * as DB from "../database.js";
 import EventBus from "../utils/EventBus.js";
 import { getEventSource } from "../utils/clientInfo.js";
 import catchAsync from "../utils/catchAsync.js";

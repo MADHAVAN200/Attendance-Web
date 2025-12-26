@@ -22,7 +22,9 @@ const PORT = process.env.PORT || 5001;
 // Allowed origins
 const allowedOrigins = [
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  'https://localhost:5173',
+  'https://127.0.0.1:5173'
 ];
 
 app.use(cookieParser());
@@ -30,7 +32,14 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.includes(origin) ||
+      origin.startsWith('http://192.') || origin.startsWith('https://192.') ||
+      origin.startsWith('http://10.') || origin.startsWith('https://10.') ||
+      origin.startsWith('http://172.') || origin.startsWith('https://172.');
+
+    if (isAllowed) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -48,13 +57,13 @@ import ActivityLogService from './services/ActivityLogService.js';
 
 // ... (previous imports)
 
-app.use('/api/auth', AuthRoutes);
-app.use('/api/attendance', AttendanceRoutes);
-app.use('/api/admin', AdminRoutes);
-app.use('/api/locations', LocationRoutes);
-app.use('/api/holiday', HolidayRoutes);
-app.use('/api/policies', PolicyRoutes);
-app.use('/api/notifications', NotificationRoutes);
+app.use('/auth', AuthRoutes);
+app.use('/attendance', AttendanceRoutes);
+app.use('/admin', AdminRoutes);
+app.use('/locations', LocationRoutes);
+app.use('/holiday', HolidayRoutes);
+app.use('/policies', PolicyRoutes);
+app.use('/notifications', NotificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running 🚀');

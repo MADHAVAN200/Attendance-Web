@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
 // import emailService from '../ForgotpasswordVerification/EmailService.js'
-import * as db from '../Database.js';
+import * as db from '../database.js';
 
 // MOCKING MISSING SERVICE
 const emailService = {

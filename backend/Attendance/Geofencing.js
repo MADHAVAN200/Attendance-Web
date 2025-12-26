@@ -1,5 +1,5 @@
 
-import { knexDB } from "../Database.js";
+import { knexDB } from "../database.js";
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {

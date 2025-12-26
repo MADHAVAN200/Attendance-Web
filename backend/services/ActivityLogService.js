@@ -1,5 +1,5 @@
 import EventBus from '../utils/EventBus.js';
-import { knexDB } from '../Database.js';
+import { knexDB } from '../database.js';
 
 class ActivityLogService {
     constructor() {

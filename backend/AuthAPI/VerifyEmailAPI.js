@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 // import { sendSignupVerificationEmail, pendingSignups } from '../SignupEmailVerification/EmailUrlService.js';
 import '../config.js';
-import { insertUser, checkUserExists } from '../Database.js';
+import { insertUser, checkUserExists } from '../database.js';
 
 // MOCKING MISSING SERVICE
 const pendingSignups = new Map();

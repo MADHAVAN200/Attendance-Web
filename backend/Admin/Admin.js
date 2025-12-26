@@ -1,5 +1,5 @@
 import express from "express";
-import { knexDB } from "../Database.js";
+import { knexDB } from "../database.js";
 import { authenticateJWT } from "../AuthAPI/LoginAPI.js";
 import bcrypt from 'bcrypt';
 import AppError from "../utils/AppError.js";

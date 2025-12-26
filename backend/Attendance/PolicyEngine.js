@@ -1,5 +1,5 @@
 
-import { knexDB } from "../Database.js";
+import { knexDB } from "../database.js";
 
 // --- TEMPLATES ---
 // Helpers to generate standard policy JSONs

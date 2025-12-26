@@ -1,5 +1,5 @@
 import express from "express";
-import { knexDB } from "../Database.js";
+import { knexDB } from "../database.js";
 import { authenticateJWT } from "../AuthAPI/LoginAPI.js";
 import { fetchTimeStamp, coordsToAddress } from "../Google_API/Maps.js";
 import multer from "multer";
