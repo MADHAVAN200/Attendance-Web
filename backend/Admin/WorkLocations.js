@@ -19,7 +19,7 @@ router.get('/', authenticateJWT, catchAsync(async (req, res) => {
     // try removed
     const org_id = req.user.org_id;
     const locations = await knexDB('work_locations')
-        .where({ org_id, is_active: 1 });
+        .where({ org_id });
     res.json({ ok: true, locations });
 }));
 
