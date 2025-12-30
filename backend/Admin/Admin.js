@@ -167,6 +167,52 @@ router.get("/shifts", authenticateJWT, catchAsync(async (req, res) => {
 }));
 
 
+// CREATE new department
+router.post("/departments", authenticateJWT, catchAsync(async (req, res) => {
+  if (req.user.user_type !== "admin") {
+    throw new AppError("Only admin can create departments", 403);
+  }
+  const { dept_name } = req.body;
+  if (!dept_name) throw new AppError("Department name is required", 400);
+
+  // Check duplicate
+  const existing = await knexDB("departments")
+    .where({ dept_name, org_id: req.user.org_id })
+    .first();
+
+  if (existing) throw new AppError("Department already exists", 400);
+
+  const [newId] = await knexDB("departments").insert({
+    dept_name,
+    org_id: req.user.org_id
+  });
+
+  res.status(201).json({ success: true, message: "Department created", dept_id: newId });
+}));
+
+// CREATE new designation
+router.post("/designations", authenticateJWT, catchAsync(async (req, res) => {
+  if (req.user.user_type !== "admin") {
+    throw new AppError("Only admin can create designations", 403);
+  }
+  const { desg_name } = req.body;
+  if (!desg_name) throw new AppError("Designation name is required", 400);
+
+  const existing = await knexDB("designations")
+    .where({ desg_name, org_id: req.user.org_id })
+    .first();
+
+  if (existing) throw new AppError("Designation already exists", 400);
+
+  const [newId] = await knexDB("designations").insert({
+    desg_name,
+    org_id: req.user.org_id
+  });
+
+  res.status(201).json({ success: true, message: "Designation created", desg_id: newId });
+}));
+
+
 // CREATE new user
 router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
   if (req.user.user_type !== "admin") {
