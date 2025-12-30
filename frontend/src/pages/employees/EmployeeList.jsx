@@ -33,7 +33,7 @@ const EmployeeList = () => {
     const fetchEmployees = async () => {
         try {
             setLoading(true);
-            const data = await adminService.getAllUsers(false); // includeWorkLocation=false
+            const data = await adminService.getAllUsers(true); // includeWorkLocation=true
             if (data.success) {
                 // Transform API data to Component state
                 const formatted = data.users.map(u => ({
@@ -45,6 +45,7 @@ const EmployeeList = () => {
                     status: 'Active', // Defaulting since backend doesn't provide status yet
                     phone: u.phone_no || '-',
                     shift: u.shift_name || '-',
+                    workLocations: u.work_locations || [],
                     joinDate: '-' // Not in API
                 }));
                 setEmployees(formatted);
@@ -138,17 +139,18 @@ const EmployeeList = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                                    <th className="px-6 py-4">Employee</th>
-                                    <th className="px-6 py-4">Role & Dept</th>
-                                    <th className="px-6 py-4">Phone</th>
-                                    <th className="px-6 py-4">Shift</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
+                                    <th className="px-6 py-4 w-[25%]">Employee</th>
+                                    <th className="px-6 py-4 w-[15%]">Role & Dept</th>
+                                    <th className="px-6 py-4 w-[15%]">Phone</th>
+                                    <th className="px-6 py-4 w-[10%]">Shift</th>
+                                    <th className="px-6 py-4 w-[25%]">Allowed Geofences</th>
+                                    <th className="px-6 py-4 text-right w-[10%]">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                                        <td colSpan="6" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                                             Loading...
                                         </td>
                                     </tr>
@@ -164,9 +166,9 @@ const EmployeeList = () => {
                                                     <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
                                                         {employee.name.charAt(0)}
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-medium text-slate-900 dark:text-white group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">{employee.name}</p>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400">{employee.email}</p>
+                                                    <div className="max-w-[150px] truncate">
+                                                        <p className="text-sm font-medium text-slate-900 dark:text-white group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors truncate" title={employee.name}>{employee.name}</p>
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={employee.email}>{employee.email}</p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -181,6 +183,19 @@ const EmployeeList = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm text-slate-600 dark:text-slate-400">{employee.shift}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {employee.workLocations && employee.workLocations.filter(loc => loc.is_active).length > 0 ? (
+                                                        employee.workLocations.filter(loc => loc.is_active).map((loc, i) => (
+                                                            <span key={i} className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg whitespace-nowrap">
+                                                                {loc.loc_name}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 italic">None</span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
