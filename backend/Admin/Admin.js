@@ -63,7 +63,8 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
         'wl.location_name as loc_name',
         'wl.latitude',
         'wl.longitude',
-        'wl.radius'
+        'wl.radius',
+        'wl.is_active'
       );
 
     for (const row of workLocationsData) {
@@ -73,7 +74,8 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
         loc_name: row.loc_name,
         latitude: row.latitude,
         longitude: row.longitude,
-        radius: row.radius
+        radius: row.radius,
+        is_active: row.is_active
       });
     }
   }
