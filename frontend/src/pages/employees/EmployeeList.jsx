@@ -70,6 +70,9 @@ const EmployeeList = () => {
         }
     };
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
     // Filter Logic
     const filteredEmployees = employees.filter(employee => {
         const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -77,6 +80,17 @@ const EmployeeList = () => {
         const matchesStatus = statusFilter === 'All' || employee.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter]);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -232,18 +246,65 @@ const EmployeeList = () => {
                         </table>
                     </div>
 
-                    {/* Pagination (Mock) */}
-                    <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                        <span className="text-sm text-slate-500 dark:text-slate-400">Showing {filteredEmployees.length} results</span>
-                        <div className="flex items-center gap-2">
-                            <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 transition-colors" disabled>
-                                <ChevronLeft size={18} />
-                            </button>
-                            <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 transition-colors">
-                                <ChevronRight size={18} />
-                            </button>
+                    {/* Pagination */}
+                    {filteredEmployees.length > 0 && (
+                        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                                Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredEmployees.length)} of {filteredEmployees.length} results
+                            </span>
+                            
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                
+                                <div className="flex items-center gap-1">
+                                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                        // Simple logic to show first 5 pages or sliding window could be added
+                                        // For now, let's keep it simple: Show pages around current
+                                        let pageNum = i + 1;
+                                        if (totalPages > 5) {
+                                            if (currentPage > 3) pageNum = currentPage - 2 + i;
+                                            if (pageNum > totalPages) pageNum = pageNum - (pageNum - totalPages); 
+                                            // Ensure we don't go out of bounds if at end (simplified logic)
+                                            // A better full pagination logic might be needed if pages > 100
+                                            // For tabination like 10 users, standard pages are fine.
+                                        }
+                                        
+                                        // Simplified: Just show all pages if < 7, else simple range
+                                        // Let's stick to simple Prev/Next + Current/Total text if complex, 
+                                        // or just render page numbers if totalPages is small.
+                                        // Given user request "tabination", let's do: [1] [2] ... 
+                                        
+                                        return (
+                                           <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors
+                                                    ${currentPage === pageNum 
+                                                        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' 
+                                                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <button     
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="p-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
             </div>

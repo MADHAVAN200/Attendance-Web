@@ -5,7 +5,6 @@ import { Server as SocketIO } from 'socket.io';
 import express from 'express';
 import cors from 'cors';
 import AuthRoutes from './AuthAPI/LoginAPI.js';
-import VerifyEmailRoutes from './AuthAPI/VerifyEmailAPI.js';
 import AppError from './utils/AppError.js';
 import errorHandler from './middleware/errorHandler.js';
 import AttendanceRoutes from './Attendance/Attendance.js';
@@ -13,8 +12,11 @@ import AdminRoutes from './Admin/Admin.js';
 import LocationRoutes from './Admin/WorkLocations.js';
 import HolidayRoutes from './Admin/Holidays.js';
 import PolicyRoutes from './Admin/Policies.js';
+import EmployeeRoutes from './Employee/EmployeeRoutes.js';
 import './config.js';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { generalLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -49,6 +51,9 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(helmet()); // Secure HTTP headers
+app.use(generalLimiter); // Global Rate Limiter
+
 app.use(express.json());
 
 // Routes
@@ -56,15 +61,15 @@ import NotificationRoutes from './Notification/NotificationRoutes.js';
 import NotificationService from './services/NotificationService.js';
 import ActivityLogService from './services/ActivityLogService.js';
 
-// ... (previous imports)
 
 app.use('/auth', AuthRoutes);
 app.use('/attendance', AttendanceRoutes);
 app.use('/admin', AdminRoutes);
-app.use('/locations', LocationRoutes);
+app.use('/locations', LocationRoutes); // Admin locations
 app.use('/holiday', HolidayRoutes);
 app.use('/policies', PolicyRoutes);
 app.use('/notifications', NotificationRoutes);
+app.use('/employee', EmployeeRoutes); // New Employee Module
 
 app.get('/', (req, res) => {
   res.send('Backend is running 🚀');
@@ -92,7 +97,7 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend server listening at http://127.0.0.1:${PORT}`);
+  console.log(`Backend server listening at http://0.0.0.0:${PORT}`);
 });
 
 // Handle 404 for undefined routes

@@ -1,3 +1,4 @@
+import axios from 'axios';
 import '../config.js';
 
 const API_KEY = process.env.MAP_API_KEY;
@@ -10,8 +11,8 @@ export async function fetchTimeStamp(lat, lng, time) {
 
     const url = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${API_KEY}`;
 
-    const response = await fetch(url);
-    const data = await response.json();
+    const response = await axios.get(url);
+    const data = response.data;
 
     if (data.status !== "OK") {
       throw new Error(`API Error: ${data.status}`);
@@ -43,19 +44,17 @@ export async function coordsToAddress(lat, lng) {
       throw new Error("Valid lat and lng required");
     }
 
-    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-    url.searchParams.append("latlng", `${lat},${lng}`);
-    url.searchParams.append("key", API_KEY);
+    const url = "https://maps.googleapis.com/maps/api/geocode/json";
 
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(5000), // 5 sec timeout
+    const response = await axios.get(url, {
+      params: {
+        latlng: `${lat},${lng}`,
+        key: API_KEY
+      },
+      timeout: 5000 // 5 sec timeout
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = response.data;
 
     if (data.status !== "OK" || !data.results.length) {
       throw new Error(`Geocoding failed: ${data.status}`);
