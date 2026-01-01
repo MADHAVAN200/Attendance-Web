@@ -60,7 +60,7 @@ const PolicyBuilder = () => {
         start: '09:00',
         end: '18:00',
         grace: 0,
-        otThreshold: "09:00"
+        otThreshold: 9.0
     });
 
     useEffect(() => {
@@ -71,7 +71,7 @@ const PolicyBuilder = () => {
                     start: editingShift.start,
                     end: editingShift.end,
                     grace: editingShift.grace,
-                    otThreshold: floatToTime(editingShift.otThreshold || 8)
+                    otThreshold: editingShift.otThreshold || 8.0
                 });
                 setIsOtEnabled(!!editingShift.overtime);
             } else {
@@ -80,7 +80,7 @@ const PolicyBuilder = () => {
                     start: '09:00',
                     end: '18:00',
                     grace: 0,
-                    otThreshold: "09:00"
+                    otThreshold: 9.0
                 });
                 setIsOtEnabled(false);
             }
@@ -92,9 +92,11 @@ const PolicyBuilder = () => {
         if (!isShiftModalOpen) return;
 
         // Prevent overwriting DB value on initial Edit load
+        // Prevent overwriting DB value on initial Edit load
+        // Compare first 5 chars (HH:mm) to handle potential HH:mm:ss vs HH:mm differences
         if (editingShift &&
-            shiftForm.start === editingShift.start &&
-            shiftForm.end === editingShift.end) {
+            shiftForm.start.substring(0, 5) === editingShift.start.substring(0, 5) &&
+            shiftForm.end.substring(0, 5) === editingShift.end.substring(0, 5)) {
             return;
         }
 
@@ -107,15 +109,16 @@ const PolicyBuilder = () => {
         let diffM = (endH * 60 + endM) - (startH * 60 + startM);
         if (diffM < 0) diffM += 24 * 60;
 
-        // Calculate HH:MM string for duration
-        const durationH = Math.floor(diffM / 60);
-        const durationMin = diffM % 60;
-        const durationStr = `${durationH.toString().padStart(2, '0')}:${durationMin.toString().padStart(2, '0')}`;
+        // Calculate Float hours for duration (e.g., 8.5)
+        const durationH = diffM / 60;
+
+        // Use a fixed precision if needed, e.g. 1 decimal place
+        const durationFloat = parseFloat(durationH.toFixed(2));
 
         setShiftForm(prev => {
-            // Avoid infinite loop if value is already same
-            if (prev.otThreshold === durationStr) return prev;
-            return { ...prev, otThreshold: durationStr };
+            // Avoid infinite loop if value is already same (compare loosely or with epsilon if needed)
+            if (prev.otThreshold === durationFloat) return prev;
+            return { ...prev, otThreshold: durationFloat };
         });
 
     }, [shiftForm.start, shiftForm.end, isShiftModalOpen]);
@@ -141,7 +144,7 @@ const PolicyBuilder = () => {
                     end: s.end_time,
                     grace: s.grace_period_mins,
                     overtime: !!s.is_overtime_enabled,
-                    otThreshold: s.overtime_threshold_hours,
+                    otThreshold: parseFloat(s.overtime_threshold_hours),
                     color: 'blue' // Default
                 }));
                 setShifts(mapped);
@@ -209,7 +212,7 @@ const PolicyBuilder = () => {
             end_time: shiftForm.end,
             grace_period_mins: parseInt(shiftForm.grace) || 0,
             is_overtime_enabled: isOtEnabled,
-            overtime_threshold_hours: timeToFloat(shiftForm.otThreshold),
+            overtime_threshold_hours: parseFloat(shiftForm.otThreshold) || 0,
         };
 
         try {
@@ -691,11 +694,12 @@ const PolicyBuilder = () => {
                                             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Minimum Hours for OT</label>
                                             <div className="relative">
                                                 <input
-                                                    type="time"
+                                                    type="number"
+                                                    step="0.1"
                                                     value={shiftForm.otThreshold}
                                                     onChange={(e) => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
                                                     disabled={!isOtEnabled}
-                                                    className={`w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200 [&::-webkit-calendar-picker-indicator]:hidden ${!isOtEnabled ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`}
+                                                    className={`w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${!isOtEnabled ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`}
                                                 />
                                             </div>
                                         </div>
