@@ -13,6 +13,7 @@ import LocationRoutes from './Admin/WorkLocations.js';
 import HolidayRoutes from './Admin/Holidays.js';
 import PolicyRoutes from './Admin/Policies.js';
 import EmployeeRoutes from './Employee/EmployeeRoutes.js';
+import FeedbackRoutes from './Feedback/FeedbackRoutes.js';
 import './config.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -70,6 +71,7 @@ app.use('/holiday', HolidayRoutes);
 app.use('/policies', PolicyRoutes);
 app.use('/notifications', NotificationRoutes);
 app.use('/employee', EmployeeRoutes); // New Employee Module
+app.use('/feedback', FeedbackRoutes); // Feedback & Bug Reports
 
 app.get('/', (req, res) => {
   res.send('Backend is running 🚀');
