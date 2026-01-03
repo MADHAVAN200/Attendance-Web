@@ -17,8 +17,8 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         return;
       }
       // Check user roles 
-      if (allowedRoles.length > 0 && !allowedRoles.includes(user.user_type)) {
-        toast.error("You do not have permission to access this page.");
+      if (allowedRoles.length > 0 && !allowedRoles.includes(user.type)) {
+        toast.error("You do not have permission to access this page. nigga");
         setShowRedirect(true);
       }
     }

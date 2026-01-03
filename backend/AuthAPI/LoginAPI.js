@@ -21,11 +21,9 @@ export async function authenticateJWT(req, res, next) {
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
     }
-
     if (!token) {
       return res.status(401).json({ message: "Unauthorized: No token provided" });
     }
-
     jwt.verify(token, process.env.JWT_SECRET, (err, decodedUser) => {
       if (err) {
         // Explicitly return 403 for expired/invalid, frontend uses this to trigger refresh
@@ -60,8 +58,6 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
       'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
     )
     .where('users.email', user_input)
-
-
     .orWhere('users.phone_no', user_input)
     .first();
 
@@ -209,8 +205,7 @@ router.get("/me", authenticateJWT, (req, res) => {
 
 
 // Route: POST /logout - Clear cookie
-router.post("/logout", async (req, res) => { // Removed authenticateJWT to allow logout even if expired
-
+router.post("/logout", async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (refreshToken) {
     await TokenService.revokeRefreshToken(refreshToken);
