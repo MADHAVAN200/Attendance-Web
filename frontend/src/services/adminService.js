@@ -168,5 +168,18 @@ export const adminService = {
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to download report");
         }
+    },
+
+    async getDashboardStats(range = 'weekly', month = null, year = null) {
+        try {
+            let url = `${API_BASE_URL}/dashboard-stats?range=${range}`;
+            if (month && year) {
+                url += `&month=${month}&year=${year}`;
+            }
+            const res = await api.get(url);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch dashboard stats");
+        }
     }
 };

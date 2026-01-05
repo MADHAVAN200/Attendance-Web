@@ -11,33 +11,102 @@ import {
     Calendar,
     FileText,
     UserPlus,
-    Briefcase
+    Briefcase,
+    RefreshCw
 } from 'lucide-react';
 import {
     LineChart,
     Line,
+    AreaChart,
+    Area,
+    BarChart,
+    Bar,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
+    Legend,
     ResponsiveContainer
 } from 'recharts';
+import { adminService } from '../../services/adminService';
+import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const weeklyData = [
-        { name: 'Mon', present: 52, absent: 3, late: 5 },
-        { name: 'Tue', present: 55, absent: 1, late: 4 },
-        { name: 'Wed', present: 50, absent: 5, late: 5 },
-        { name: 'Thu', present: 54, absent: 2, late: 4 },
-        { name: 'Fri', present: 56, absent: 1, late: 3 },
-    ];
+    const [stats, setStats] = React.useState({
+        presentToday: 0,
+        totalEmployees: 0,
+        absentToday: 0,
+        lateCheckins: 0
+    });
+    const [trends, setTrends] = React.useState({
+        present: '0%',
+        absent: '0%',
+        late: '0%'
+    });
+    const [chartData, setChartData] = React.useState([]);
+    const [activities, setActivities] = React.useState([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [activeRange, setActiveRange] = React.useState('weekly');
+    const [viewMode, setViewMode] = React.useState('range'); // 'range' or 'calendar'
+    const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth() + 1);
+    const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
 
-    const activities = [
-        { id: 1, user: 'Sarah Wilson', action: 'Clocked In', time: '08:45 AM', status: 'present', role: 'UX Designer' },
-        { id: 2, user: 'Mike Johnson', action: 'Late Check-in', time: '09:15 AM', status: 'late', role: 'Developer' },
-        { id: 3, user: 'Anna Davis', action: 'Sick Leave', time: '08:30 AM', status: 'absent', role: 'HR Manager' },
-    ];
+    // Cache for dashboard data
+    const dataCache = React.useRef({});
+
+    React.useEffect(() => {
+        if (viewMode === 'range') {
+            fetchDashboardData(activeRange);
+        } else {
+            fetchDashboardData('custom', selectedMonth, selectedYear);
+        }
+    }, [activeRange, viewMode, selectedMonth, selectedYear]);
+
+    const fetchDashboardData = async (range, month = null, year = null, forceRefresh = false) => {
+        const cacheKey = `${range}_${month || 'now'}_${year || 'now'}`;
+
+        if (!forceRefresh && dataCache.current[cacheKey]) {
+            const cachedData = dataCache.current[cacheKey];
+            setStats(cachedData.stats);
+            setTrends(cachedData.trends);
+            setChartData(cachedData.chartData);
+            setActivities(cachedData.activities);
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const res = await adminService.getDashboardStats(range, month, year);
+            if (res.success) {
+                const dataToCache = {
+                    stats: res.stats,
+                    trends: res.trends,
+                    chartData: res.chartData,
+                    activities: res.activities
+                };
+                setStats(dataToCache.stats);
+                setTrends(dataToCache.trends);
+                setChartData(dataToCache.chartData);
+                setActivities(dataToCache.activities);
+                dataCache.current[cacheKey] = dataToCache;
+            }
+        } catch (error) {
+            console.error("Dashboard error:", error);
+            toast.error("Failed to load dashboard statistics");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRefresh = () => {
+        if (viewMode === 'range') {
+            fetchDashboardData(activeRange, null, null, true);
+        } else {
+            fetchDashboardData('custom', selectedMonth, selectedYear, true);
+        }
+    };
 
     const alerts = [
         { id: 1, type: 'warning', message: 'High absence rate in Sales Dept.' },
@@ -51,32 +120,41 @@ const AdminDashboard = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                     <StatCard
                         title="Present Today"
-                        value="56"
-                        total="/ 60"
+                        value={stats.presentToday}
+                        total={`/ ${stats.totalEmployees}`}
                         icon={<CheckCircle className="text-emerald-500" size={24} />}
-                        trend="+2.5%"
-                        trendUp
+                        trend={trends.present}
+                        trendUp={trends.present?.startsWith('+')}
+                        loading={isLoading}
+                        period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
                     />
                     <StatCard
                         title="Absent"
-                        value="3"
+                        value={stats.absentToday}
                         total="Employees"
                         icon={<XCircle className="text-red-500" size={24} />}
-                        trend="-1.2%"
+                        trend={trends.absent}
+                        trendUp={trends.absent?.startsWith('-')}
+                        loading={isLoading}
+                        period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
                     />
                     <StatCard
                         title="Late Check-ins"
-                        value="5"
+                        value={stats.lateCheckins}
                         total="Employees"
                         icon={<Clock className="text-amber-500" size={24} />}
-                        trend="+4%"
+                        trend={trends.late}
+                        trendUp={trends.late?.startsWith('-')}
+                        loading={isLoading}
+                        period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
                     />
                     <StatCard
                         title="On Leave"
                         value="4"
                         total="Planned"
                         icon={<Calendar className="text-indigo-500" size={24} />}
-                        period="This week"
+                        period="Monthly"
+                        loading={isLoading}
                     />
                 </div>
 
@@ -93,39 +171,171 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Content Grid */}
+                {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Main Chart Section */}
-                    <div className="lg:col-span-2 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                        <div className="flex items-center justify-between mb-6">
-                            <div>
-                                <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Attendance Trends</h3>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">Weekly insight</p>
+                    {/* Charts Column */}
+                    <div className="lg:col-span-2 space-y-8">
+                        {/* 1. Overall Attendance Trends */}
+                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
+                            <div className="flex items-center justify-between mb-6 gap-2">
+                                <div className="flex-shrink-0">
+                                    <h3 className="font-semibold text-base sm:text-lg text-slate-800 dark:text-white truncate max-w-[150px] sm:max-w-none">Overall Trends</h3>
+                                </div>
+
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                                    {/* Main Mode Toggle (Pill Style) */}
+                                    <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50 flex-shrink-0">
+                                        <button
+                                            onClick={() => setViewMode('range')}
+                                            className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all duration-200 ${viewMode === 'range'
+                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                        >
+                                            Quick
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('calendar')}
+                                            className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all duration-200 ${viewMode === 'calendar'
+                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                                        >
+                                            Calendar
+                                        </button>
+                                    </div>
+
+                                    {/* Sub-selectors and Sync - Compact Wrapper */}
+                                    <div className="flex items-center gap-1.5 h-8 px-1.5 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-slate-700/50 flex-shrink-0">
+                                        {viewMode === 'range' ? (
+                                            <div className="flex items-center">
+                                                {['daily', 'weekly', 'monthly'].map((r) => (
+                                                    <button
+                                                        key={r}
+                                                        onClick={() => setActiveRange(r)}
+                                                        className={`px-2 py-0.5 rounded text-[10px] sm:text-xs font-bold transition-all ${activeRange === r
+                                                            ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                                                            : 'text-slate-400 dark:text-slate-500'
+                                                            }`}
+                                                    >
+                                                        {r.charAt(0).toUpperCase()}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1">
+                                                <select
+                                                    value={selectedMonth}
+                                                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                                    className="bg-transparent text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                                                >
+                                                    {Array.from({ length: 12 }, (_, i) => (
+                                                        <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="w-px h-3 bg-slate-300 dark:bg-slate-600" />
+                                                <select
+                                                    value={selectedYear}
+                                                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                                    className="bg-transparent text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                                                >
+                                                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                                                        <option key={y} value={y}>{y}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        <div className="w-px h-3 bg-slate-200 dark:bg-slate-700" />
+
+                                        <button
+                                            onClick={handleRefresh}
+                                            disabled={isLoading}
+                                            className={`p-1 rounded-md text-slate-400 hover:text-indigo-600 transition-all ${isLoading ? 'opacity-50' : ''}`}
+                                            title="Sync Data"
+                                        >
+                                            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <button className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-3 py-1.5 rounded-md transition-colors">View Details</button>
+                            <div className="h-72">
+                                {isLoading ? (
+                                    <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg flex items-center justify-center">
+                                        <div className="h-40 w-full mx-8 flex items-end gap-4">
+                                            {[1, 2, 3, 4, 5].map(i => (
+                                                <div key={i} className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-t" style={{ height: `${20 * i}%` }}></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={chartData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{ fill: 'transparent' }} />
+                                            <Bar dataKey="present" fill="#10b981" radius={[4, 4, 0, 0]} name="Present" />
+                                            <Bar dataKey="absent" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Absent" />
+                                            <Bar dataKey="late" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Late" />
+                                            <Legend verticalAlign="top" height={36} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </div>
                         </div>
-                        <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={weeklyData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
-                                    <XAxis
-                                        dataKey="name"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12 }}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12 }}
-                                    />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: '#fff' }}
-                                    />
-                                    <Line type="monotone" dataKey="present" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} name="Present" />
-                                    <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} name="Late" />
-                                </LineChart>
-                            </ResponsiveContainer>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* 2. Present vs Absent (Area Chart) */}
+                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
+                                <h3 className="font-semibold text-base text-slate-800 dark:text-white mb-4">Present vs Absent</h3>
+                                <div className="h-60">
+                                    {isLoading ? (
+                                        <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg" />
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={chartData}>
+                                                <defs>
+                                                    <linearGradient id="colorPresent2" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                    </linearGradient>
+                                                    <linearGradient id="colorAbsent2" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
+                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: 12 }} />
+                                                <Area type="monotone" dataKey="present" stroke="#6366f1" fillOpacity={1} fill="url(#colorPresent2)" name="Present" />
+                                                <Area type="monotone" dataKey="absent" stroke="#f43f5e" fillOpacity={1} fill="url(#colorAbsent2)" name="Absent" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 3. Present vs Late (Bar Chart) */}
+                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
+                                <h3 className="font-semibold text-base text-slate-800 dark:text-white mb-4">Present vs Late</h3>
+                                <div className="h-60">
+                                    {isLoading ? (
+                                        <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg" />
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={chartData}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
+                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: 12 }} />
+                                                <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Present" />
+                                                <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Late" />
+                                                <Legend verticalAlign="top" height={36} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -141,25 +351,37 @@ const AdminDashboard = () => {
                                 </span>
                             </div>
                             <div className="space-y-4">
-                                {activities.map((activity) => (
-                                    <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0">
-                                        <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                                            {activity.user.charAt(0)}
+                                {isLoading ? (
+                                    [1, 2, 3, 4, 5].map(i => (
+                                        <div key={i} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0 animate-pulse">
+                                            <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0"></div>
+                                            <div className="flex-1 space-y-2">
+                                                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                                                <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded w-1/2"></div>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{activity.user}</p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">{activity.role} • {activity.action}</p>
+                                    ))
+                                ) : (
+                                    activities.map((activity) => (
+                                        <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0">
+                                            <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                                                {activity.user?.charAt(0) || '?'}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{activity.user || 'Unknown User'}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">{activity.role || 'System'} • {activity.action}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${activity.status === 'present' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30' :
+                                                    activity.status === 'late' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/30' :
+                                                        'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-800/30'
+                                                    }`}>
+                                                    {activity.time}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${activity.status === 'present' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30' :
-                                                activity.status === 'late' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/30' :
-                                                    'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-800/30'
-                                                }`}>
-                                                {activity.time}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                             <button className="w-full mt-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors border border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20">
                                 View Full Feed
@@ -184,30 +406,49 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             </div>
-        </DashboardLayout>
+        </DashboardLayout >
     );
 };
 
-const StatCard = ({ title, value, total, icon, trend, trendUp, period }) => (
+const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading }) => (
     <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
-        <div className="flex items-start justify-between mb-4">
-            <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-                <h4 className="text-3xl font-bold text-slate-800 dark:text-white mt-1 tracking-tight">{value} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">{total}</span></h4>
+        {loading ? (
+            <div className="animate-pulse space-y-4">
+                <div className="flex justify-between items-start">
+                    <div className="space-y-2 w-full">
+                        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+                        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                    </div>
+                    <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                </div>
+                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-2/3"></div>
             </div>
-            <div className="p-2.5 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-100 dark:border-slate-700">
-                {icon}
-            </div>
-        </div>
-        <div className="flex items-center text-sm">
-            {trend && (
-                <span className={`font-semibold ${trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'} flex items-center bg-opacity-10 px-1.5 py-0.5 rounded`}>
-                    {trendUp ? '↑' : '↓'} {trend}
-                </span>
-            )}
-            {period && <span className="text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded">{period}</span>}
-            {trend && <span className="text-slate-400 dark:text-slate-500 ml-2">vs last week</span>}
-        </div>
+        ) : (
+            <>
+                <div className="flex items-start justify-between mb-4">
+                    <div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
+                        <h4 className="text-3xl font-bold text-slate-800 dark:text-white mt-1 tracking-tight">{value} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">{total}</span></h4>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-100 dark:border-slate-700">
+                        {icon}
+                    </div>
+                </div>
+                <div className="flex items-center text-sm">
+                    {trend && (
+                        <span className={`font-semibold ${trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'} flex items-center bg-opacity-10 px-1.5 py-0.5 rounded`}>
+                            {trendUp ? '↑' : '↓'} {trend}
+                        </span>
+                    )}
+                    {trend && (
+                        <span className="text-slate-400 dark:text-slate-500 ml-2">
+                            vs {period === 'daily' ? 'yesterday' : period === 'weekly' ? 'last week' : 'last month'}
+                        </span>
+                    )}
+                    {!trend && period && <span className="text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded">{period}</span>}
+                </div>
+            </>
+        )}
     </div>
 );
 
