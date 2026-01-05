@@ -75,5 +75,16 @@ export const attendanceService = {
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch live attendance");
         }
+    },
+
+    // Download My Monthly Report
+    async downloadMyReport(month, format = "xlsx") {
+        try {
+            const url = `${API_BASE_URL}/reports/download?month=${month}&type=attendance_detailed&format=${format}`;
+            const response = await api.get(url, { responseType: 'blob' });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to download your report");
+        }
     }
 };

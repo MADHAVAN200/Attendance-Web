@@ -12,6 +12,8 @@ import {
     RefreshCw,
     ChevronLeft,
     ChevronRight,
+    FileText,
+    Download
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
@@ -23,6 +25,7 @@ const Attendance = () => {
     const today = new Date();
     const formattedToday = today.toISOString().split('T')[0];
     const [selectedDate, setSelectedDate] = useState(formattedToday);
+    const [reportMonth, setReportMonth] = useState(today.toISOString().slice(0, 7));
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -212,6 +215,22 @@ const Attendance = () => {
         setSelectedDate(date.toISOString().split('T')[0]);
     };
 
+    const handleDownloadReport = async () => {
+        try {
+            const data = await attendanceService.downloadMyReport(reportMonth);
+            const url = window.URL.createObjectURL(new Blob([data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `My_Attendance_${reportMonth}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success("Monthly report downloaded successfully");
+        } catch (error) {
+            toast.error(error.message);
+        }
+    };
+
     return (
         <DashboardLayout title="Attendance">
             <div className="space-y-8 relative">
@@ -235,6 +254,34 @@ const Attendance = () => {
                         </div>
                         <span className="text-2xl font-bold">Time Out</span>
                     </button>
+                </div>
+
+                {/* Report Download Section for User */}
+                <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                            <FileText size={20} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-none">Monthly Report</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Download your full logs for the month</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="month"
+                            value={reportMonth}
+                            onChange={(e) => setReportMonth(e.target.value)}
+                            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                        <button
+                            onClick={handleDownloadReport}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none"
+                        >
+                            <Download size={16} />
+                            Download
+                        </button>
+                    </div>
                 </div>
 
                 {/* Date Picker Header */}

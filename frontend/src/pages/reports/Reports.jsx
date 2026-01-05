@@ -14,9 +14,13 @@ import {
     Table
 } from 'lucide-react';
 
+import { adminService } from '../../services/adminService';
+import { toast } from 'react-toastify';
+
 const Reports = () => {
-    const [selectedMonth, setSelectedMonth] = useState('2023-12');
-    const [reportType, setReportType] = useState('attendance_detailed');
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+    const [reportType, setReportType] = useState('matrix_monthly');
     const [fileFormat, setFileFormat] = useState('xlsx');
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'history'
@@ -29,63 +33,58 @@ const Reports = () => {
         { id: 4, name: 'Full_Dump_2022.zip', type: 'System Backup', date: '15 Jan 2023, 02:00 PM', status: 'Failed', size: '-' },
     ]);
 
-    // Mock Preview Data
-    const previewData = {
-        attendance_detailed: {
-            columns: ['Date', 'Employee ID', 'Name', 'Department', 'Shift', 'Time In', 'Time Out', 'Work Hrs', 'Status'],
-            rows: [
-                ['2023-12-01', 'EMP001', 'Arjun Mehta', 'Sales', 'General', '09:00 AM', '06:00 PM', '9h 00m', 'Present'],
-                ['2023-12-01', 'EMP002', 'Priya Sharma', 'Retail', 'Morning', '08:55 AM', '05:30 PM', '8h 35m', 'Present'],
-                ['2023-12-01', 'EMP003', 'Rahul Verma', 'Logistics', 'General', '10:15 AM', '06:00 PM', '7h 45m', 'Late'],
-                ['2023-12-02', 'EMP001', 'Arjun Mehta', 'Sales', 'General', '09:05 AM', '06:10 PM', '9h 05m', 'Present'],
-                ['2023-12-03', 'EMP001', 'Arjun Mehta', 'Sales', 'General', '09:00 AM', '06:00 PM', '9h 00m', 'Present'],
-                ['2023-12-03', 'EMP002', 'Priya Sharma', 'Retail', 'Morning', '09:00 AM', '05:30 PM', '8h 30m', 'Present'],
-            ]
-        },
-        attendance_summary: {
-            columns: ['Employee ID', 'Name', 'Department', 'Total Days', 'Present', 'Absent', 'Late', 'Leaves', 'Total Hrs'],
-            rows: [
-                ['EMP001', 'Arjun Mehta', 'Sales', '30', '28', '1', '1', '0', '250h'],
-                ['EMP002', 'Priya Sharma', 'Retail', '30', '29', '0', '0', '1', '260h'],
-                ['EMP003', 'Rahul Verma', 'Logistics', '30', '25', '2', '3', '0', '220h'],
-            ]
-        },
-        lateness_report: {
-            columns: ['Date', 'Employee', 'Expected In', 'Actual In', 'Late By', 'Reason'],
-            rows: [
-                ['2023-12-01', 'Rahul Verma', '09:30 AM', '10:15 AM', '45 mins', 'Traffic'],
-                ['2023-12-05', 'Sneha Patil', '09:30 AM', '09:45 AM', '15 mins', '-'],
-                ['2023-12-10', 'Rahul Verma', '09:30 AM', '10:00 AM', '30 mins', 'Personal'],
-            ]
-        },
-        employee_master: {
-            columns: ['ID', 'Name', 'Email', 'Role', 'Department', 'Join Date', 'Status'],
-            rows: [
-                ['EMP001', 'Arjun Mehta', 'arjun@mano.com', 'Sales Exec', 'Sales', '2022-01-15', 'Active'],
-                ['EMP002', 'Priya Sharma', 'priya@mano.com', 'Manager', 'Retail', '2021-11-01', 'Active'],
-                ['EMP003', 'Rahul Verma', 'rahul@mano.com', 'Specialist', 'Logistics', '2023-03-10', 'Active'],
-            ]
-        }
-    };
+    // Real Preview Data State
+    const [previewData, setPreviewData] = useState({ columns: [], rows: [] });
+    const [loadingPreview, setLoadingPreview] = useState(false);
 
-    const currentPreview = previewData[reportType];
+    // Fetch Preview
+    React.useEffect(() => {
+        const fetchPreview = async () => {
+            setLoadingPreview(true);
+            try {
+                const res = await adminService.getReportPreview(selectedMonth, reportType, selectedDate);
+                if (res.ok) {
+                    setPreviewData(res.data);
+                }
+            } catch (error) {
+                console.error(error);
+                toast.error("Failed to load preview data");
+            } finally {
+                setLoadingPreview(false);
+            }
+        };
+        fetchPreview();
+    }, [selectedMonth, reportType, selectedDate]);
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         setIsGenerating(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsGenerating(false);
+        try {
+            const data = await adminService.downloadReport(selectedMonth, reportType, fileFormat, "", selectedDate);
+            const url = window.URL.createObjectURL(new Blob([data]));
+            const link = document.createElement('a');
+            link.href = url;
+            const filename = `Report_${reportType}_${selectedMonth}.${fileFormat}`;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
             const newReport = {
                 id: exportHistory.length + 1,
-                name: `Attendance_${selectedMonth}_${Date.now()}.${fileFormat}`,
-                type: reportType.replace('_', ' '),
-                date: 'Just Now',
+                name: filename,
+                type: reportType.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+                date: new Date().toLocaleString(),
                 status: 'Ready',
-                size: 'Pending'
+                size: (data.size / 1024).toFixed(1) + ' KB'
             };
             setExportHistory([newReport, ...exportHistory]);
-            setActiveTab('history');
-        }, 2000);
+            toast.success("Report generated successfully");
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || "Failed to generate report");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     return (
@@ -96,18 +95,31 @@ const Reports = () => {
                 <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
                     <div className="flex flex-col xl:flex-row items-start xl:items-end gap-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 flex-1 w-full">
-                            <div>
-                                <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Select Month</label>
-                                <div className="relative">
-                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input
-                                        type="month"
-                                        value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                                    />
+                            {reportType !== 'employee_master' && (
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1.5 ml-1">
+                                        {['matrix_monthly', 'lateness_report', 'attendance_detailed', 'attendance_summary'].includes(reportType) ? 'Select Month' : 'Select Date'}
+                                    </label>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        {['matrix_monthly', 'lateness_report', 'attendance_detailed', 'attendance_summary'].includes(reportType) ? (
+                                            <input
+                                                type="month"
+                                                value={selectedMonth}
+                                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            />
+                                        ) : (
+                                            <input
+                                                type="date"
+                                                value={selectedDate}
+                                                onChange={(e) => setSelectedDate(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            />
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Report Type</label>
@@ -116,9 +128,12 @@ const Reports = () => {
                                     onChange={(e) => setReportType(e.target.value)}
                                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
                                 >
-                                    <option value="attendance_detailed">Detailed Attendance Log</option>
-                                    <option value="attendance_summary">Monthly Summary</option>
-                                    <option value="lateness_report">Lateness & Overtime</option>
+                                    <option value="matrix_daily">Daily Attendance Matrix</option>
+                                    <option value="matrix_weekly">Weekly Attendance Matrix</option>
+                                    <option value="matrix_monthly">Monthly Attendance Matrix</option>
+                                    <option value="lateness_report">Lateness & Overtime Report</option>
+                                    <option value="attendance_detailed">Detailed Attendance Log (Original)</option>
+                                    <option value="attendance_summary">Monthly Summary (Original)</option>
                                     <option value="employee_master">Employee Master Data</option>
                                 </select>
                             </div>
@@ -200,37 +215,49 @@ const Reports = () => {
                                 </div>
 
                                 <div className="overflow-x-auto flex-1">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
-                                                {currentPreview.columns.map((col, idx) => (
-                                                    <th key={idx} className="px-6 py-4 whitespace-nowrap">{col}</th>
+                                    {loadingPreview ? (
+                                        <div className="flex flex-col items-center justify-center py-20 gap-4">
+                                            <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                                            <p className="text-slate-500 text-sm font-medium">Loading preview data...</p>
+                                        </div>
+                                    ) : previewData.rows && previewData.rows.length > 0 ? (
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                                    {previewData.columns.map((col, idx) => (
+                                                        <th key={idx} className="px-6 py-4 whitespace-nowrap">{col}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                {previewData.rows.map((row, rIdx) => (
+                                                    <tr key={rIdx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                                        {row.map((cell, cIdx) => (
+                                                            <td key={cIdx} className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                                                {cell}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
                                                 ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {currentPreview.rows.map((row, rIdx) => (
-                                                <tr key={rIdx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                                    {row.map((cell, cIdx) => (
-                                                        <td key={cIdx} className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                                                            {cell}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            ))}
-                                            {/* Filler Rows to visualize 'extended' table */}
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <tr key={`filler-${i}`} className="bg-slate-50/10 dark:bg-slate-800/10">
-                                                    {currentPreview.rows[0].map((_, cIdx) => (
-                                                        <td key={cIdx} className="px-6 py-4 text-sm text-slate-300 dark:text-slate-600 blur-[1px] opacity-30 select-none">...</td>
-                                                    ))}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                {/* Filler Rows */}
+                                                {previewData.rows.length < 10 && Array.from({ length: Math.max(0, 5 - previewData.rows.length) }).map((_, i) => (
+                                                    <tr key={`filler-${i}`} className="bg-slate-50/10 dark:bg-slate-800/10">
+                                                        {previewData.columns.map((_, cIdx) => (
+                                                            <td key={cIdx} className="px-6 py-4 text-sm text-slate-300 dark:text-slate-600 blur-[1px] opacity-30 select-none">...</td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                            <Table className="text-slate-200 dark:text-slate-700" size={48} />
+                                            <p className="text-slate-500 text-sm">No data available for this selection.</p>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                    This is a preview. Actual report will contain all records.
+                                    This is a preview of the first few records. Actual report will contain all data.
                                 </div>
                             </>
                         )}

@@ -151,5 +151,22 @@ export const adminService = {
             console.error("Failed to fetch work locations", error);
             throw error;
         }
+    },
+    async getReportPreview(month, type, date = "") {
+        try {
+            const res = await api.get(`${API_BASE_URL}/reports/preview?month=${month}&type=${type}&date=${date}`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch report preview");
+        }
+    },
+    async downloadReport(month, type, format = "xlsx", userId = "", date = "") {
+        try {
+            const url = `${API_BASE_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const response = await api.get(url, { responseType: 'blob' });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to download report");
+        }
     }
 };
