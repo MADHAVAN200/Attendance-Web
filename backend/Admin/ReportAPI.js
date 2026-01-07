@@ -94,58 +94,89 @@ router.get("/preview", authenticateJWT, catchAsync(async (req, res) => {
         const records = await knexDB("attendance_records as ar")
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select("ar.time_in", "u.user_name", "d.dept_name", "ar.time_out", "ar.status")
+            .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
             .orderBy("ar.time_in", "asc")
             .limit(20);
 
-        data.columns = ["Date", "Name", "Dept", "Time In", "Time Out", "Status"];
+        data.columns = ["Date", "ID", "Name", "Dept", "Shift", "Time In", "Time Out", "Work Hrs", "Status"];
         data.rows = records.map(r => [
             new Date(r.time_in).toLocaleDateString(),
+            r.user_id,
             r.user_name,
             r.dept_name || "-",
+            r.shift_name || "-",
             r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
             r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
+            calculateWorkHours(r.time_in, r.time_out),
             r.status
         ]);
     } else if (type === "attendance_summary") {
-        const records = await knexDB("attendance_records as ar")
-            .join("users as u", "ar.user_id", "u.user_id")
+        const [year, monthNum] = month.split("-").map(Number);
+        const totalDaysInMonth = new Date(year, monthNum, 0).getDate();
+
+        const users = await knexDB("users as u")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select(
-                "u.user_name",
-                "d.dept_name",
-                knexDB.raw("COUNT(*) as total_days"),
-                knexDB.raw("SUM(CASE WHEN ar.status = 'PRESENT' THEN 1 ELSE 0 END) as present_days")
-            )
-            .where("ar.org_id", org_id)
-            .whereRaw("DATE(ar.time_in) >= ?", [startDate])
-            .whereRaw("DATE(ar.time_in) <= ?", [endDate])
-            .groupBy("u.user_id")
+            .select("u.user_id", "u.user_name", "d.dept_name")
+            .where("u.org_id", org_id)
             .limit(20);
 
-        data.columns = ["Name", "Dept", "Total Records", "Present"];
-        data.rows = records.map(r => [r.user_name, r.dept_name || "-", r.total_days, r.present_days]);
+        const records = await knexDB("attendance_records")
+            .where("org_id", org_id)
+            .whereRaw("DATE(time_in) >= ?", [startDate])
+            .whereRaw("DATE(time_in) <= ?", [endDate]);
+
+        data.columns = ["ID", "Name", "Dept", "Total Days", "Present", "Absent", "Late", "Leaves", "Total Hrs"];
+        data.rows = users.map(u => {
+            const userRecs = records.filter(r => r.user_id === u.user_id);
+            const presentDays = new Set(userRecs.map(r => new Date(r.time_in).toISOString().split('T')[0])).size;
+            const lateCount = userRecs.filter(r => r.late_minutes > 0).length;
+            const totalHrs = userRecs.reduce((sum, r) => {
+                const start = new Date(r.time_in);
+                const end = r.time_out ? new Date(r.time_out) : null;
+                if (start && end) {
+                    return sum + (end - start) / (1000 * 60 * 60);
+                }
+                return sum;
+            }, 0);
+            const leaves = 0; // Placeholder until leave module is implemented
+            const absent = Math.max(0, totalDaysInMonth - (presentDays + leaves));
+
+            return [
+                u.user_id,
+                u.user_name,
+                u.dept_name || "-",
+                totalDaysInMonth,
+                presentDays,
+                absent,
+                lateCount,
+                leaves,
+                totalHrs.toFixed(2)
+            ];
+        });
     } else if (type === "lateness_report") {
         const records = await knexDB("attendance_records as ar")
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select("u.user_name", "d.dept_name", "ar.time_in", "ar.late_minutes", "ar.overtime_hours")
+            .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+            .select("u.user_name", "d.dept_name", "ar.time_in", "s.start_time as expected_in", "ar.late_minutes", "ar.late_reason")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
-            .where(builder => builder.where("ar.late_minutes", ">", 0).orWhere("ar.overtime_hours", ">", 0))
+            .where("ar.late_minutes", ">", 0)
             .limit(20);
 
-        data.columns = ["Name", "Dept", "Date", "Late (Mins)", "Overtime (Mins)"];
+        data.columns = ["Date", "Employee", "Expected In", "Actual In", "Late By (Mins)", "Reason"];
         data.rows = records.map(r => [
-            r.user_name,
-            r.dept_name || "-",
             new Date(r.time_in).toLocaleDateString(),
+            r.user_name,
+            r.expected_in || "-",
+            r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
             r.late_minutes || 0,
-            r.overtime_hours || 0
+            r.late_reason || "-"
         ]);
     } else if (type === "employee_master") {
         const users = await knexDB("users as u")
@@ -320,19 +351,23 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
         let pdfCols, pdfRows;
 
         if (type === "matrix_daily" || type === "attendance_detailed") {
-            pdfCols = ["Name", "Dept", "Time In", "Time Out", "Work Hrs", "Status"];
+            pdfCols = ["Date", "ID", "Name", "Dept", "Shift", "Time In", "Time Out", "Work Hrs", "Status"];
             if (type === "attendance_detailed") {
                 const detailedRecords = await knexDB("attendance_records as ar")
                     .join("users as u", "ar.user_id", "u.user_id")
                     .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-                    .select("u.user_name", "d.dept_name", "ar.time_in", "ar.time_out", "ar.status")
+                    .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+                    .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
                     .where("ar.org_id", org_id)
                     .whereRaw("DATE(ar.time_in) >= ?", [startDate])
                     .whereRaw("DATE(ar.time_in) <= ?", [endDate])
                     .orderBy("ar.time_in", "asc");
                 pdfRows = detailedRecords.map(r => [
+                    new Date(r.time_in).toLocaleDateString(),
+                    r.user_id,
                     r.user_name,
                     r.dept_name || "-",
+                    r.shift_name || "-",
                     r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                     r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                     calculateWorkHours(r.time_in, r.time_out),
@@ -352,21 +387,23 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                 });
             }
         } else if (type === "lateness_report") {
-            pdfCols = ["Name", "Dept", "Date", "Late (Mins)", "Overtime (Mins)"];
+            pdfCols = ["Date", "Employee", "Expected In", "Actual In", "Late By (Mins)", "Reason"];
             const latenessRecords = await knexDB("attendance_records as ar")
                 .join("users as u", "ar.user_id", "u.user_id")
                 .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-                .select("u.user_name", "d.dept_name", "ar.time_in", "ar.late_minutes", "ar.overtime_hours")
+                .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+                .select("u.user_name", "d.dept_name", "ar.time_in", "s.start_time as expected_in", "ar.late_minutes", "ar.late_reason")
                 .where("ar.org_id", org_id)
                 .whereRaw("DATE(ar.time_in) >= ?", [startDate])
                 .whereRaw("DATE(ar.time_in) <= ?", [endDate])
-                .where(builder => builder.where("ar.late_minutes", ">", 0).orWhere("ar.overtime_hours", ">", 0));
+                .where("ar.late_minutes", ">", 0);
             pdfRows = latenessRecords.map(r => [
-                r.user_name,
-                r.dept_name || "-",
                 new Date(r.time_in).toLocaleDateString(),
+                r.user_name,
+                r.expected_in || "-",
+                r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                 r.late_minutes || 0,
-                r.overtime_hours || 0
+                r.late_reason || "-"
             ]);
         } else if (type === "employee_master") {
             pdfCols = ["ID", "Name", "Email", "Phone", "Dept"];
@@ -378,16 +415,35 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                 u.dept_name || "-"
             ]);
         } else {
-            pdfCols = ["Name", "Dept", "Present", "Total Hrs", "Late"];
+            pdfCols = ["ID", "Name", "Dept", "Total Days", "Present", "Absent", "Late", "Leaves", "Total Hrs"];
+            const [year, monthNum] = month.split("-").map(Number);
+            const totalDaysInMonth = new Date(year, monthNum, 0).getDate();
+
             pdfRows = users.map(u => {
                 const userRecs = records.filter(r => r.user_id === u.user_id);
-                const totalHrs = userRecs.reduce((sum, r) => sum + parseFloat(calculateWorkHours(r.time_in, r.time_out)), 0);
+                const presentDays = new Set(userRecs.map(r => new Date(r.time_in).toISOString().split('T')[0])).size;
+                const lateCount = userRecs.filter(r => r.late_minutes > 0).length;
+                const totalHrs = userRecs.reduce((sum, r) => {
+                    const start = new Date(r.time_in);
+                    const end = r.time_out ? new Date(r.time_out) : null;
+                    if (start && end) {
+                        return sum + (end - start) / (1000 * 60 * 60);
+                    }
+                    return sum;
+                }, 0);
+                const leaves = 0;
+                const absent = Math.max(0, totalDaysInMonth - (presentDays + leaves));
+
                 return [
+                    u.user_id,
                     u.user_name,
                     u.dept_name || "-",
-                    userRecs.length,
-                    totalHrs.toFixed(2),
-                    userRecs.filter(r => r.late_minutes > 0).length
+                    totalDaysInMonth,
+                    presentDays,
+                    absent,
+                    lateCount,
+                    leaves,
+                    totalHrs.toFixed(2)
                 ];
             });
         }
@@ -428,8 +484,10 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
     } else if (type === "attendance_detailed") {
         worksheet.columns = [
             { header: "Date", key: "date", width: 15 },
+            { header: "Employee ID", key: "user_id", width: 15 },
             { header: "Name", key: "name", width: 25 },
-            { header: "Dept", key: "dept", width: 20 },
+            { header: "Department", key: "dept", width: 20 },
+            { header: "Shift", key: "shift", width: 15 },
             { header: "Time In", key: "time_in", width: 15 },
             { header: "Time Out", key: "time_out", width: 15 },
             { header: "Work Hrs", key: "work_hrs", width: 12 },
@@ -438,7 +496,8 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
         const detailedRecords = await knexDB("attendance_records as ar")
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select("ar.time_in", "u.user_name", "d.dept_name", "ar.time_out", "ar.status")
+            .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
@@ -447,8 +506,10 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
         detailedRecords.forEach(r => {
             worksheet.addRow({
                 date: new Date(r.time_in).toLocaleDateString(),
+                user_id: r.user_id,
                 name: r.user_name,
                 dept: r.dept_name || "-",
+                shift: r.shift_name || "-",
                 time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                 time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                 work_hrs: calculateWorkHours(r.time_in, r.time_out),
@@ -457,54 +518,74 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
         });
     } else if (type === "attendance_summary") {
         worksheet.columns = [
+            { header: "ID", key: "id", width: 10 },
             { header: "Name", key: "name", width: 25 },
             { header: "Dept", key: "dept", width: 20 },
-            { header: "Total Days", key: "total", width: 15 },
-            { header: "Present", key: "present", width: 15 }
+            { header: "Total Days", key: "total_days", width: 12 },
+            { header: "Present", key: "present", width: 10 },
+            { header: "Absent", key: "absent", width: 10 },
+            { header: "Late", key: "late", width: 10 },
+            { header: "Leaves", key: "leaves", width: 10 },
+            { header: "Total Hrs", key: "total_hrs", width: 12 }
         ];
-        const summaryRecords = await knexDB("attendance_records as ar")
-            .join("users as u", "ar.user_id", "u.user_id")
-            .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select("u.user_name", "d.dept_name")
-            .count("ar.record_id as total_days")
-            .sum(knexDB.raw("CASE WHEN ar.status = 'PRESENT' THEN 1 ELSE 0 END as present_days"))
-            .where("ar.org_id", org_id)
-            .whereRaw("DATE(ar.time_in) >= ?", [startDate])
-            .whereRaw("DATE(ar.time_in) <= ?", [endDate])
-            .groupBy("u.user_id");
 
-        summaryRecords.forEach(r => {
+        const [year, monthNum] = month.split("-").map(Number);
+        const totalDaysInMonth = new Date(year, monthNum, 0).getDate();
+
+        users.forEach(u => {
+            const userRecs = records.filter(r => r.user_id === u.user_id);
+            const presentDays = new Set(userRecs.map(r => new Date(r.time_in).toISOString().split('T')[0])).size;
+            const lateCount = userRecs.filter(r => r.late_minutes > 0).length;
+            const totalHrs = userRecs.reduce((sum, r) => {
+                const start = new Date(r.time_in);
+                const end = r.time_out ? new Date(r.time_out) : null;
+                if (start && end) {
+                    return sum + (end - start) / (1000 * 60 * 60);
+                }
+                return sum;
+            }, 0);
+            const leaves = 0;
+            const absent = Math.max(0, totalDaysInMonth - (presentDays + leaves));
+
             worksheet.addRow({
-                name: r.user_name,
-                dept: r.dept_name || "-",
-                total: r.total_days,
-                present: r.present_days
+                id: u.user_id,
+                name: u.user_name,
+                dept: u.dept_name || "-",
+                total_days: totalDaysInMonth,
+                present: presentDays,
+                absent: absent,
+                late: lateCount,
+                leaves: leaves,
+                total_hrs: totalHrs.toFixed(2)
             });
         });
     } else if (type === "lateness_report") {
         worksheet.columns = [
-            { header: "Name", key: "name", width: 25 },
-            { header: "Dept", key: "dept", width: 20 },
             { header: "Date", key: "date", width: 15 },
-            { header: "Late (Mins)", key: "late", width: 15 },
-            { header: "Overtime (Mins)", key: "ot", width: 15 }
+            { header: "Employee", key: "name", width: 25 },
+            { header: "Expected In", key: "expected_in", width: 15 },
+            { header: "Actual In", key: "actual_in", width: 15 },
+            { header: "Late By (Mins)", key: "late_mins", width: 15 },
+            { header: "Reason", key: "reason", width: 30 }
         ];
         const latenessRecords = await knexDB("attendance_records as ar")
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
-            .select("u.user_name", "d.dept_name", "ar.time_in", "ar.late_minutes", "ar.overtime_hours")
+            .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
+            .select("u.user_name", "d.dept_name", "ar.time_in", "s.start_time as expected_in", "ar.late_minutes", "ar.late_reason")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
-            .where(builder => builder.where("ar.late_minutes", ">", 0).orWhere("ar.overtime_hours", ">", 0));
+            .where("ar.late_minutes", ">", 0);
 
         latenessRecords.forEach(r => {
             worksheet.addRow({
-                name: r.user_name,
-                dept: r.dept_name || "-",
                 date: new Date(r.time_in).toLocaleDateString(),
-                late: r.late_minutes || 0,
-                ot: r.overtime_hours || 0
+                name: r.user_name,
+                expected_in: r.expected_in || "-",
+                actual_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
+                late_mins: r.late_minutes || 0,
+                reason: r.late_reason || "-"
             });
         });
     } else if (type === "employee_master") {
