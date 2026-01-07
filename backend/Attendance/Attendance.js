@@ -346,6 +346,7 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
     .limit(Math.min(parseInt(limit), 100));
 
   if (user_id) query = query.where("attendance_records.user_id", user_id);
+  query = query.where("attendance_records.org_id", req.user.org_id);
   if (date_from) query = query.whereRaw("DATE(time_in) >= DATE(?)", [date_from]);
   if (date_to) query = query.whereRaw("DATE(time_in) <= DATE(?)", [date_to]);
 

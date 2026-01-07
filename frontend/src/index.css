@@ -4,65 +4,34 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+    }
 
-/* Custom Cursor Styles */
-/* 
-html,
-body,
-#root {
-    cursor: url('/cursors/helmet-pointer.png') 25 9, auto !important;
-}
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
 
-*,
-*::before,
-*::after {
-    cursor: inherit !important;
-}
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #e2e8f0;
+        border-radius: 10px;
+    }
 
-div,
-section,
-main,
-article,
-aside,
-header,
-footer,
-nav {
-    cursor: inherit !important;
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #334155;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #cbd5e1;
+    }
 }
 
-div:empty,
-section:empty {
-    cursor: inherit !important;
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
 }
 
-[class*="flex"],
-[class*="grid"] {
-    cursor: inherit !important;
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
-*/
-
-/* Pointer cursor for interactive elements */
-/*
-a,
-button,
-[role="button"],
-input[type="submit"],
-input[type="button"],
-select,
-label[for],
-.cursor-pointer {
-    cursor: url('/cursors/glove-pointer.png') 24 6, pointer !important;
-}
-*/
-/* Text cursor for input fields */
-/*
-input[type="text"],
-input[type="password"],
-input[type="email"],
-input[type="number"],
-input[type="search"],
-textarea,
-[contenteditable] {
-    cursor: url('/cursors/type.png') 15 15, text !important;
-}
-*/

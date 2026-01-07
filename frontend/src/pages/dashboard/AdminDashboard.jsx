@@ -51,6 +51,7 @@ const AdminDashboard = () => {
     const [viewMode, setViewMode] = React.useState('range'); // 'range' or 'calendar'
     const [selectedMonth, setSelectedMonth] = React.useState(new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+    const [isFeedExpanded, setIsFeedExpanded] = React.useState(false);
 
     // Cache for dashboard data
     const dataCache = React.useRef({});
@@ -344,15 +345,20 @@ const AdminDashboard = () => {
                         {/* Live Activity Feed */}
                         <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Live Activity</h3>
-                                <span className="relative flex h-3 w-3">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                                </span>
+                                <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Today's Activity</h3>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    </span>
+                                    Live
+                                </div>
                             </div>
-                            <div className="space-y-4">
+                            <div
+                                className={`space-y-4 px-1 transition-all duration-300 ${isFeedExpanded ? 'max-h-[600px]' : 'max-h-[380px]'} overflow-y-auto custom-scrollbar`}
+                            >
                                 {isLoading ? (
-                                    [1, 2, 3, 4, 5].map(i => (
+                                    [1, 2, 3, 4, 5, 6].map(i => (
                                         <div key={i} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0 animate-pulse">
                                             <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0"></div>
                                             <div className="flex-1 space-y-2">
@@ -361,7 +367,7 @@ const AdminDashboard = () => {
                                             </div>
                                         </div>
                                     ))
-                                ) : (
+                                ) : activities.length > 0 ? (
                                     activities.map((activity) => (
                                         <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0">
                                             <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-indigo-600 dark:text-indigo-400">
@@ -372,20 +378,26 @@ const AdminDashboard = () => {
                                                 <p className="text-xs text-slate-500 dark:text-slate-400">{activity.role || 'System'} • {activity.action}</p>
                                             </div>
                                             <div className="text-right">
-                                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${activity.status === 'present' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30' :
-                                                    activity.status === 'late' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/30' :
-                                                        'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-800/30'
-                                                    }`}>
+                                                <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
                                                     {activity.time}
                                                 </span>
                                             </div>
                                         </div>
                                     ))
+                                ) : (
+                                    <div className="py-8 text-center">
+                                        <p className="text-sm text-slate-500">No activity yet today</p>
+                                    </div>
                                 )}
                             </div>
-                            <button className="w-full mt-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors border border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20">
-                                View Full Feed
-                            </button>
+                            {activities.length > 5 && (
+                                <button
+                                    onClick={() => setIsFeedExpanded(!isFeedExpanded)}
+                                    className="w-full mt-4 py-2 text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold transition-all border border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-2"
+                                >
+                                    {isFeedExpanded ? 'Show Less' : 'Show More Today'}
+                                </button>
+                            )}
                         </div>
 
                         {/* Anomalies / Alerts */}

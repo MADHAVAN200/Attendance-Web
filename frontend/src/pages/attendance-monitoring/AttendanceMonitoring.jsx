@@ -49,11 +49,12 @@ const AttendanceMonitoring = () => {
     // Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('All');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+    const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split("T")[0]);
+    const [lastSynced, setLastSynced] = React.useState(new Date());
 
     // Data Fetching
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             // 1. Fetch Users and Attendance Records in Parallel
             const [usersRes, attendanceRes] = await Promise.all([
@@ -66,32 +67,49 @@ const AttendanceMonitoring = () => {
 
             // 2. Merge Data
             const mergedData = users.map(user => {
-                // Find LAST record (latest) if multiple exist for today
                 const userRecords = records.filter(r => r.user_id === user.user_id);
-                // Sort by attendance_id desc (assuming higher ID is later) or just take the first if API sorts it
-                const record = userRecords.length > 0 ? userRecords[0] : null; // data seems sorted desc by time
 
+                let sessions = [];
+                let totalMin = 0;
                 let status = 'Absent';
-                let timeIn = '-';
-                let timeOut = '-';
-                let hours = '-';
-                let location = '-';
+                let lastLocation = '-';
 
-                if (record) {
-                    timeIn = new Date(record.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    location = record.time_in_address || (record.time_in_lat ? `${record.time_in_lat}, ${record.time_in_lng}` : '-');
+                if (userRecords.length > 0) {
+                    // Process all sessions
+                    sessions = userRecords.map(r => {
+                        const inTime = new Date(r.time_in);
+                        const outTime = r.time_out ? new Date(r.time_out) : null;
 
-                    if (record.time_out) {
-                        timeOut = new Date(record.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        status = record.late_minutes > 0 ? 'Late' : 'Present';
+                        let sessionHours = '-';
+                        if (outTime) {
+                            const diff = (outTime - inTime) / (1000 * 60);
+                            totalMin += diff;
+                            sessionHours = `${(diff / 60).toFixed(1)}h`;
+                        }
 
-                        const duration = (new Date(record.time_out) - new Date(record.time_in)) / (1000 * 60 * 60);
-                        hours = `${duration.toFixed(1)} hrs`;
+                        return {
+                            id: r.attendance_id,
+                            in: inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            out: outTime ? outTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active',
+                            hours: sessionHours,
+                            isLate: r.late_minutes > 0,
+                            isActive: !r.time_out,
+                            rawIn: inTime,
+                            rawOut: outTime,
+                            inLocation: r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Location unknown'),
+                            outLocation: r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : (r.time_out ? 'Location unknown' : null))
+                        };
+                    });
+
+                    // Determine overall status
+                    const latest = userRecords[0]; // records is sorted desc by time
+                    lastLocation = latest.time_in_address || (latest.time_in_lat ? `${latest.time_in_lat}, ${latest.time_in_lng}` : '-');
+
+                    if (sessions.some(s => s.isActive)) {
+                        status = latest.late_minutes > 0 ? 'Late Active' : 'Active';
                     } else {
-                        status = 'Active';
+                        status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
                     }
-
-                    if (status === 'Active' && record.late_minutes > 0) status = 'Late Active';
                 }
 
                 return {
@@ -100,12 +118,10 @@ const AttendanceMonitoring = () => {
                     role: user.desg_name || user.designation_title || 'Employee',
                     avatar: (user.user_name || 'U').charAt(0).toUpperCase(),
                     department: user.dept_name || user.department_title || 'General',
-                    timeIn,
-                    timeOut,
+                    sessions,
                     status,
-                    hours,
-                    location,
-                    rawRecord: record
+                    totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
+                    location: lastLocation,
                 };
             });
 
@@ -119,27 +135,27 @@ const AttendanceMonitoring = () => {
 
             setAttendanceData(mergedData);
 
-            // 4. Calculate Stats
+            // 4. Calculate Stats precisely from merged data for consistency
             setStats({
                 present: mergedData.filter(d => d.status !== 'Absent').length,
-                late: records.filter(r => r.late_minutes > 0).length,
+                late: mergedData.filter(d => d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: records.filter(r => !r.time_out).length
+                active: mergedData.filter(d => d.status.includes('Active')).length
             });
 
         } catch (error) {
             console.error("Error fetching data:", error);
-            // toast.error("Failed to load dashboard data");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
+            setLastSynced(new Date());
         }
     };
 
     useEffect(() => {
         if (activeTab === 'live') {
             fetchData();
-            // Auto refresh every minute
-            const interval = setInterval(fetchData, 60000);
+            // Auto refresh every 15 seconds (Live Monitoring)
+            const interval = setInterval(() => fetchData(true), 15000);
             return () => clearInterval(interval);
         }
     }, [activeTab, selectedDate]);
@@ -245,11 +261,17 @@ const AttendanceMonitoring = () => {
     const selectedRequestData = requests.find(r => r.id === selectedRequest);
 
     const getStatusData = () => {
+        // Create disjoint sets that sum to total headcount for a valid Pie Chart
+        const active = attendanceData.filter(d => d.status === 'Active').length;
+        const present = attendanceData.filter(d => d.status === 'Present').length;
+        const late = attendanceData.filter(d => d.status.includes('Late')).length;
+        const absent = attendanceData.filter(d => d.status === 'Absent').length;
+
         return [
-            { name: 'Present', value: stats.present, color: '#10b981' }, // emerald-500
-            { name: 'Late', value: stats.late, color: '#f59e0b' },    // amber-500
-            { name: 'Absent', value: stats.absent, color: '#ef4444' },  // red-500
-            { name: 'Active', value: stats.active, color: '#3b82f6' },  // blue-500
+            { name: 'Present', value: present, color: '#10b981' },
+            { name: 'Late', value: late, color: '#f59e0b' },
+            { name: 'Absent', value: absent, color: '#ef4444' },
+            { name: 'Active', value: active, color: '#3b82f6' },
         ].filter(item => item.value > 0);
     };
 
@@ -267,18 +289,68 @@ const AttendanceMonitoring = () => {
     };
 
     const getTimelineData = () => {
-        // Mock timeline data based on current stats for demo
-        // In real app, this would be computed from actual punch times
-        const data = [];
-        for (let i = 8; i <= 18; i++) {
-            const hour = i > 12 ? `${i - 12} PM` : `${i} AM`;
-            data.push({
-                time: hour,
-                checkins: Math.floor(Math.random() * (stats.present / 2)),
-                active: Math.floor(Math.random() * (stats.active / 2))
-            });
+        const hourlyData = {};
+        // Initialize hours from 6 AM to 10 PM
+        for (let i = 6; i <= 22; i++) {
+            hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
         }
-        return data;
+
+        attendanceData.forEach(item => {
+            item.sessions.forEach((session, index) => {
+                const inTime = session.rawIn;
+                const inHour = inTime.getHours();
+
+                if (hourlyData.hasOwnProperty(inHour)) {
+                    if (index === 0) {
+                        hourlyData[inHour].checkins++; // First login of the day
+                    } else {
+                        hourlyData[inHour].repeats++; // Subsequent login
+                    }
+                }
+
+                const outTime = session.rawOut;
+                for (let h = 6; h <= 22; h++) {
+                    const hourStart = h;
+                    if (inHour <= hourStart) {
+                        if (!outTime || outTime.getHours() > hourStart) {
+                            hourlyData[h].active++;
+                        }
+                    }
+                }
+            });
+        });
+
+        return Object.keys(hourlyData).map(hour => {
+            const h = parseInt(hour);
+            const label = h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`;
+            return {
+                time: label,
+                checkins: hourlyData[hour].checkins,
+                repeats: hourlyData[hour].repeats,
+                active: hourlyData[hour].active
+            };
+        });
+    };
+
+    const getLoginFrequencyData = () => {
+        const frequency = {
+            '1 Session': 0,
+            '2 Sessions': 0,
+            '3 Sessions': 0,
+            '4+ Sessions': 0
+        };
+
+        attendanceData.forEach(item => {
+            if (item.status !== 'Absent') {
+                const count = item.sessions.length;
+                if (count === 1) frequency['1 Session']++;
+                else if (count === 2) frequency['2 Sessions']++;
+                else if (count === 3) frequency['3 Sessions']++;
+                else if (count >= 4) frequency['4+ Sessions']++;
+            }
+        });
+
+        return Object.entries(frequency).map(([name, value]) => ({ name, value }));
     };
 
     return (
@@ -324,7 +396,16 @@ const AttendanceMonitoring = () => {
 
                             {/* Toolbar */}
                             <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Real-time Monitoring</h2>
+                                <div className="flex items-center gap-4">
+                                    <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Real-time Monitoring</h2>
+                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        Live
+                                    </div>
+                                </div>
 
                                 <div className="flex items-center gap-3 w-full sm:w-auto">
                                     <div className="relative flex-1 sm:flex-none">
@@ -359,14 +440,14 @@ const AttendanceMonitoring = () => {
                                     <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex items-center gap-1">
                                         <button
                                             onClick={() => setActiveView('cards')}
-                                            className={`p-1.5 rounded-md transition-all ${activeView === 'cards' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                                            className={`p-1.5 rounded-md transition-all ${activeView === 'cards' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                             title="Card View"
                                         >
                                             <LayoutGrid size={18} />
                                         </button>
                                         <button
                                             onClick={() => setActiveView('graph')}
-                                            className={`p-1.5 rounded-md transition-all ${activeView === 'graph' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                                            className={`p-1.5 rounded-md transition-all ${activeView === 'graph' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                             title="Graph View"
                                         >
                                             <PieChartIcon size={18} />
@@ -383,7 +464,7 @@ const AttendanceMonitoring = () => {
                                     <button
                                         onClick={fetchData}
                                         className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                        title="Refresh"
+                                        title={`Refresh (Last sync: ${lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
                                     >
                                         <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
                                     </button>
@@ -430,7 +511,7 @@ const AttendanceMonitoring = () => {
 
                                                             {/* Status Badge Line */}
                                                             <div className="px-5 pb-4">
-                                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
                                                                     <div className={`w-1.5 h-1.5 rounded-full mr-2 ${item.status === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
                                                                     {item.status}
                                                                 </span>
@@ -439,25 +520,62 @@ const AttendanceMonitoring = () => {
                                                             {/* Divider */}
                                                             <div className="h-px bg-slate-100 dark:bg-slate-800 mx-5"></div>
 
-                                                            {/* Card Body */}
-                                                            <div className="p-5 space-y-3 flex-1">
-                                                                <div className="flex items-center justify-between text-sm">
-                                                                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                                                                        <Clock size={16} /> In
-                                                                    </span>
-                                                                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{item.timeIn}</span>
-                                                                </div>
-                                                                <div className="flex items-center justify-between text-sm">
-                                                                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                                                                        <LogOut size={16} className="rotate-180" /> Out
-                                                                    </span>
-                                                                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{item.timeOut}</span>
-                                                                </div>
+                                                            {/* Card Body - Sessions */}
+                                                            <div className="p-5 flex-1 overflow-hidden">
+                                                                {item.status === 'Absent' ? (
+                                                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-4 italic">
+                                                                        <Clock size={20} className="mb-2 opacity-30" />
+                                                                        <span className="text-xs">No activity yet</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-4">
+                                                                        {item.sessions.map((session, sIdx) => (
+                                                                            <div key={session.id} className={`relative pl-4 border-l-2 ${session.isActive ? 'border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}>
+                                                                                {/* Session Indicator Dot */}
+                                                                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${session.isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
 
-                                                                {item.location !== '-' && (
-                                                                    <div className="pt-2 flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                                        <MapPin size={14} className="shrink-0 mt-0.5 text-indigo-500" />
-                                                                        <span className="line-clamp-2" title={item.location}>{item.location}</span>
+                                                                                <div className="flex items-center justify-between mb-2">
+                                                                                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                                                                        Session {item.sessions.length - sIdx}
+                                                                                    </span>
+                                                                                    {session.isActive && (
+                                                                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase animate-pulse">
+                                                                                            Active
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                                            In {session.in}
+                                                                                        </div>
+                                                                                        <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                            <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
+                                                                                            <span className="line-clamp-2" title={session.inLocation}>{session.inLocation}</span>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                            <div className={`w-1.5 h-1.5 rounded-full ${session.isActive ? 'bg-slate-300 dark:bg-slate-600' : 'bg-red-500'}`}></div>
+                                                                                            Out {session.out}
+                                                                                        </div>
+                                                                                        {session.outLocation ? (
+                                                                                            <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                                <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
+                                                                                                <span className="line-clamp-2" title={session.outLocation}>{session.outLocation}</span>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div className="h-full flex items-center p-1.5">
+                                                                                                <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -465,10 +583,18 @@ const AttendanceMonitoring = () => {
                                                             {/* Card Footer (Duration) */}
                                                             {item.status !== 'Absent' && (
                                                                 <div className="bg-slate-50 dark:bg-slate-800/50 px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                                                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Working Hours</span>
-                                                                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                                                                        <Activity size={14} /> {item.hours}
-                                                                    </span>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Daily Time</span>
+                                                                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                                                                            {item.totalHours}
+                                                                        </span>
+                                                                    </div>
+                                                                    {item.sessions.length > 1 && (
+                                                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
+                                                                            <Activity size={12} className="text-indigo-500" />
+                                                                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{item.sessions.length} Sessions</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -524,15 +650,15 @@ const AttendanceMonitoring = () => {
                                                 <div className="h-[300px] w-full">
                                                     <ResponsiveContainer width="100%" height="100%">
                                                         <BarChart data={getDepartmentData()}>
-                                                            <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
                                                             <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                                                             <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                                                             <Tooltip
                                                                 cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
-                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
+                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
                                                             />
                                                             <Legend />
-                                                            <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
+                                                            <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
                                                             <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
                                                             <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
                                                         </BarChart>
@@ -541,27 +667,72 @@ const AttendanceMonitoring = () => {
                                             </div>
                                         </div>
 
-                                        {/* Check-in Activity */}
-                                        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Activity Timeline (Mock Data)</h3>
-                                            <div className="h-[300px] w-full">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={getTimelineData()}>
-                                                        <defs>
-                                                            <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                                                        <XAxis dataKey="time" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                        <Tooltip
-                                                            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
-                                                        />
-                                                        <Area type="monotone" dataKey="checkins" stroke="#6366f1" fillOpacity={1} fill="url(#colorCheckins)" strokeWidth={3} />
-                                                    </AreaChart>
-                                                </ResponsiveContainer>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Check-in Activity */}
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Peak Check-in Hours</h3>
+                                                    <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-wider">
+                                                        <div className="flex items-center gap-1.5 text-indigo-600">
+                                                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                                            New
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-purple-600">
+                                                            <div className="w-2 h-2 rounded-full bg-purple-500 border-2 border-dashed border-purple-200"></div>
+                                                            Repeat
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="h-[300px] w-full">
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <AreaChart data={getTimelineData()}>
+                                                            <defs>
+                                                                <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                                </linearGradient>
+                                                                <linearGradient id="colorRepeats" x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
+                                                                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                                                </linearGradient>
+                                                                <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                                </linearGradient>
+                                                            </defs>
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                                                            <XAxis dataKey="time" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} interval={1} />
+                                                            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                            <Tooltip
+                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                                                                itemStyle={{ fontSize: '12px' }}
+                                                            />
+                                                            <Legend verticalAlign="top" height={36} iconType="circle" />
+                                                            <Area name="Active Staff" type="monotone" dataKey="active" stroke="#10b981" fillOpacity={1} fill="url(#colorActive)" strokeWidth={3} />
+                                                            <Area name="New Check-ins" type="monotone" dataKey="checkins" stroke="#6366f1" fillOpacity={1} fill="url(#colorCheckins)" strokeWidth={2} />
+                                                            <Area name="Repeat Check-ins" type="monotone" dataKey="repeats" stroke="#a855f7" fillOpacity={1} fill="url(#colorRepeats)" strokeWidth={2} strokeDasharray="5 5" />
+                                                        </AreaChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+                                            </div>
+
+                                            {/* Login Frequency */}
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Login Frequency</h3>
+                                                <div className="h-[300px] w-full">
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <BarChart data={getLoginFrequencyData()} layout="vertical">
+                                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" opacity={0.5} />
+                                                            <XAxis type="number" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                            <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} width={80} />
+                                                            <Tooltip
+                                                                cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
+                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
+                                                            />
+                                                            <Bar dataKey="value" name="Employees" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                                                        </BarChart>
+                                                    </ResponsiveContainer>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -709,7 +880,7 @@ const AttendanceMonitoring = () => {
                 )}
 
             </div>
-        </DashboardLayout>
+        </DashboardLayout >
     );
 };
 

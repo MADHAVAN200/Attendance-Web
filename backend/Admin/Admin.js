@@ -574,8 +574,9 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
       .leftJoin("designations as d", "u.desg_id", "d.desg_id")
       .select("al.activity_id as id", "u.user_name as user", "d.desg_name as role", "al.description as action", "al.occurred_at as time")
       .where("al.org_id", org_id)
+      .whereRaw("DATE(al.occurred_at) = ?", [today])
       .orderBy("al.occurred_at", "desc")
-      .limit(5)
+      .limit(20)
   ]);
 
   const totalEmployees = totalEmployeesRes.count || 0;
