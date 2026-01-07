@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+﻿import React, { createContext, useContext, useEffect, useState } from "react";
 import api, { setAccessToken } from "../services/api";
 
 const AuthContext = createContext();
@@ -48,12 +48,13 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email, password, captchaToken, rememberMe = false) => {
+  const login = async (email, password, captchaId, captchaText, rememberMe = false) => {
     // Axios throws on 4xx/5xx, so we just await the call
     const res = await api.post("/auth/login", { 
         user_input: email, 
         user_password: password, 
-        captchaToken, 
+        captchaId,
+        captchaText,
         rememberMe 
     });
     

@@ -5,7 +5,7 @@ import * as DB from "../database.js";
 import EventBus from "../utils/EventBus.js";
 import { getEventSource } from "../utils/clientInfo.js";
 import catchAsync from "../utils/catchAsync.js";
-import { verifyCaptcha } from "../middleware/verifyCaptcha.js";
+import { verifyCaptcha, generateCaptcha } from "../middleware/verifyCaptcha.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
 import * as TokenService from "../services/tokenService.js";
 
@@ -13,6 +13,9 @@ const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 Days
 
 const router = express.Router();
+
+// Generate Captcha route
+router.get("/captcha/generate", generateCaptcha);
 
 export async function authenticateJWT(req, res, next) {
   try {
