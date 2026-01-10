@@ -48,15 +48,17 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email, password, captchaId, captchaText, rememberMe = false) => {
-    // Axios throws on 4xx/5xx, so we just await the call
-    const res = await api.post("/auth/login", { 
+  const login = async (email, password, captchaToken, rememberMe = false) => {
+    // Construct request body for v2 recaptcha only
+    const loginData = {
         user_input: email, 
         user_password: password, 
-        captchaId,
-        captchaText,
-        rememberMe 
-    });
+        rememberMe,
+        captchaToken, // Backend checks for this key for v2 verification
+    };
+
+    // Axios throws on 4xx/5xx, so we just await the call
+    const res = await api.post("/auth/login", loginData);
     
     if (res.data.accessToken) {
         setAccessToken(res.data.accessToken);

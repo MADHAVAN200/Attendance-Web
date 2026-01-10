@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
-import WordCaptcha from "../../components/WordCaptcha/WordCaptcha";
+import ReCAPTCHA from "react-google-recaptcha";
 
 const Login = () => {
   const { login } = useAuth();
@@ -14,42 +14,29 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  // Captcha state
-  const [captchaType, setCaptchaType] = useState("word"); // "word" or "google"
-  const [captchaId, setCaptchaId] = useState(null);
-  const [captchaText, setCaptchaText] = useState("");
+  const [captchaToken, setCaptchaToken] = useState(null);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleCaptchaChange = (id, text) => {
-    setCaptchaId(id);
-    setCaptchaText(text);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate based on captcha type
-    if (captchaType === "word") {
-      if (!captchaId || !captchaText || captchaText.length !== 6) {
-        toast.error("Please complete the CAPTCHA check.");
-        return;
-      }
+    if (!captchaToken) {
+      toast.error("Please complete the CAPTCHA check.");
+      return;
     }
 
     setLoading(true);
     try {
-      await login(formData.identifier, formData.password, captchaId, captchaText);
+      await login(formData.identifier, formData.password, captchaToken);
       toast.success("Logged in successfully!");
       navigate("/");
     } catch (err) {
       toast.error(err.message || "Invalid credentials");
-      // Reset captcha on error
-      setCaptchaId(null);
-      setCaptchaText("");
+      window.grecaptcha?.reset();
+      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
@@ -114,7 +101,7 @@ const Login = () => {
                   onChange={handleChange}
                   required
                   className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                  placeholder=""
+                  placeholder="••••••••"
                 />
                 <button
                   type="button"
@@ -126,15 +113,13 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Captcha - Using Word-based by default */}
-            <div className="my-4">
-              <WordCaptcha 
-                onCaptchaChange={handleCaptchaChange}
-                isDarkMode={false}
+            {/* Captcha */}
+            <div className="flex justify-center my-4">
+              <ReCAPTCHA
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "YOUR_SITE_KEY_HERE"}
+                onChange={setCaptchaToken}
+                theme="light" // or check for dark mode
               />
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 text-center">
-                Using word-based CAPTCHA (Flutter compatible)
-              </p>
             </div>
 
             <button
