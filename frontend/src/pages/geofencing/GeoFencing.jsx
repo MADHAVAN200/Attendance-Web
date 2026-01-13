@@ -23,7 +23,11 @@ import {
 } from "../../services/userService";
 import { useMapEvents, useMap } from "react-leaflet";
 import DashboardLayout from '../../components/DashboardLayout';
-import { Map, MapPin, Plus, Search, Navigation, Users, Settings, ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check} from 'lucide-react';
+import { 
+  Map, MapPin, Plus, Search, Navigation, Users, Settings, 
+  ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check, 
+  Sun, Moon, Layers, ChevronDown 
+} from 'lucide-react';
 
 const GeoFencing = () => {
     // --- STATE ---
@@ -49,6 +53,16 @@ const GeoFencing = () => {
       longitude: null,
       radius: 100,
     });
+
+    const [activeTheme, setActiveTheme] = useState('voyager');
+
+    const MAP_THEMES = {
+      dark: { name: 'Night Mode', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
+      light: { name: 'Light Mode', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
+      voyager: { name: 'Day Mode', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
+      satellite: { name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
+      streets: { name: 'Streets', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
+    };
 
     const [mapPickEnabled, setMapPickEnabled] = useState(true);
     // Reverse geocoding helper
@@ -504,9 +518,23 @@ const GeoFencing = () => {
                       className="h-full w-full rounded-xl"
                       attributionControl={false}
                     >
-                      <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                      />
+                       <TileLayer url={MAP_THEMES[activeTheme].url} />
+                        <div className="absolute top-4 right-4 z-[1001]">
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-2 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+                          <Layers size={18} className="text-indigo-500" />
+                          <select
+                            value={activeTheme}
+                            onChange={(e) => setActiveTheme(e.target.value)}
+                            className="bg-transparent text-sm font-medium focus:outline-none appearance-none pr-6 cursor-pointer"
+                          >
+                            {Object.entries(MAP_THEMES).map(([id, theme]) => (
+                              <option key={id} value={id} className="dark:bg-slate-800">{theme.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 pointer-events-none text-slate-400" />
+                        </div>
+                      </div>
+
                       <MapRecenter location={selectedLocation} />
                       <Marker
                         position={[
@@ -676,6 +704,24 @@ const GeoFencing = () => {
                     </div>
                   )}
 
+                  <div className="absolute top-4 right-4 z-[1001]">
+                      <div className="relative group">
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-2 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                          <Layers size={18} className="text-indigo-500" />
+                          <select
+                            value={activeTheme}
+                            onChange={(e) => setActiveTheme(e.target.value)}
+                            className="bg-transparent text-sm font-medium focus:outline-none appearance-none pr-6 cursor-pointer"
+                          >
+                            {Object.entries(MAP_THEMES).map(([id, theme]) => (
+                              <option key={id} value={id}>{theme.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 pointer-events-none text-slate-400" />
+                        </div>
+                      </div>
+                    </div>
+
                   <div>
                     <label className="text-sm">Radius (meters)</label>
                     <input
@@ -719,7 +765,22 @@ const GeoFencing = () => {
                     className="h-full w-full"
                     attributionControl={false}
                   >
-                    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                    <TileLayer url={MAP_THEMES[activeTheme].url} />
+                     <div className="absolute top-4 right-4 z-[1001]">
+                    <div className="flex items-center gap-2 bg-slate-800 text-white px-3 py-2 rounded-lg shadow-lg border border-slate-700">
+                      <Layers size={18} className="text-indigo-400" />
+                      <select
+                        value={activeTheme}
+                        onChange={(e) => setActiveTheme(e.target.value)}
+                        className="bg-transparent text-sm font-medium focus:outline-none appearance-none pr-6 cursor-pointer"
+                      >
+                        {Object.entries(MAP_THEMES).map(([id, theme]) => (
+                          <option key={id} value={id} className="bg-slate-800">{theme.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 pointer-events-none text-slate-400" />
+                    </div>
+                  </div>
                     {mapPickEnabled && <MapClickHandler />}
 
                     {newGeo.latitude && newGeo.longitude && (
