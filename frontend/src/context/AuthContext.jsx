@@ -12,7 +12,12 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await api.get("/auth/me");
       if (res.data) {
-        setUser(res.data);
+        // Normalize user_type to lowercase to ensure consistency with frontend role checks
+        const normalizedUser = {
+          ...res.data,
+          user_type: res.data.user_type?.toLowerCase()
+        };
+        setUser(normalizedUser);
       } else {
         setUser(null);
       }
@@ -25,24 +30,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-        try {
-            // Explicitly try to refresh token on mount
-            const res = await api.post("/auth/refresh");
-            if (res.data?.accessToken) {
-                setAccessToken(res.data.accessToken);
-                // Now fetch user details
-                const userRes = await api.get("/auth/me");
-                if (userRes.data) {
-                    setUser(userRes.data);
-                }
-            }
-        } catch (error) {
-             // Refresh failed (no cookie or invalid), just stay logged out
-             console.log("Silent refresh failed:", error);
-             setUser(null);
-        } finally {
-            setAuthChecked(true);
+      try {
+        // Explicitly try to refresh token on mount
+        const res = await api.post("/auth/refresh");
+        if (res.data?.accessToken) {
+          setAccessToken(res.data.accessToken);
+          // Now fetch user details
+          const userRes = await api.get("/auth/me");
+          if (userRes.data) {
+            const normalizedUser = {
+              ...userRes.data,
+              user_type: userRes.data.user_type?.toLowerCase()
+            };
+            setUser(normalizedUser);
+          }
         }
+      } catch (error) {
+        // Refresh failed (no cookie or invalid), just stay logged out
+        console.log("Silent refresh failed:", error);
+        setUser(null);
+      } finally {
+        setAuthChecked(true);
+      }
     };
 
     initAuth();
@@ -51,24 +60,31 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password, captchaToken, rememberMe = false) => {
     // Construct request body for v2 recaptcha only
     const loginData = {
-        user_input: email, 
-        user_password: password, 
-        rememberMe,
-        captchaToken, // Backend checks for this key for v2 verification
+      user_input: email,
+      user_password: password,
+      rememberMe,
+      captchaToken, // Backend checks for this key for v2 verification
     };
 
     // Axios throws on 4xx/5xx, so we just await the call
     const res = await api.post("/auth/login", loginData);
-    
+
     if (res.data.accessToken) {
-        setAccessToken(res.data.accessToken);
+      setAccessToken(res.data.accessToken);
     }
 
     if (res.data.user) {
-        setUser(res.data.user);
+      const normalizedUser = {
+        ...res.data.user,
+        user_type: res.data.user.user_type?.toLowerCase()
+      };
+      setUser(normalizedUser);
+      res.data.user = normalizedUser; // Update response for Login.jsx
     } else {
-        await fetchUser();
+      await fetchUser();
     }
+
+    return res.data; // Return data for redirect logic in Login.jsx
   };
 
   const logout = async () => {

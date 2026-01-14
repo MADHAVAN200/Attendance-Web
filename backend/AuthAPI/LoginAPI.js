@@ -33,7 +33,10 @@ export async function authenticateJWT(req, res, next) {
         return res.status(403).json({ message: "Forbidden: Invalid or expired token" });
       }
 
-      req.user = decodedUser;
+      req.user = {
+        ...decodedUser,
+        user_type: decodedUser.user_type?.toLowerCase()
+      };
       next();
     });
   } catch (error) {

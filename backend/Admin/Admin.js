@@ -26,8 +26,8 @@ const ALLOWED_UPDATE_FIELDS = new Set([
 
 // GET all users
 router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== 'admin') {
-    throw new AppError("Only admin can access user Data", 403);
+  if (req.user.user_type !== 'admin' && req.user.user_type !== 'hr') {
+    throw new AppError("Only admin and HR can access user Data", 403);
   }
 
   const includeWorkLocation = req.query.workLocation === 'true';
@@ -98,8 +98,8 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
 
 // GET single user by ID
 router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== 'admin') {
-    throw new AppError("Only admin can access user Data", 403);
+  if (req.user.user_type !== 'admin' && req.user.user_type !== 'hr') {
+    throw new AppError("Only admin and HR can access user Data", 403);
   }
 
   const { user_id } = req.params;
@@ -217,8 +217,8 @@ router.post("/designations", authenticateJWT, catchAsync(async (req, res) => {
 
 // CREATE new user
 router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can create users", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can create users", 403);
   }
 
   const {
@@ -292,8 +292,8 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
 
 // BULK CREATE users from CSV/Excel
 router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can perform bulk operations", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can perform bulk operations", 403);
   }
   console.log(req.file)
   if (!req.file) {
@@ -653,8 +653,8 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
 
 // UPDATE user by user_id
 router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can update user data", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can update user data", 403);
   }
 
   const { user_id } = req.params;
@@ -730,8 +730,8 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 
 // DELETE user by user_id
 router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can delete users", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can delete users", 403);
   }
 
   const { user_id } = req.params;
@@ -759,8 +759,8 @@ router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, nex
 
 // BULK VALIDATE (Pre-check)
 router.post("/users/bulk-validate", authenticateJWT, catchAsync(async (req, res, next) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can perform bulk operations", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can perform bulk operations", 403);
   }
 
   const { users } = req.body;
