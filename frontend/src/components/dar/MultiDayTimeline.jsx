@@ -273,21 +273,21 @@ const MultiDayTimeline = ({
                                                     }}
                                                     title={`${task.title} (${task.startTime} - ${task.endTime})`}
                                                 >
-                                                    {/* Title (Single Line Truncate) */}
-                                                    <div className="font-bold leading-tight truncate text-sm">
+                                                    {/* Title (Dynamic Size) */}
+                                                    <div className={`font-bold leading-tight truncate ${maxLanes > 1 || width < 60 ? 'text-[10px]' : 'text-sm'}`}>
                                                         {task.title || "(No Title)"}
                                                     </div>
 
-                                                    {/* Time (Only show if height permits) */}
-                                                    {itemHeight > 35 && (
-                                                        <div className="text-[10px] opacity-80 mt-0.5 font-medium flex items-center gap-1">
+                                                    {/* Time (Hide if narrow) */}
+                                                    {itemHeight > 35 && width > 60 && (
+                                                        <div className={`opacity-80 mt-1.5 font-medium flex items-center gap-1 ${maxLanes > 1 ? 'text-[9px]' : 'text-[10px]'}`}>
                                                             <span>{task.startTime} - {task.endTime}</span>
                                                         </div>
                                                     )}
 
-                                                    {/* Description (3 Lines Max) */}
-                                                    {itemHeight > 50 && task.description && (
-                                                        <div className="text-[10px] opacity-75 mt-1 leading-normal line-clamp-3">
+                                                    {/* Description (Hide if narrow OR Stacked) */}
+                                                    {itemHeight > 50 && width > 60 && maxLanes === 1 && task.description && (
+                                                        <div className={`opacity-75 mt-1 leading-normal line-clamp-3 text-[10px]`}>
                                                             {task.description}
                                                         </div>
                                                     )}
