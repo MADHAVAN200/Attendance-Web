@@ -35,8 +35,8 @@ const MOCK_TASKS = [
     {
         id: "t4",
         date: "2026-01-14",
-        startTime: "11:30", // 2:00 PM
-        endTime: "13:15", // 4:00 PM
+        startTime: "9:30", // 2:00 PM
+        endTime: "13:00", // 4:00 PM
         title: "Client Call",
         type: "meeting",
         description: "Discussing requirements with the client.",
@@ -44,7 +44,7 @@ const MOCK_TASKS = [
     {
         id: "t5",
         date: "2026-01-15",
-        startTime: "10:30", // 2:00 PM
+        startTime: "9:30", // 2:00 PM
         endTime: "11:00", // 4:00 PM
         title: "summa oru meeting with client, avlo thaan vera onnum illa",
         type: "meeting",
