@@ -70,22 +70,26 @@ const DailyActivity = () => {
 
     // Live update from TaskCreationPanel
     const handleTaskPreviewUpdate = (partials) => {
-        // partials = { id, title, startTime, endTime, date, type }
-        // Check if task exists in state (by temp id)
-        const exists = tasks.find(t => t.id === partials.id);
+        // partials = { id, title, startTime, endTime, date, type, deleted }
 
-        let newTasks;
-        if (exists) {
-            newTasks = tasks.map(t => t.id === partials.id ? { ...t, ...partials } : t);
-        } else {
-            // Only add if it has visual timing
-            if (partials.startTime) {
-                newTasks = [...tasks, partials];
-            } else {
-                newTasks = tasks;
-            }
+        if (partials.deleted) {
+            setTasks(prev => prev.filter(t => t.id !== partials.id));
+            return;
         }
-        setTasks(newTasks);
+
+        // Check if task exists in state (by temp id)
+        setTasks(prev => {
+            const exists = prev.find(t => t.id === partials.id);
+            if (exists) {
+                return prev.map(t => t.id === partials.id ? { ...t, ...partials } : t);
+            } else {
+                // Add new task skeleton
+                if (partials.startTime) {
+                    return [...prev, partials];
+                }
+                return prev;
+            }
+        });
     };
 
     return (

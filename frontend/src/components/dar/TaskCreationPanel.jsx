@@ -42,7 +42,20 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30" }) => {
             };
         });
         setInputs(initialTasks);
-    }, [initialTimeIn]);
+
+        // IMMEDIATE PREVIEW: Emit all initial tasks to the parent instantly
+        initialTasks.forEach(task => {
+            onUpdate({
+                id: task.id,
+                title: task.title,
+                startTime: task.startTime,
+                endTime: task.endTime,
+                type: 'task',
+                date: new Date().toISOString().split('T')[0]
+            });
+        });
+
+    }, [initialTimeIn]); // Only re-run if Time In changes drastically on mount
 
 
     const handleInputChange = (index, field, value) => {
@@ -53,23 +66,16 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30" }) => {
         if (field === 'startTime') {
             if (isBefore(value, initialTimeIn)) {
                 task.error = "Cannot start before Time In";
-                // We still update the value but mark as error
             } else {
                 task.error = null;
-                // Auto-adjust end time based on previous duration? 
-                // Or just leave specific input. User requirement says "start time cannot be below".
-                // Let's just validate.
             }
-
-            // Daisy chain effect?
-            // If start time changes, shifting subsequent tasks could be complex. 
-            // For now, let's keep it simple: just update this task.
         }
 
         newInputs[index] = task;
         setInputs(newInputs);
 
-        if (task.title && task.startTime && !task.error) {
+        // Update Parent (even if title is empty, to update times)
+        if (task.startTime && !task.error) {
             onUpdate({
                 id: task.id,
                 title: task.title,
@@ -87,17 +93,39 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30" }) => {
         // Default 1 hour for new tasks
         let nextEnd = addMinutes(nextStart, 60);
 
-        setInputs([
-            ...inputs,
-            {
-                id: `new-${inputs.length}`,
-                title: '',
-                startTime: nextStart,
-                endTime: nextEnd,
-                isValid: true,
-                error: null
-            }
-        ]);
+        const newTask = {
+            id: `new-${inputs.length + Math.random().toString(36).substr(2, 5)}`, // Unique ID for additions
+            title: '',
+            startTime: nextStart,
+            endTime: nextEnd,
+            isValid: true,
+            error: null
+        };
+
+        setInputs([...inputs, newTask]);
+
+        // Emit new task immediately
+        onUpdate({
+            id: newTask.id,
+            title: newTask.title,
+            startTime: newTask.startTime,
+            endTime: newTask.endTime,
+            type: 'task',
+            date: new Date().toISOString().split('T')[0]
+        });
+    };
+
+    const handleDelete = (index) => {
+        const taskToDelete = inputs[index];
+        // Remove from local state
+        const newInputs = inputs.filter((_, i) => i !== index);
+        setInputs(newInputs);
+
+        // Remove from Parent
+        onUpdate({
+            id: taskToDelete.id,
+            deleted: true
+        });
     };
 
     return (
@@ -132,19 +160,24 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30" }) => {
             <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
 
                 {inputs.map((task, i) => (
-                    <div key={i} className={`group relative bg-white rounded-xl border transition-all p-3 ${task.error ? 'border-red-200 ring-1 ring-red-100' : 'border-gray-100 hover:border-indigo-100 hover:shadow-sm'}`}>
+                    <div key={task.id} className={`group relative bg-white rounded-xl border transition-all p-3 flex flex-col gap-3 ${task.error ? 'border-red-200 ring-1 ring-red-100' : 'border-gray-100 hover:border-indigo-100 hover:shadow-sm'}`}>
                         {/* Indicator Line */}
                         <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${task.error ? 'bg-red-400' : 'bg-gray-200 group-hover:bg-indigo-500'}`}></div>
 
-                        <div className="flex items-center justify-between mb-2">
+                        {/* Top Row: Label & Hidden Delete */}
+                        <div className="flex items-center justify-between relative">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Task {i + 1 < 10 ? `0${i + 1}` : i + 1}
                             </span>
-                            {task.title && (
-                                <button onClick={() => handleInputChange(i, 'title', '')} className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
+
+                            {/* Hidden Delete Button (Top Right) */}
+                            <button
+                                onClick={() => handleDelete(i)}
+                                className="absolute -top-1 -right-1 p-1.5 bg-red-50 text-red-400 rounded-full hover:bg-red-100 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                                title="Remove Task"
+                            >
+                                <Trash2 size={12} />
+                            </button>
                         </div>
 
                         <div className="space-y-3">
@@ -187,7 +220,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30" }) => {
                     </div>
                 ))}
 
-                {/* Unavailable Slot Placeholder (Dynamic) */}
+                {/* Unavailable Slot Placeholder */}
                 <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 flex items-center justify-between opacity-70">
                     <span className="text-xs font-bold text-gray-400 uppercase">
                         Task {inputs.length + 1 < 10 ? `0${inputs.length + 1}` : inputs.length + 1}
