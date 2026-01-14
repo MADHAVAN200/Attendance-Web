@@ -1,11 +1,15 @@
 
 import { knexDB } from "../database.js";
+import { verifyUserGeofence } from "./Geofencing.js";
 
 // --- TEMPLATES ---
 // Helpers to generate standard policy JSONs
 
 export const PolicyTemplates = {
     STRICT_SHIFT: ({ selfie = true, geofence = true, grace_mins = 10 } = {}) => ({
+        shift_timing: { start_time: "09:00:00", end_time: "18:00:00" },
+        grace_period: { minutes: grace_mins },
+        overtime: { enabled: true, threshold: 8 },
         entry_requirements: {
             selfie,
             geofence
@@ -14,7 +18,13 @@ export const PolicyTemplates = {
         status_rules: [
             {
                 if: [
-                    { ">": [{ var: "minutes_late" }, 120] }, // > 2 hours late
+                    { "<": [{ var: "total_hours" }, 4] },
+                    "ABSENT",
+                ],
+            },
+            {
+                if: [
+                    { "<": [{ var: "total_hours" }, 8] },
                     "HALF_DAY",
                 ],
             },
@@ -22,12 +32,6 @@ export const PolicyTemplates = {
                 if: [
                     { ">": [{ var: "minutes_late" }, grace_mins] },
                     "LATE",
-                ],
-            },
-            {
-                if: [
-                    { "<": [{ var: "total_hours" }, 4] },
-                    "ABSENT",
                 ],
             },
         ],
@@ -182,28 +186,20 @@ function shouldApplyRule(conditions, reqData) {
 
 export const PolicyService = {
     /**
-     * Get policy for Organization. Returns default if none found.
+     * Parse Rules from Shift Object
+     * Returns default STRICT_SHIFT if no rules found in shift
      */
-    getPolicy: async (org_id) => {
-        const policy = await knexDB("attendance_policies")
-            .where({ org_id, is_active: true })
-            .first();
-
-        if (!policy) {
-            // Default Fallback
-            return {
-                rules: PolicyTemplates.STRICT_SHIFT(), // Default strict
-                type: "DEFAULT",
-            };
+    getRulesFromShift: (shift) => {
+        if (!shift || !shift.policy_rules) {
+            return PolicyTemplates.STRICT_SHIFT(); // Default strict
         }
 
-        // If string, parse it (Knex sometimes auto-parses JSON cols, but safe to check)
-        const rules =
-            typeof policy.rules_json === "string"
-                ? JSON.parse(policy.rules_json)
-                : policy.rules_json;
+        // If string, parse it
+        const rules = typeof shift.policy_rules === "string"
+            ? JSON.parse(shift.policy_rules)
+            : shift.policy_rules;
 
-        return { rules, type: policy.policy_type };
+        return rules;
     },
 
     /**
@@ -223,43 +219,89 @@ export const PolicyService = {
         return "PRESENT"; // Default
     },
 
+
     /**
-     * Enhanced Entry Requirements Validation
-     * Supports conditional requirements (only_on)
+     * Check Location Compliance (Modular)
+     * @returns {Promise<{ok: boolean, error?: string}>}
      */
-    validateEntryRequirements: (rules, reqData) => {
-        const errors = [];
-        const reqs = rules.entry_requirements || {};
+    checkLocationCompliance: async (user_id, lat, lng, accuracy, requirements) => {
+        // 1. Basic Validation (Moved from Controller)
+        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            return { ok: false, error: "Invalid or missing latitude/longitude" };
+        }
 
-        // Smart Selfie Check
-        if (reqs.selfie) {
-            let shouldRequire = true;
+        const MAX_ALLOWED_ACCURACY = 200;
+        if (!accuracy || accuracy > MAX_ALLOWED_ACCURACY) {
+            return { ok: false, error: `Location accuracy too poor (${Math.round(accuracy)}m). GPS/Wi-Fi required (< ${MAX_ALLOWED_ACCURACY}m).` };
+        }
 
-            // Check if selfie has conditional logic
-            if (typeof reqs.selfie === 'object' && !Array.isArray(reqs.selfie)) {
-                shouldRequire = reqs.selfie.required && shouldApplyRule(reqs.selfie.only_on, reqData);
-            }
+        const reqs = requirements || {};
+        const geoPolicy = reqs.geolocation || {};
+        const geofenceRule = geoPolicy.geofence;
 
-            if (shouldRequire && !reqData.has_image) {
-                errors.push("Selfie is required for this check-in/out.");
+        if (!geoPolicy.required || !geofenceRule.required) return { ok: true };
+
+        // 2. Perform Geofence Check
+        const isInLocation = await verifyUserGeofence(user_id, lat, lng);
+
+        if (!isInLocation) {
+            return { ok: false, error: "You are outside the allowed work location." };
+        }
+
+        return { ok: true };
+    },
+
+    /**
+     * Check Biometric/Selfie Compliance (Modular)
+     * @returns {{ok: boolean, error?: string}}
+     */
+    checkBiometricCompliance: (file, requirements) => {
+        const reqs = requirements || {};
+        const selfiePolicy = reqs.selfie || {};
+
+        // 1. Check if Selfie is required by policy
+        // Format: "selfie": { "required": true/false, ... }
+        if (!selfiePolicy.required) return { ok: true };
+
+        // 2. Check if file exists
+        if (!file) {
+            return { ok: false, error: "Selfie is required for this check-in/out." };
+        }
+
+        return { ok: true };
+    },
+
+    /**
+     * Calculate Late Arrival & Compliance
+     * Handles grace periods and determines if arrival is effectively late.
+     * @returns {{minutesLate: number, isLate: boolean, gracePeriod: number}}
+     */
+    calculateLateArrival: (localTime, rules) => {
+        let minutesLate = 0;
+        const timing = rules.shift_timing || {};
+        const startTimeStr = timing.start_time;
+
+        if (startTimeStr) {
+            const [sH, sM] = startTimeStr.split(':').map(Number);
+            const localDate = new Date(localTime);
+            const shiftStart = new Date(localDate);
+            shiftStart.setHours(sH, sM, 0, 0);
+
+            const diffMs = localDate - shiftStart;
+            // Only count if positive (late)
+            if (diffMs > 0) {
+                minutesLate = Math.floor(diffMs / 60000);
             }
         }
 
-        // Smart Geofence Check
-        if (reqs.geofence) {
-            let shouldRequire = true;
+        const gracePeriod = timing.grace_period_mins || 0; // Default 0 if undefined
+        const isLate = minutesLate > gracePeriod;
 
-            // Check if geofence has conditional logic
-            if (typeof reqs.geofence === 'object' && !Array.isArray(reqs.geofence)) {
-                shouldRequire = reqs.geofence.required && shouldApplyRule(reqs.geofence.only_on, reqData);
-            }
-
-            if (shouldRequire && !reqData.is_in_location) {
-                errors.push("You are outside the allowed work location.");
-            }
-        }
-
-        return errors;
+        return {
+            minutesLate,
+            isLate,
+            gracePeriod
+        };
     },
 
     /**
@@ -291,11 +333,6 @@ export const PolicyService = {
         const firstTimeIn = todaySessions[0]?.time_in;
         const lastTimeOut = todaySessions[todaySessions.length - 1]?.time_out;
 
-        // Extract hours from timestamps
-        const currentHour = new Date(localTime).getHours();
-        const firstTimeInHour = firstTimeIn ? new Date(firstTimeIn).getHours() : null;
-        const lastTimeOutHour = lastTimeOut ? new Date(lastTimeOut).getHours() : null;
-
         return {
             is_first_session: isFirstSession,
             is_last_session: false, // We can't know this until end of day
@@ -303,11 +340,8 @@ export const PolicyService = {
             total_sessions: todaySessions.length,
 
             // Time data
-            current_time_hour: currentHour,
             first_time_in: firstTimeIn,
-            first_time_in_hour: firstTimeInHour,
             last_time_out: lastTimeOut,
-            last_time_out_hour: lastTimeOutHour,
 
             // Aggregates
             total_hours_today: parseFloat(totalHoursToday.toFixed(2)),

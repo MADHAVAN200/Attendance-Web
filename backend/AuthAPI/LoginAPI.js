@@ -148,12 +148,14 @@ router.post("/refresh", async (req, res) => {
     if (!result) {
       // Invalid or expired
       res.clearCookie('refreshToken');
+      console.log("REFRESH: Invalid or expired token.");
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
     if (result.error) {
       // Reuse detected!
       res.clearCookie('refreshToken');
+      console.log("REFRESH: Reuse detected!");
       return res.status(403).json({ message: "Security Alert: Token reuse detected. Re-login required." });
     }
 
@@ -209,6 +211,7 @@ router.get("/me", authenticateJWT, (req, res) => {
 
 // Route: POST /logout - Clear cookie
 router.post("/logout", async (req, res) => {
+  console.log("Logout called");
   const refreshToken = req.cookies.refreshToken;
   if (refreshToken) {
     await TokenService.revokeRefreshToken(refreshToken);
@@ -217,13 +220,7 @@ router.post("/logout", async (req, res) => {
   res.clearCookie("refreshToken", {
     path: '/' // Important to match the path used to set it
   });
-
-  // Also clear possible old 'token' cookie just in case
-  res.clearCookie("token");
-
-  // Optional: Log logout if we can identify user (if we parse token or pass user_id)
-  // But for now, just responding success is fine.
-
+  console.log("REFRESH: Cookie cleared");
   res.json({ message: "Logged out successfully" });
 });
 

@@ -26,7 +26,7 @@ import { toast } from 'react-toastify';
 
 const PolicyBuilder = () => {
     const location = useLocation();
-    const [activeTab, setActiveTab] = useState('automation'); // 'automation' | 'shifts'
+    const [activeTab, setActiveTab] = useState('shifts'); // 'automation' | 'shifts'
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -72,18 +72,27 @@ const PolicyBuilder = () => {
         start: '09:00',
         end: '18:00',
         grace: 0,
-        otThreshold: 9.0
+        otThreshold: 9.0,
+        reqEntrySelfie: true,
+        reqEntryGeofence: true,
+        reqExitSelfie: false,
+        reqExitGeofence: false
     });
 
     useEffect(() => {
         if (isShiftModalOpen) {
             if (editingShift) {
+                const rules = editingShift.policy_rules || {};
                 setShiftForm({
                     name: editingShift.name,
                     start: editingShift.start,
                     end: editingShift.end,
                     grace: editingShift.grace,
-                    otThreshold: editingShift.otThreshold || 8.0
+                    otThreshold: editingShift.otThreshold || 8.0,
+                    reqEntrySelfie: !!rules.entry_requirements?.selfie,
+                    reqEntryGeofence: !!rules.entry_requirements?.geofence,
+                    reqExitSelfie: !!rules.exit_requirements?.selfie,
+                    reqExitGeofence: !!rules.exit_requirements?.geofence
                 });
                 setIsOtEnabled(!!editingShift.overtime);
             } else {
@@ -92,7 +101,11 @@ const PolicyBuilder = () => {
                     start: '09:00',
                     end: '18:00',
                     grace: 0,
-                    otThreshold: 9.0
+                    otThreshold: 9.0,
+                    reqEntrySelfie: true,
+                    reqEntryGeofence: true,
+                    reqExitSelfie: false,
+                    reqExitGeofence: false
                 });
                 setIsOtEnabled(false);
             }
@@ -106,7 +119,7 @@ const PolicyBuilder = () => {
         // Prevent overwriting DB value on initial Edit load
         // Prevent overwriting DB value on initial Edit load
         // Compare first 5 chars (HH:mm) to handle potential HH:mm:ss vs HH:mm differences
-        if (editingShift &&
+        if (editingShift && editingShift.start && editingShift.end &&
             shiftForm.start.substring(0, 5) === editingShift.start.substring(0, 5) &&
             shiftForm.end.substring(0, 5) === editingShift.end.substring(0, 5)) {
             return;
@@ -146,20 +159,23 @@ const PolicyBuilder = () => {
         setIsLoadingShifts(true);
         try {
             const res = await adminService.getShifts();
-            if (res.success) {
+            
+            if (res.shifts) {
                 // Map backend fields to frontend UI expected fields
-                // DB fields: shift_id, shift_name, start_time, end_time, grace_period_mins, is_overtime_enabled, overtime_threshold_hours
                 const mapped = res.shifts.map(s => ({
                     id: s.shift_id,
                     name: s.shift_name,
-                    start: s.start_time,
-                    end: s.end_time,
+                    start: (s.start_time || "09:00").substring(0, 5),
+                    end: (s.end_time || "18:00").substring(0, 5),
                     grace: s.grace_period_mins,
                     overtime: !!s.is_overtime_enabled,
                     otThreshold: parseFloat(s.overtime_threshold_hours),
-                    color: 'blue' // Default
+                    policy_rules: typeof s.policy_rules === 'string' ? JSON.parse(s.policy_rules) : (s.policy_rules || {}),
+                    color: 'blue' 
                 }));
                 setShifts(mapped);
+            } else {
+                console.warn("API returned no shifts array:", res);
             }
         } catch (error) {
             console.error(error);
@@ -217,14 +233,29 @@ const PolicyBuilder = () => {
 
     const handleSaveShift = async (e) => {
         e.preventDefault();
-        // const formData = new FormData(e.target); // Removed usage of FormData
+        
+        // Preserve existing rules structure (accuracy etc) if editing
+        let baseRules = editingShift ? (editingShift.policy_rules || {}) : {};
+
+        const policies = {
+            ...baseRules,
+            // Ensure core fields are synced
+            shift_timing: { start_time: shiftForm.start, end_time: shiftForm.end },
+            grace_period: { minutes: parseInt(shiftForm.grace) || 0 },
+            overtime: { enabled: isOtEnabled, threshold: parseFloat(shiftForm.otThreshold) || 0 },
+            entry_requirements: {
+                selfie: shiftForm.reqEntrySelfie,
+                geofence: shiftForm.reqEntryGeofence
+            },
+            exit_requirements: {
+                selfie: shiftForm.reqExitSelfie,
+                geofence: shiftForm.reqExitGeofence
+            }
+        };
+
         const shiftData = {
             shift_name: shiftForm.name,
-            start_time: shiftForm.start,
-            end_time: shiftForm.end,
-            grace_period_mins: parseInt(shiftForm.grace) || 0,
-            is_overtime_enabled: isOtEnabled,
-            overtime_threshold_hours: parseFloat(shiftForm.otThreshold) || 0,
+            policy_rules: policies
         };
 
         try {
@@ -280,21 +311,6 @@ const PolicyBuilder = () => {
             {/* Tab Navigation */}
             <div className="flex items-center gap-6 mb-6 border-b border-slate-200 dark:border-slate-700">
                 <button
-                    onClick={() => setActiveTab('automation')}
-                    className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'automation'
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                >
-                    <div className="flex items-center gap-2">
-                        <Zap size={18} />
-                        Automation Rules
-                    </div>
-                    {activeTab === 'automation' && (
-                        <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>
-                    )}
-                </button>
-                <button
                     onClick={() => setActiveTab('shifts')}
                     className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'shifts'
                         ? 'text-indigo-600 dark:text-indigo-400'
@@ -306,6 +322,21 @@ const PolicyBuilder = () => {
                         Shift Configuration
                     </div>
                     {activeTab === 'shifts' && (
+                        <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('automation')}
+                    className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'automation'
+                        ? 'text-indigo-600 dark:text-indigo-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                >
+                    <div className="flex items-center gap-2">
+                        <Zap size={18} />
+                        Automation Rules
+                    </div>
+                    {activeTab === 'automation' && (
                         <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>
                     )}
                 </button>
@@ -714,6 +745,63 @@ const PolicyBuilder = () => {
                                                     className={`w-full pl-3 pr-8 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${!isOtEnabled ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`}
                                                 />
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Hr</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Attendance Requirements */}
+                                    <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
+                                        <h4 className="text-sm font-medium text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                                            <MapPin size={16} className="text-slate-400"/>
+                                            Attendance Validation
+                                        </h4>
+                                        
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Check-In</p>
+                                                <div className="space-y-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={shiftForm.reqEntryGeofence}
+                                                            onChange={e => setShiftForm({...shiftForm, reqEntryGeofence: e.target.checked})}
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">GPS Required</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={shiftForm.reqEntrySelfie}
+                                                            onChange={e => setShiftForm({...shiftForm, reqEntrySelfie: e.target.checked})}
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Selfie Required</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Check-Out</p>
+                                                <div className="space-y-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={shiftForm.reqExitGeofence}
+                                                            onChange={e => setShiftForm({...shiftForm, reqExitGeofence: e.target.checked})}
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">GPS Required</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={shiftForm.reqExitSelfie}
+                                                            onChange={e => setShiftForm({...shiftForm, reqExitSelfie: e.target.checked})}
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Selfie Required</span>
+                                                    </label>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -1,13 +1,13 @@
 import api from './api';
 
-const API_BASE_URL = "/admin";
+const ADMIN_API_URL = "/admin";
 const POLICY_API_URL = "/policies";
 
 export const adminService = {
     // Get all users
     async getAllUsers(includeWorkLocation = false) {
         try {
-            const res = await api.get(`${API_BASE_URL}/users?workLocation=${includeWorkLocation}`);
+            const res = await api.get(`${ADMIN_API_URL}/users?workLocation=${includeWorkLocation}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch users");
@@ -17,7 +17,7 @@ export const adminService = {
     // Get single user
     async getUserById(userId) {
         try {
-            const res = await api.get(`${API_BASE_URL}/user/${userId}`);
+            const res = await api.get(`${ADMIN_API_URL}/user/${userId}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch user");
@@ -27,7 +27,7 @@ export const adminService = {
     // Create user
     async createUser(userData) {
         try {
-            const res = await api.post(`${API_BASE_URL}/user`, userData);
+            const res = await api.post(`${ADMIN_API_URL}/user`, userData);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create user");
@@ -37,7 +37,7 @@ export const adminService = {
     // Update user
     async updateUser(userId, userData) {
         try {
-            const res = await api.put(`${API_BASE_URL}/user/${userId}`, userData);
+            const res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update user");
@@ -47,7 +47,7 @@ export const adminService = {
     // Delete user
     async deleteUser(userId) {
         try {
-            const res = await api.delete(`${API_BASE_URL}/user/${userId}`);
+            const res = await api.delete(`${ADMIN_API_URL}/user/${userId}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete user");
@@ -57,7 +57,7 @@ export const adminService = {
     // Helpers
     async getDepartments() {
         try {
-            const res = await api.get(`${API_BASE_URL}/departments`);
+            const res = await api.get(`${ADMIN_API_URL}/departments`);
             return res.data;
         } catch (error) {
             console.error("Failed to fetch departments", error);
@@ -66,7 +66,7 @@ export const adminService = {
     },
     async bulkCreateUsersJson(usersData) {
         try {
-            const res = await api.post(`${API_BASE_URL}/users/bulk-json`, { users: usersData });
+            const res = await api.post(`${ADMIN_API_URL}/users/bulk-json`, { users: usersData });
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to bulk create users");
@@ -75,7 +75,7 @@ export const adminService = {
 
     async bulkValidateUsers(usersData) {
         try {
-            const res = await api.post(`${API_BASE_URL}/users/bulk-validate`, { users: usersData });
+            const res = await api.post(`${ADMIN_API_URL}/users/bulk-validate`, { users: usersData });
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to validate users");
@@ -84,7 +84,7 @@ export const adminService = {
 
     async createDepartment(dept_name) {
         try {
-            const res = await api.post(`${API_BASE_URL}/departments`, { dept_name });
+            const res = await api.post(`${ADMIN_API_URL}/departments`, { dept_name });
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create department");
@@ -93,7 +93,7 @@ export const adminService = {
 
     async createDesignation(desg_name) {
         try {
-            const res = await api.post(`${API_BASE_URL}/designations`, { desg_name });
+            const res = await api.post(`${ADMIN_API_URL}/designations`, { desg_name });
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create designation");
@@ -102,7 +102,7 @@ export const adminService = {
 
     async getDesignations() {
         try {
-            const res = await api.get(`${API_BASE_URL}/designations`);
+            const res = await api.get(`${ADMIN_API_URL}/designations`);
             return res.data;
         } catch (error) {
             console.error("Failed to fetch designations", error);
@@ -111,7 +111,8 @@ export const adminService = {
     },
     async getShifts() {
         try {
-            const res = await api.get(`${API_BASE_URL}/shifts`);
+            const res = await api.get(`${POLICY_API_URL}/shifts`);
+            console.log(res.data);
             return res.data;
         } catch (error) {
             console.error("Failed to fetch shifts", error);
@@ -129,6 +130,7 @@ export const adminService = {
     },
     async updateShift(shiftId, shiftData) {
         try {
+            console.log(`shift ${shiftId} update: ${JSON.stringify(shiftData)}`);
             const res = await api.put(`${POLICY_API_URL}/shifts/${shiftId}`, shiftData);
             return res.data;
         } catch (error) {
@@ -154,7 +156,7 @@ export const adminService = {
     },
     async getReportPreview(month, type, date = "") {
         try {
-            const res = await api.get(`${API_BASE_URL}/reports/preview?month=${month}&type=${type}&date=${date}`);
+            const res = await api.get(`${ADMIN_API_URL}/reports/preview?month=${month}&type=${type}&date=${date}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch report preview");
@@ -162,7 +164,7 @@ export const adminService = {
     },
     async downloadReport(month, type, format = "xlsx", userId = "", date = "") {
         try {
-            const url = `${API_BASE_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
             const response = await api.get(url, { responseType: 'blob' });
             return response.data;
         } catch (error) {
@@ -172,7 +174,7 @@ export const adminService = {
 
     async getDashboardStats(range = 'weekly', month = null, year = null) {
         try {
-            let url = `${API_BASE_URL}/dashboard-stats?range=${range}`;
+            let url = `${ADMIN_API_URL}/dashboard-stats?range=${range}`;
             if (month && year) {
                 url += `&month=${month}&year=${year}`;
             }

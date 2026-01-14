@@ -27,37 +27,23 @@ async function getUserShift(user_id) {
 router.post("/timein", authenticateJWT, upload.single("image"),
   catchAsync(async (req, res) => {
 
-    // fields come as strings in multipart
-    const user_id = req.user.user_id;
-    const org_id = req.user.org_id;
+    // 1. DATA PREPARATION
+    const { user_id, org_id } = req.user;
     const latitude = Number(req.body.latitude);
     const longitude = Number(req.body.longitude);
     const accuracy = Number(req.body.accuracy);
     const late_reason = req.body.late_reason || null;
-    const file = req.file; // may be undefined if no image sent
+    const file = req.file;
 
-    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      return res.status(400).json({
-        ok: false,
-        message: "Invalid or missing latitude/longitude",
-      });
-    }
 
-    // ACCURACY VALIDATION - Security: Prevent fake locations
-    const MAX_ALLOWED_ACCURACY = 200; // meters
-    if (!accuracy || accuracy > MAX_ALLOWED_ACCURACY) {
-      return res.status(400).json({
-        ok: false,
-        message: `Location accuracy too poor (${Math.round(accuracy)}m). GPS/Wi-Fi required (< ${MAX_ALLOWED_ACCURACY}m).`,
-      });
-    }
-
-    // STEP 1: Convert UTC → local time at user's coordinates
+    // 2. CONTEXT LOADING
+    // A. Time & Address
     const nowUTC = new Date().toISOString();
     const tz = await fetchTimeStamp(latitude, longitude, nowUTC);
     const localTime = tz.localTime;
+    const { address } = await coordsToAddress(latitude, longitude);
 
-    // STEP 2: Check existing open session
+    // B. Check Existing Session
     const openSession = await knexDB("attendance_records")
       .where({ user_id })
       .whereNull("time_out")
@@ -65,68 +51,35 @@ router.post("/timein", authenticateJWT, upload.single("image"),
       .first();
 
     if (openSession) {
-      return res.status(400).json({
-        ok: false,
-        message: "Already timed in. Please time out first.",
-      });
+      return res.status(400).json({ ok: false, message: "Already timed in. Please time out first." });
     }
 
-    // STEP 3: Convert coordinates into address
-    const { address } = await coordsToAddress(latitude, longitude);
-
-    // STEP 4: --- BUILD SESSION CONTEXT ---
+    // C. Policy Context
     const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_in");
-
-    // STEP 5: --- POLICY VALIDATION ---
-    const policy = await PolicyService.getPolicy(org_id);
-
-    // STEP 5.1: Check geofence (conditionally based on policy)
-    let isInLocation = true;
-    const reqs = policy.rules.entry_requirements || {};
-
-    // Only check geofence if it's required for this event
-    const shouldCheckGeofence = reqs.geofence === true ||
-      (typeof reqs.geofence === 'object' && reqs.geofence.required);
-
-    if (shouldCheckGeofence) {
-      isInLocation = await verifyUserGeofence(user_id, latitude, longitude);
-    }
-
-    // STEP 5.2: Build complete policy data (merge session context with current data)
-    const policyData = {
-      ...sessionContext,
-      has_image: !!file,
-      is_in_location: isInLocation,
-    };
-
-    // STEP 5.3: Validate entry requirements (with conditional logic)
-    const policyErrors = PolicyService.validateEntryRequirements(policy.rules, policyData);
-
-    if (policyErrors.length > 0) {
-      return res.status(400).json({
-        ok: false,
-        message: "Policy Violation: " + policyErrors.join(", "),
-      });
-    }
-
-    // STEP 6: Late Calculation
     const shift = await getUserShift(user_id);
-    let minutesLate = 0;
+    const rules = PolicyService.getRulesFromShift(shift);
 
-    if (shift && shift.start_time) {
-      // shift.start_time is "HH:MM:SS"
-      const [sH, sM] = shift.start_time.split(':').map(Number);
-      const localDate = new Date(localTime);
-      const shiftStart = new Date(localDate);
-      shiftStart.setHours(sH, sM, 0, 0);
+    // 3. MODULAR POLICY CHECKS
 
-      const diffMs = localDate - shiftStart;
-      if (diffMs > 0) {
-        minutesLate = Math.floor(diffMs / 60000);
-      }
+    // A. Geolocation Check
+    const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.entry_requirements);
+    if (!geoCheck.ok) {
+      return res.status(400).json({ ok: false, message: "Policy Violation: " + geoCheck.error });
     }
 
-    // STEP 7: Prepare metadata for logging (include session context)
+    // B. Biometric Check
+    const bioCheck = PolicyService.checkBiometricCompliance(file, rules.entry_requirements);
+    if (!bioCheck.ok) {
+      return res.status(400).json({ ok: false, message: "Policy Violation: " + bioCheck.error });
+    }
+
+    // 4. POLICY EXECUTION
+
+    // Late Calculation
+    const lateCheck = PolicyService.calculateLateArrival(localTime, rules);
+    const minutesLate = lateCheck.minutesLate;
+
+    // Metadata
     const metadata = {
       time_in: {
         accuracy: Math.round(accuracy),
@@ -138,34 +91,57 @@ router.post("/timein", authenticateJWT, upload.single("image"),
       session_context: sessionContext
     };
 
-    // STEP 8: Insert attendance with Policy Data & Metadata
+    // DB Insert
     const [attendance_id] = await knexDB("attendance_records").insert({
       user_id,
-      org_id: req.user.org_id,
-      late_reason: late_reason || (minutesLate > 0 ? "Late Entry" : null),
+      org_id,
+      late_reason: sessionContext.is_first_session ? (late_reason || (lateCheck.isLate ? "Late Entry" : null)) : null,
       late_minutes: minutesLate,
-      status: "PRESENT", // Default, updated on checkout
       time_in: localTime,
       time_in_lat: latitude,
       time_in_lng: longitude,
       time_in_address: address,
+      status: lateCheck.isLate ? "LATE" : "TIMED_IN",
       metadata: JSON.stringify(metadata),
       created_at: knexDB.fn.now(),
       updated_at: knexDB.fn.now(),
     });
 
-    let imageKey = null;
+    // Daily Sync
+    try {
+      const dateStr = localTime.split('T')[0];
+      const timeStr = localTime.split('T')[1].split('.')[0];
 
-    // STEP 9: If image present, upload to S3
+      const existingDaily = await knexDB("daily_attendance")
+        .where({ user_id, date: dateStr })
+        .first();
+
+      if (!existingDaily) {
+        await knexDB("daily_attendance").insert({
+          user_id,
+          org_id,
+          date: dateStr,
+          shift_id: shift ? shift.shift_id : null,
+          first_in: timeStr,
+          status: lateCheck.isLate ? 'LATE' : 'ON_TIME', // Set initial status based on arrival
+          total_hours: 0,
+          created_at: knexDB.fn.now(),
+          updated_at: knexDB.fn.now()
+        });
+      }
+    } catch (dailyErr) {
+      console.error("Daily Sync Error:", dailyErr);
+    }
+
+    // S3 Upload
+    let imageKey = null;
     if (file) {
       const uploadResult = await uploadCompressedImage({
         fileBuffer: file.buffer,
         key: `${attendance_id}_in`,
         directory: "attendance_images"
       });
-
       imageKey = uploadResult.key;
-
       await knexDB("attendance_records")
         .where({ attendance_id })
         .update({
@@ -174,9 +150,10 @@ router.post("/timein", authenticateJWT, upload.single("image"),
         });
     }
 
+    // Events
     EventBus.emitNotification({
-      org_id: req.user.org_id,
-      user_id: user_id,
+      org_id,
+      user_id,
       title: "Attendance Checked In",
       message: `You have successfully checked in at ${localTime} from ${address}`,
       type: "SUCCESS",
@@ -186,7 +163,7 @@ router.post("/timein", authenticateJWT, upload.single("image"),
 
     EventBus.emitActivityLog({
       user_id,
-      org_id: req.user.org_id,
+      org_id,
       event_type: "CHECK_IN",
       event_source: getEventSource(req),
       object_type: "ATTENDANCE",
@@ -201,7 +178,7 @@ router.post("/timein", authenticateJWT, upload.single("image"),
       ok: true,
       attendance_id,
       local_time: localTime,
-      address: address,
+      address,
       tz_name: tz.tzName,
       image_key: imageKey,
       session_number: sessionContext.session_number,
@@ -215,98 +192,65 @@ router.post("/timein", authenticateJWT, upload.single("image"),
 router.post("/timeout", authenticateJWT, upload.single("image"),
   catchAsync(async (req, res) => {
 
-    // fields come as strings in multipart
-    const user_id = req.user.user_id;
-    const org_id = req.user.org_id;
+    // 1. DATA PREPARATION
+    const { user_id, org_id } = req.user;
     const latitude = Number(req.body.latitude);
     const longitude = Number(req.body.longitude);
     const accuracy = Number(req.body.accuracy);
     const file = req.file;
 
-    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "Invalid or missing latitude/longitude" });
-    }
 
-    // ACCURACY VALIDATION - Security: Prevent fake locations
-    const MAX_ALLOWED_ACCURACY = 200; // meters
-    if (!accuracy || accuracy > MAX_ALLOWED_ACCURACY) {
-      return res.status(400).json({
-        ok: false,
-        message: `Location accuracy too poor (${Math.round(accuracy)}m). GPS/Wi-Fi required (< ${MAX_ALLOWED_ACCURACY}m).`,
-      });
-    }
 
-    // STEP 1: Get current UTC time and convert to LOCAL
+    // 2. CONTEXT LOADING
+    // A. Time & Address
     const nowUTC = new Date().toISOString();
     const tz = await fetchTimeStamp(latitude, longitude, nowUTC);
     const localTime = tz.localTime;
-
-    // STEP 2: Convert coordinates into address
     const { address } = await coordsToAddress(latitude, longitude);
 
-    // STEP 3: Find open attendance session
+    // B. Check Existing Session (Fail Fast)
     const openSession = await knexDB("attendance_records")
       .where({ user_id })
       .whereNull("time_out")
       .whereRaw("DATE(time_in) = DATE(?)", [localTime])
       .first();
+    // console.log("open session: ", openSession);
+    // console.log("local time: ", localTime);
 
     if (!openSession) {
-      return res.status(400).json({
-        ok: false,
-        message: "No active time-in found to time out.",
-      });
+      return res.status(400).json({ ok: false, message: "No active time-in found to time out." });
     }
 
-    // STEP 4: --- BUILD SESSION CONTEXT ---
+    // C. Policy Context
     const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_out");
+    const shift = await getUserShift(user_id);
+    const rules = PolicyService.getRulesFromShift(shift);
 
-    // STEP 5: --- POLICY VALIDATION ---
-    const policy = await PolicyService.getPolicy(org_id);
+    // 3. MODULAR POLICY CHECKS (Fail Fast)
 
-    // STEP 5.1: Check geofence (conditionally based on policy)
-    let isInLocation = true;
-    const reqs = policy.rules.entry_requirements || {};
-
-    // Only check geofence if it's required for this event
-    const shouldCheckGeofence = reqs.geofence === true ||
-      (typeof reqs.geofence === 'object' && reqs.geofence.required);
-
-    if (shouldCheckGeofence) {
-      isInLocation = await verifyUserGeofence(user_id, latitude, longitude);
+    // A. Geolocation Check
+    const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.exit_requirements);
+    if (!geoCheck.ok) {
+      return res.status(400).json({ ok: false, message: "Policy Violation: " + geoCheck.error });
     }
 
-    // STEP 5.2: Build complete policy data (merge session context with current data)
-    const policyData = {
-      ...sessionContext,
-      has_image: !!file,
-      is_in_location: isInLocation,
-    };
-
-    // STEP 5.3: Validate entry requirements (with conditional logic)
-    const policyErrors = PolicyService.validateEntryRequirements(policy.rules, policyData);
-
-    if (policyErrors.length > 0) {
-      return res.status(400).json({
-        ok: false,
-        message: "Policy Violation: " + policyErrors.join(", "),
-      });
+    // B. Biometric Check
+    const bioCheck = PolicyService.checkBiometricCompliance(file, rules.exit_requirements);
+    if (!bioCheck.ok) {
+      return res.status(400).json({ ok: false, message: "Policy Violation: " + bioCheck.error });
     }
 
+    // 4. POLICY EXECUTION
+
+    // S3 Upload
     let imageKey = null;
-
-    // STEP 6: If image present, upload to S3
     if (file) {
       const uploadResult = await uploadCompressedImage({
         fileBuffer: file.buffer,
         key: `${openSession.attendance_id}_out`,
         directory: "attendance_images"
       });
-
       imageKey = uploadResult.key;
-
       await knexDB("attendance_records")
         .where({ attendance_id: openSession.attendance_id })
         .update({
@@ -315,37 +259,38 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
         });
     }
 
-    // STEP 7: Calculate Duration for this session
+    // Calculations
     const timeIn = new Date(openSession.time_in);
-    const timeOut = new Date(localTime);
+    const timeOut = new Date(nowUTC);
     const durationMs = timeOut - timeIn;
     const totalHours = durationMs / (1000 * 60 * 60);
-
     const minutesLate = openSession.late_minutes || 0;
+    // console.log("timeIn", timeIn);
+    // console.log("timeOut", timeOut);
+    // console.log("durationMs", durationMs);
+    // console.log("totalHours", totalHours);
+    // console.log("minutesLate", minutesLate);
 
-    // STEP 8: Build enhanced policy data for status evaluation
-    // Include both session-specific and day-level data
+    // Status Evaluation
     const statusEvalData = {
-      ...policyData,
-      // Session-specific
+      ...sessionContext,
       total_hours: totalHours,
       minutes_late: minutesLate,
       check_in_hour: timeIn.getHours(),
       check_out_hour: timeOut.getHours(),
-      // Update with current checkout time
       last_time_out_hour: timeOut.getHours()
     };
+    const status = PolicyService.evaluateStatus(rules, statusEvalData);
 
-    // STEP 9: Evaluate Status (using enhanced data)
-    const status = PolicyService.evaluateStatus(policy.rules, statusEvalData);
-
-    // Merge metadata - Keep time_in data, add time_out data
+    // Metadata Update
     let metadata = {};
     try {
-      metadata = openSession.metadata ? JSON.parse(openSession.metadata) : {};
-    } catch (e) {
-      console.error("Failed to parse existing metadata:", e);
-    }
+      if (typeof openSession.metadata === 'string') {
+        metadata = JSON.parse(openSession.metadata);
+      } else if (typeof openSession.metadata === 'object' && openSession.metadata !== null) {
+        metadata = openSession.metadata;
+      }
+    } catch (e) { console.error("Metadata parse error", e); }
 
     metadata.time_out = {
       accuracy: Math.round(accuracy),
@@ -355,10 +300,9 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
       timezone: tz.tzName,
       total_hours: parseFloat(totalHours.toFixed(2))
     };
-
-    // Add session context to metadata
     metadata.session_context_at_checkout = sessionContext;
 
+    // DB Update
     await knexDB("attendance_records")
       .where({ attendance_id: openSession.attendance_id })
       .update({
@@ -366,15 +310,33 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
         time_out_lat: latitude,
         time_out_lng: longitude,
         time_out_address: address,
-        status: status,
-        overtime_hours: totalHours > 8 ? (totalHours - 8) : 0, // Simple calc for now
+        overtime_hours: totalHours > (rules.overtime?.threshold || 8) ? (totalHours - (rules.overtime?.threshold || 8)) : 0,
         metadata: JSON.stringify(metadata),
         updated_at: knexDB.fn.now(),
       });
 
+    // Daily Sync
+    try {
+      const dateStrSync = localTime.split('T')[0];
+      const timeStrSync = localTime.split('T')[1].split('.')[0];
+      const grandTotalHours = parseFloat((sessionContext.total_hours_today + totalHours).toFixed(2));
+
+      await knexDB("daily_attendance")
+        .where({ user_id, date: dateStrSync })
+        .update({
+          last_out: timeStrSync,
+          total_hours: grandTotalHours,
+          status: status,
+          updated_at: knexDB.fn.now()
+        });
+    } catch (dailyErr) {
+      console.error("Daily Sync Error (Timeout):", dailyErr);
+    }
+
+    // Events
     EventBus.emitNotification({
-      org_id: req.user.org_id,
-      user_id: user_id,
+      org_id,
+      user_id,
       title: "Attendance Checked Out",
       message: `You have successfully checked out at ${localTime}. Total hours today: ${sessionContext.total_hours_today.toFixed(2)}h`,
       type: "INFO",
@@ -384,7 +346,7 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
 
     EventBus.emitActivityLog({
       user_id,
-      org_id: req.user.org_id,
+      org_id,
       event_type: "CHECK_OUT",
       event_source: getEventSource(req),
       object_type: "ATTENDANCE",
@@ -399,10 +361,10 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
       ok: true,
       attendance_id: openSession.attendance_id,
       local_time_out: localTime,
-      address: address,
+      address,
       tz_name: tz.tzName,
       image_key: imageKey,
-      status: status,
+      status,
       session_hours: parseFloat(totalHours.toFixed(2)),
       total_hours_today: sessionContext.total_hours_today,
       message: "Timed out successfully",
@@ -478,7 +440,6 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
 
 // Normal user fetch their own records with optional limit and date filter
 router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
-  // try removed
   const userId = req.user.user_id;
   const { date_from, date_to, limit = 50 } = req.query;
 
@@ -495,6 +456,7 @@ router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
   }
 
   const records = await query;
+  // console.log(records);
 
   const withUrls = await Promise.all(
     (records || []).map(async (row) => {
@@ -769,6 +731,57 @@ router.patch(
           review_comments: review_comments || null,
           audit_trail: JSON.stringify(auditTrail)
         });
+
+      // --- APPLY CORRECTION IF APPROVED ---
+      if (status === 'approved') {
+        // Format date for DB
+        const dateStr = new Date(correction.request_date).toISOString().split('T')[0];
+
+        const updateData = {
+          status: 'PRESENT', // default to present if approved
+          is_manual_adjustment: true,
+          adjusted_by: reviewer_id,
+          adjustment_reason: `Correction Request #${acr_id} Approved`,
+          updated_at: knexDB.fn.now()
+        };
+
+        // If times provided, apply them
+        if (correction.requested_time_in) {
+          updateData.first_in = correction.requested_time_in;
+        }
+        if (correction.requested_time_out) {
+          updateData.last_out = correction.requested_time_out;
+        }
+
+        // Calculate hours if both exist (Simple diff)
+        if (correction.requested_time_in && correction.requested_time_out) {
+          const start = new Date(`1970-01-01T${correction.requested_time_in}`);
+          const end = new Date(`1970-01-01T${correction.requested_time_out}`);
+          const diff = (end - start) / (1000 * 60 * 60);
+          if (diff > 0) updateData.total_hours = diff.toFixed(2);
+        }
+
+        // Upsert into daily_attendance
+        const existing = await knexDB("daily_attendance")
+          .where({ user_id: correction.user_id, date: dateStr })
+          .first();
+
+        if (existing) {
+          await knexDB("daily_attendance")
+            .where({ daily_id: existing.daily_id })
+            .update(updateData);
+        } else {
+          await knexDB("daily_attendance").insert({
+            user_id: correction.user_id,
+            org_id: org_id,
+            date: dateStr,
+            // defaulting shift? we might skip shift_id or query it
+            ...updateData,
+            created_at: knexDB.fn.now()
+          });
+        }
+      }
+      // ------------------------------------ --
 
       res.json({
         message: `Request ${status} successfully`

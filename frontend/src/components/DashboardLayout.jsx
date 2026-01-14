@@ -14,7 +14,8 @@ import {
     Sun,
     Clock,
     MapPin,
-    CreditCard
+    CreditCard,
+    ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -118,6 +119,7 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                     <SidebarItem icon={<Clock size={20} />} text="Live Attendance" to="/attendance-monitoring" />
                     <SidebarItem icon={<TrendingUp size={20} />} text="Reports" to="/reports" />
                     <SidebarItem icon={<Calendar size={20} />} text="Holidays" to="/holidays" />
+                    <SidebarItem icon={<ClipboardList size={20} />} text="Daily Activity Report" to="/daily-activity" />
                     <SidebarItem icon={<Settings size={20} />} text="Policy Engine" to="/policy-builder" />
                     <SidebarItem icon={<MapPin size={20} />} text="Geo Fencing" to="/geofencing" />
                     <SidebarItem icon={<CreditCard size={20} />} text="Subscription" to="/subscription" />
