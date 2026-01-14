@@ -33,7 +33,6 @@ export const setAccessToken = (token) => {
 
 api.interceptors.request.use(
     (config) => {
-        console.log(`accessToken API: ${accessToken}`); // Optional debug
         if (accessToken) {
             config.headers['Authorization'] = `Bearer ${accessToken}`;
         }
