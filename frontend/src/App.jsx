@@ -68,6 +68,7 @@ function App() {
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/holidays" element={<HolidayManagement />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/daily-activity" element={<DailyActivity />} />
             </Route>
 
             {/* Admin & HR Only Routes */}
@@ -76,7 +77,6 @@ function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/policy-builder" element={<PolicyBuilder />} />
               <Route path="/geofencing" element={<GeoFencing />} />
-              <Route path="/daily-activity" element={<DailyActivity />} />
               <Route path="/employees" element={<EmployeeList />} />
               <Route path="/employees/add" element={<EmployeeForm />} />
               <Route path="/employees/edit/:id" element={<EmployeeForm />} />
