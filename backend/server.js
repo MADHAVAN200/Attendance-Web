@@ -15,6 +15,7 @@ import PolicyRoutes from './Admin/Policies.js';
 import EmployeeRoutes from './Employee/EmployeeRoutes.js';
 import FeedbackRoutes from './Feedback/FeedbackRoutes.js';
 import ReportRoutes from './Admin/ReportAPI.js';
+import LeaveRoutes from './Attendance/Leaves.js';
 import './config.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -70,6 +71,7 @@ app.use('/admin', AdminRoutes);
 app.use('/admin/reports', ReportRoutes);
 app.use('/attendance/reports', ReportRoutes);
 app.use('/locations', LocationRoutes); // Admin locations
+app.use('/leaves', LeaveRoutes);
 app.use('/holiday', HolidayRoutes);
 app.use('/policies', PolicyRoutes);
 app.use('/notifications', NotificationRoutes);
