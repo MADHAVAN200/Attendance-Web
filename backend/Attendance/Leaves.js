@@ -18,7 +18,7 @@ router.get('/my-history', authenticateJWT, catchAsync(async (req, res) => {
 
     const leaves = await knexDB('leave_requests')
         .where({ user_id, org_id })
-        .orderBy('created_at', 'desc');
+        .orderBy('start_date', 'desc');
 
     res.json({ ok: true, leaves });
 }));
@@ -62,8 +62,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
         start_date,
         end_date,
         reason,
-        status: 'Pending',
-        created_at: new Date()
+        status: 'Pending'
     });
 
     // Notify Admins
@@ -93,7 +92,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
     const { id } = req.params;
     const { user_id, org_id } = req.user;
 
-    const request = await knexDB('leave_requests').where({ leave_id: id, user_id, org_id }).first();
+    const request = await knexDB('leave_requests').where({ lr_id: id, user_id, org_id }).first();
 
     if (!request) {
         return res.status(404).json({ ok: false, message: "Request not found" });
@@ -103,7 +102,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(400).json({ ok: false, message: "Cannot withdraw processed request" });
     }
 
-    await knexDB('leave_requests').where({ leave_id: id }).del();
+    await knexDB('leave_requests').where({ lr_id: id }).del();
 
     res.json({ ok: true, message: "Request withdrawn" });
 }));
@@ -129,7 +128,7 @@ router.get('/admin/pending', authenticateJWT, catchAsync(async (req, res) => {
         )
         .where('lr.org_id', req.user.org_id)
         .where('lr.status', 'Pending')
-        .orderBy('lr.created_at', 'asc');
+        .orderBy('lr.start_date', 'asc');
 
     res.json({ ok: true, requests });
 }));
@@ -152,12 +151,12 @@ router.get('/admin/history', authenticateJWT, catchAsync(async (req, res) => {
     if (start_date) query = query.where('lr.start_date', '>=', start_date);
     if (end_date) query = query.where('lr.end_date', '<=', end_date);
 
-    const history = await query.orderBy('lr.created_at', 'desc');
+    const history = await query.orderBy('lr.start_date', 'desc');
     res.json({ ok: true, history });
 }));
 
-// PUT /leaves/admin/approve/:id - Approve/Reject
-router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
+// PUT /leaves/admin/status/:id - Approve/Reject/Update Status
+router.put('/admin/status/:id', authenticateJWT, catchAsync(async (req, res) => {
     if (req.user.user_type !== 'admin' && req.user.user_type !== 'hr') {
         return res.status(403).json({ ok: false, message: "Access denied" });
     }
@@ -166,7 +165,7 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
     const { status, pay_type, pay_percentage, admin_comment } = req.body;
 
     if (!['Approved', 'Rejected'].includes(status)) {
-        return res.status(400).json({ ok: false, message: "Invalid status" });
+        return res.status(400).json({ ok: false, message: "Invalid 5" });
     }
 
     if (status === 'Approved' && !pay_type) {
@@ -186,7 +185,7 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
     }
 
     const affected = await knexDB('leave_requests')
-        .where({ leave_id: id, org_id: req.user.org_id })
+        .where({ lr_id: id, org_id: req.user.org_id })
         .update(updateData);
 
     if (affected === 0) {
@@ -194,7 +193,7 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
     }
 
     // Fetch user for notification
-    const request = await knexDB('leave_requests').where({ leave_id: id }).first();
+    const request = await knexDB('leave_requests').where({ lr_id: id }).first();
     if (request) {
         NotificationService.handleNotification({
             org_id: req.user.org_id,
