@@ -250,26 +250,48 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
   let newUserId;
 
   await knexDB.transaction(async (trx) => {
-    // 2. Insert User
-    const [insertedId] = await trx('users').insert({
+    // 2. Lock Organization Row
+    const org = await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .forUpdate()
+      .first();
+
+    if (!org) {
+      throw new AppError("Organization not found", 404);
+    }
+
+    // 3. Increment counter
+    const nextNumber = org.last_user_number + 1;
+
+    // 4. Generate user_code (space preserved)
+    const userCode = `${org.org_code}-${String(nextNumber).padStart(3, "0")}`;
+
+    // 5. Update org counter
+    await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .update({ last_user_number: nextNumber });
+
+    // 6. Insert user WITH user_code
+    const [insertedId] = await trx("users").insert({
       org_id: req.user.org_id,
       user_name,
+      user_code: userCode,
       user_password: hashedPassword,
       email,
       phone_no: phoneToSave,
       desg_id: desg_id || null,
       dept_id: dept_id || null,
       shift_id: shift_id || null,
-      user_type: user_type || 'employee'
+      user_type: user_type || "employee"
     });
 
     if (!insertedId) {
-      throw new AppError("Failed to create user: No ID returned", 500);
+      throw new AppError("Failed to create user", 500);
     }
 
     newUserId = insertedId;
 
-    // 4. Emit Event
+    // 7. Activity log (non-blocking)
     try {
       EventBus.emitActivityLog({
         user_id: req.user.user_id,
@@ -278,24 +300,29 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
         event_source: getEventSource(req),
         object_type: "USER",
         object_id: newUserId,
-        description: `Created user ${user_name} (${user_type})`,
+        description: `Created user ${user_name} (${user_type || "employee"})`,
         request_ip: req.ip,
-        user_agent: req.get('User-Agent')
+        user_agent: req.get("User-Agent")
       });
     } catch (logErr) {
       console.error("Failed to log activity:", logErr);
     }
   });
 
-  res.status(201).json({ success: true, message: "User created successfully", inserted_id: newUserId });
-}));
+  res.status(201).json({
+    success: true,
+    message: "User created successfully",
+    inserted_id: newUserId
+  });
+})
+);
+
 
 // BULK CREATE users from CSV/Excel
 router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(async (req, res, next) => {
   if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
     throw new AppError("Only admin and HR can perform bulk operations", 403);
   }
-  console.log(req.file)
   if (!req.file) {
     throw new AppError("Please upload a CSV or Excel file", 400);
   }
@@ -305,7 +332,6 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
   const mimeType = req.file.mimetype;
   const originalName = req.file.originalname.toLowerCase();
 
-  // Load data based on format
   if (mimeType.includes("csv") || originalName.endsWith(".csv")) {
     const bufferStream = new PassThrough();
     bufferStream.end(buffer);
@@ -318,7 +344,6 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
   if (!worksheet) {
     throw new AppError("Invalid or empty file", 400);
   }
-
   const results = {
     total_processed: 0,
     success_count: 0,
@@ -326,7 +351,6 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
     errors: []
   };
 
-  const usersToInsert = [];
 
   // Clean headers map
   const headerMap = {};
@@ -350,7 +374,7 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
     rowsData.push({ row, rowNumber });
   });
 
-  // 1. Scan and resolve Departments, Designations, and Shifts
+  // Collect unique values
   const uniqueDepts = new Set();
   const uniqueDesgs = new Set();
   const uniqueShifts = new Set();
@@ -370,18 +394,35 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
   const shiftMap = {}; // Name -> ID
 
   await knexDB.transaction(async (trx) => {
-    // A. Resolve Departments
+
+    // ================= OUR PART (START) =================
+
+    // 🔐 Lock organization row ONCE
+    const org = await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .forUpdate()
+      .first();
+
+    if (!org) {
+      throw new AppError("Organization not found", 404);
+    }
+
+    // Local counter for bulk users
+    let nextUserNumber = org.last_user_number;
+
+    // ================= OUR PART (END) =================
+
+
+    // Resolve Departments
     for (const deptName of uniqueDepts) {
-      if (!deptName) continue;
-      // Check if exists
-      let dept = await trx("departments").where({ dept_name: deptName, org_id: req.user.org_id }).first();
-      // Also check defaults? Assuming we only match org-specific for now or logic similar to helpers
+      let dept = await trx("departments")
+        .where({ dept_name: deptName, org_id: req.user.org_id })
+        .first();
+
       if (!dept) {
-        // Create new
         const [newId] = await trx("departments").insert({
           dept_name: deptName,
-          org_id: req.user.org_id,
-          // description? defaults?
+          org_id: req.user.org_id
         });
         deptMap[deptName.toLowerCase()] = newId;
       } else {
@@ -389,10 +430,12 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
       }
     }
 
-    // B. Resolve Designations
+    // Resolve Designations
     for (const desgName of uniqueDesgs) {
-      if (!desgName) continue;
-      let desg = await trx("designations").where({ desg_name: desgName, org_id: req.user.org_id }).first();
+      let desg = await trx("designations")
+        .where({ desg_name: desgName, org_id: req.user.org_id })
+        .first();
+
       if (!desg) {
         const [newId] = await trx("designations").insert({
           desg_name: desgName,
@@ -404,15 +447,14 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
       }
     }
 
-    // C. Resolve Shifts (Read-only, matches exact name)
-    // We fetch all shifts for this org + defaults? 
-    // Assuming shifts need to be strictly matched to what is created in the system.
-    // Let's just lookup what we have.
-    const allShifts = await trx("shifts").where({ org_id: req.user.org_id }).select('shift_id', 'shift_name');
+    // Resolve Shifts
+    const allShifts = await trx("shifts")
+      .where({ org_id: req.user.org_id })
+      .select("shift_id", "shift_name");
+
     for (const sh of allShifts) {
       shiftMap[sh.shift_name.toLowerCase()] = sh.shift_id;
     }
-
 
     // 2. Process Users
     for (const { row, rowNumber } of rowsData) {
@@ -426,7 +468,6 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
       const desgName = getVal(row, "designation") || getVal(row, "role");
       const shiftName = getVal(row, "shift");
 
-      // Default password logic
       const password = getVal(row, "password") || `${name}-${req.user.org_id}`;
       const type = getVal(row, "type") || "employee";
 
@@ -436,50 +477,53 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
         continue;
       }
 
-      try {
-        // Check duplicates in DB
-        let duplicateQuery = trx("users").where({ email });
-        if (phone) {
-          duplicateQuery = duplicateQuery.orWhere({ phone_no: phone });
-        }
-        const existing = await duplicateQuery.first();
-        console.log(existing)
+      const existing = await trx("users")
+        .where({ email })
+        .orWhere({ phone_no: phone })
+        .first();
 
-        if (existing) {
-          results.failure_count++;
-          results.errors.push(`Row ${rowNumber}: Duplicate Email/Phone (${email})`);
-          continue;
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Resolve IDs
-        const deptId = deptName ? deptMap[deptName.toLowerCase()] : null;
-        const desgId = desgName ? desgMap[desgName.toLowerCase()] : null;
-        const shiftId = shiftName ? shiftMap[shiftName.toLowerCase()] : null;
-
-        await trx("users").insert({
-          org_id: req.user.org_id,
-          user_name: name,
-          email: email,
-          phone_no: phone || "",
-          user_password: hashedPassword,
-          user_type: type,
-          dept_id: deptId,
-          desg_id: desgId,
-          shift_id: shiftId
-        });
-
-        results.success_count++;
-      } catch (err) {
+      if (existing) {
         results.failure_count++;
-        results.errors.push(`Row ${rowNumber}: ${err.message}`);
+        results.errors.push(`Row ${rowNumber}: Duplicate Email/Phone`);
+        continue;
       }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const deptId = deptName ? deptMap[deptName.toLowerCase()] : null;
+      const desgId = desgName ? desgMap[desgName.toLowerCase()] : null;
+      const shiftId = shiftName ? shiftMap[shiftName.toLowerCase()] : null;
+
+      // ================= OUR PART (START) =================
+
+      nextUserNumber++;
+
+      const userCode = `${org.org_code || org.org_name}-${String(nextUserNumber).padStart(3, "0")}`;
+
+      // ================= OUR PART (END) =================
+
+      await trx("users").insert({
+        org_id: req.user.org_id,
+        user_name: name,
+        user_code: userCode,
+        email: email,
+        phone_no: phone || "",
+        user_password: hashedPassword,
+        user_type: type,
+        dept_id: deptId,
+        desg_id: desgId,
+        shift_id: shiftId
+      });
+
+      results.success_count++;
     }
+    // Update org counter ONCE
+    await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .update({ last_user_number: nextUserNumber });
   });
 
   res.json({ ok: true, report: results });
-
 }));
 
 // GET dashboard stats
@@ -951,6 +995,18 @@ router.post("/users/bulk-json", authenticateJWT, catchAsync(async (req, res, nex
       shiftMap[sh.shift_name.toLowerCase()] = sh.shift_id;
     }
 
+    // D. Lock organization row for counter
+    const org = await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .forUpdate()
+      .first();
+
+    if (!org) {
+      throw new AppError("Organization not found", 404);
+    }
+
+    let nextUserNumber = org.last_user_number;
+
     // 2. Process Users
     let rowNumber = 0;
     for (const row of users) {
@@ -998,9 +1054,13 @@ router.post("/users/bulk-json", authenticateJWT, catchAsync(async (req, res, nex
         const desgId = desgName ? desgMap[desgName.toLowerCase()] : null;
         const shiftId = shiftName ? shiftMap[shiftName.toLowerCase()] : null;
 
+        nextUserNumber++;
+        const userCode = `${org.org_code}-${String(nextUserNumber).padStart(3, "0")}`;
+
         await trx("users").insert({
           org_id: req.user.org_id,
           user_name: name,
+          user_code: userCode,
           email: email,
           phone_no: phone,
           user_password: hashedPassword,
@@ -1016,6 +1076,11 @@ router.post("/users/bulk-json", authenticateJWT, catchAsync(async (req, res, nex
         results.errors.push(`Row ${rowNumber}: ${err.message}`);
       }
     }
+
+    // Update org counter
+    await trx("organizations")
+      .where({ org_id: req.user.org_id })
+      .update({ last_user_number: nextUserNumber });
   });
 
   res.json({ ok: true, report: results });
