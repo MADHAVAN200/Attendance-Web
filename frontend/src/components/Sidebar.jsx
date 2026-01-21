@@ -12,9 +12,12 @@ import {
     MapPin,
     CreditCard,
     FileText,
-    ClipboardList
+    ClipboardList,
+    Bug
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import FeedbackModal from './FeedbackModal';
+import { useState } from 'react';
 
 const SidebarItem = ({ icon, text, to }) => {
     const location = useLocation();
@@ -57,12 +60,11 @@ const getNavItems = (userType) => {
         { icon: <Calendar size={20} />, text: "My Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
         { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
         { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={20} />, text: "Holidays", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
+        { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
         { icon: <ClipboardList size={20} />, text: "Daily Activity Report", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
         { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
         { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
         { icon: <CreditCard size={20} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
-        { icon: <Users size={20} />, text: "My Profile", to: "/profile", roles: ['admin', 'hr', 'employee'] },
     ];
 
     return allItems.filter(item => item.roles.includes(userType));
@@ -70,6 +72,7 @@ const getNavItems = (userType) => {
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     const { logout, user } = useAuth();
+    const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     // Default to 'employee' if user_type is not available yet
     const userType = user?.user_type || 'employee';
 
@@ -106,15 +109,25 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                     ))}
                 </nav>
 
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
                     <button
-                        onClick={logout}
-                        className="flex items-center gap-3 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors w-full px-4 py-2 text-sm font-medium">
-                        <LogOut size={18} />
-                        Logout
+                        onClick={() => setIsFeedbackOpen(true)}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                    >
+                        <Bug size={18} />
+                        Bugs & Feedback
                     </button>
+
+                    <div className="text-[10px] text-center text-slate-400 dark:text-slate-600 font-mono pt-2">
+                        v1.0.0
+                    </div>
                 </div>
             </aside>
+
+            <FeedbackModal
+                isOpen={isFeedbackOpen}
+                onClose={() => setIsFeedbackOpen(false)}
+            />
         </>
     );
 };

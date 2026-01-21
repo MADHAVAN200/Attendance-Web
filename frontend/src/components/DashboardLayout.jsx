@@ -5,6 +5,10 @@ import {
     Bell,
     Moon,
     Sun,
+    LogOut,
+    User,
+    ChevronDown,
+    Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -15,6 +19,8 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
     const { unreadCount } = useNotification();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const { logout, user } = useAuth();
 
     // Initialize theme from localStorage or default to 'light'
     const [theme, setTheme] = useState(() => {
@@ -85,27 +91,70 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                             />
                         </div>
 
-                        <Link to="/profile" className="flex items-center gap-3 pl-4 sm:pl-6 border-l border-slate-200 dark:border-slate-700 hover:opacity-80 transition-opacity">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 capitalize">
-                                    {useAuth().user?.user_name || 'Admin User'}
-                                </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
-                                    {useAuth().user?.user_type || 'Administrator'}
-                                </p>
-                            </div>
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer overflow-hidden">
-                                {useAuth().user?.avatar_url || useAuth().user?.profile_image_url ? (
-                                    <img
-                                        src={useAuth().user?.avatar_url || useAuth().user?.profile_image_url}
-                                        alt="Profile"
-                                        className="w-full h-full object-cover"
-                                    />
-                                ) : (
-                                    useAuth().user?.user_name?.charAt(0).toUpperCase() || 'A'
-                                )}
-                            </div>
-                        </Link>
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                className="flex items-center gap-3 pl-4 sm:pl-6 border-l border-slate-200 dark:border-slate-700 hover:opacity-80 transition-opacity outline-none"
+                            >
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 capitalize">
+                                        {user?.user_name || 'User'}
+                                    </p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                        {user?.user_type || 'Role'}
+                                    </p>
+                                </div>
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer overflow-hidden">
+                                    {useAuth().user?.avatar_url || useAuth().user?.profile_image_url ? (
+                                        <img
+                                            src={useAuth().user?.avatar_url || useAuth().user?.profile_image_url}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        useAuth().user?.user_name?.charAt(0).toUpperCase() || 'U'
+                                    )}
+                                </div>
+                            </button>
+
+                            {/* Profile Dropdown */}
+                            {isProfileOpen && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setIsProfileOpen(false)}
+                                    ></div>
+                                    <div className="absolute right-0 mt-3 w-48 bg-white dark:bg-dark-card rounded-lg shadow-lg border border-slate-100 dark:border-slate-700 z-20 py-1 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700 sm:hidden">
+                                            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user?.user_name}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                                        </div>
+
+                                        <Link
+                                            to="/profile"
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                        >
+                                            <User size={16} />
+                                            My Profile
+                                        </Link>
+
+                                        <div className="my-1 border-t border-slate-100 dark:border-slate-800"></div>
+
+                                        <button
+                                            onClick={() => {
+                                                logout();
+                                                setIsProfileOpen(false);
+                                            }}
+                                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
+                                        >
+                                            <LogOut size={16} />
+                                            Logout
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </header>
 

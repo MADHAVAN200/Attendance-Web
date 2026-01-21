@@ -18,7 +18,7 @@ router.get('/my-history', authenticateJWT, catchAsync(async (req, res) => {
 
     const leaves = await knexDB('leave_requests')
         .where({ user_id, org_id })
-        .orderBy('start_date', 'desc');
+        .orderBy('applied_at', 'desc');
 
     res.json({ ok: true, leaves });
 }));
@@ -40,7 +40,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
     // Check for overlapping requests (optional but recommended)
     const overlap = await knexDB('leave_requests')
         .where({ user_id, org_id })
-        .whereIn('status', ['Pending', 'Approved'])
+        .whereIn('status', ['Pending', 'Approved']) // Changed to Title Case
         .where(builder => {
             builder.whereBetween('start_date', [start_date, end_date])
                 .orWhereBetween('end_date', [start_date, end_date])
@@ -62,7 +62,8 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
         start_date,
         end_date,
         reason,
-        status: 'Pending'
+        status: 'Pending',
+        applied_at: new Date()
     });
 
     // Notify Admins
@@ -81,7 +82,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
         });
 
         // Notify Admins (Future: Broadcast to 'admin' room via socket)
-        // NotificationService.sendToRole('admin', ...); 
+        // NotificationService.sendToRole('admin', ...);
     } catch (e) { console.error("Log error", e); }
 
     res.status(201).json({ ok: true, message: "Leave request submitted", leave_id: insertId });
@@ -98,7 +99,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(404).json({ ok: false, message: "Request not found" });
     }
 
-    if (request.status !== 'Pending') {
+    if (request.status !== 'Pending') { // Changed to Title Case
         return res.status(400).json({ ok: false, message: "Cannot withdraw processed request" });
     }
 
@@ -128,7 +129,7 @@ router.get('/admin/pending', authenticateJWT, catchAsync(async (req, res) => {
         )
         .where('lr.org_id', req.user.org_id)
         .where('lr.status', 'Pending')
-        .orderBy('lr.start_date', 'asc');
+        .orderBy('lr.applied_at', 'asc');
 
     res.json({ ok: true, requests });
 }));
@@ -151,7 +152,7 @@ router.get('/admin/history', authenticateJWT, catchAsync(async (req, res) => {
     if (start_date) query = query.where('lr.start_date', '>=', start_date);
     if (end_date) query = query.where('lr.end_date', '<=', end_date);
 
-    const history = await query.orderBy('lr.start_date', 'desc');
+    const history = await query.orderBy('lr.applied_at', 'desc');
     res.json({ ok: true, history });
 }));
 
@@ -165,10 +166,10 @@ router.put('/admin/status/:id', authenticateJWT, catchAsync(async (req, res) => 
     const { status, pay_type, pay_percentage, admin_comment } = req.body;
 
     if (!['Approved', 'Rejected'].includes(status)) {
-        return res.status(400).json({ ok: false, message: "Invalid 5" });
+        return res.status(400).json({ ok: false, message: "Invalid status" });
     }
 
-    if (status === 'Approved' && !pay_type) {
+    if (status === 'Approved' && !pay_type) { // Changed to Title Case
         return res.status(400).json({ ok: false, message: "Payment type required for approval (Paid, Unpaid, or Partial)" });
     }
 

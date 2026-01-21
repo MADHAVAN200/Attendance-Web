@@ -240,10 +240,10 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
     .leftJoin("designations", "users.desg_id", "designations.desg_id")
     .select(
       "attendance_records.*",
-      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%d %H:%i:%s') as time_in"),
-      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%d %H:%i:%s') as time_out"),
-      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%d %H:%i:%s') as created_at"),
-      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%d %H:%i:%s') as updated_at"),
+      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts"),
       "users.user_name",
       "users.email",
       "designations.desg_name as designation"
@@ -272,10 +272,11 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
         timeOutUrl = url;
       }
 
-      const time_in = row.time_in == null ? null : String(row.time_in);
-      const time_out = row.time_out == null ? null : String(row.time_out);
-      const created_at = row.created_at == null ? null : String(row.created_at);
-      const updated_at = row.updated_at == null ? null : String(row.updated_at);
+      // Use the formatted string (naive time) if available, otherwise fallback
+      const time_in = row.time_in_ts || (row.time_in ? String(row.time_in) : null);
+      const time_out = row.time_out_ts || (row.time_out ? String(row.time_out) : null);
+      const created_at = row.created_at_ts || (row.created_at ? String(row.created_at) : null);
+      const updated_at = row.updated_at_ts || (row.updated_at ? String(row.updated_at) : null);
 
       return {
         ...row,
@@ -299,6 +300,13 @@ router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
 
   let query = knexDB("attendance_records")
     .where("user_id", userId)
+    .select(
+      "attendance_records.*",
+      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
+    )
     .orderBy("time_in", "desc")
     .limit(Math.min(parseInt(limit), 100)); // max limit 100
 
@@ -325,10 +333,10 @@ router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
         timeOutUrl = url;
       }
 
-      const time_in = row.time_in == null ? null : String(row.time_in);
-      const time_out = row.time_out == null ? null : String(row.time_out);
-      const created_at = row.created_at == null ? null : String(row.created_at);
-      const updated_at = row.updated_at == null ? null : String(row.updated_at);
+      const time_in = row.time_in_ts || (row.time_in ? String(row.time_in) : null);
+      const time_out = row.time_out_ts || (row.time_out ? String(row.time_out) : null);
+      const created_at = row.created_at_ts || (row.created_at ? String(row.created_at) : null);
+      const updated_at = row.updated_at_ts || (row.updated_at ? String(row.updated_at) : null);
 
       return {
         ...row,

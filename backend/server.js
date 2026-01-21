@@ -25,7 +25,7 @@ import ActivitiesAPI from './DAR/ActivitiesAPI.js';
 import ProfileRoutes from './Profile/ProfileRoutes.js';
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 
 // Allowed origins
 const allowedOrigins = [
