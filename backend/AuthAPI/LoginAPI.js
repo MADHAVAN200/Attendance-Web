@@ -67,14 +67,15 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
     .orWhere('users.phone_no', user_input)
     .first();
 
+
   if (!user) {
-    return res.status(401).json({ error: 'Invalid Email/Phone or Password' });
+    return res.status(401).json({ message: 'User not found' });
   }
 
   // 2. Compare password
   const isMatch = await bcrypt.compare(user_password, user.user_password);
   if (!isMatch) {
-    return res.status(401).json({ error: 'Invalid Email/Phone or Password' });
+    return res.status(401).json({ message: 'Incorrect Password' });
   }
 
   // 3. Generate Access Token (JWT)

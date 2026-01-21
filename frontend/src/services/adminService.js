@@ -111,8 +111,7 @@ export const adminService = {
     },
     async getShifts() {
         try {
-            const res = await api.get(`${POLICY_API_URL}/shifts`);
-            console.log(res.data);
+            const res = await api.get(`${ADMIN_API_URL}/shifts`);
             return res.data;
         } catch (error) {
             console.error("Failed to fetch shifts", error);
@@ -130,7 +129,6 @@ export const adminService = {
     },
     async updateShift(shiftId, shiftData) {
         try {
-            console.log(`shift ${shiftId} update: ${JSON.stringify(shiftData)}`);
             const res = await api.put(`${POLICY_API_URL}/shifts/${shiftId}`, shiftData);
             return res.data;
         } catch (error) {

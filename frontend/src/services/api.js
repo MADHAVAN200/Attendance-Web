@@ -51,8 +51,13 @@ api.interceptors.response.use(
 
         if ((error.response?.status === 403 || error.response?.status === 401) && !originalRequest._retry) {
 
-            // Prevent infinite loops if refresh itself fails (though check below handles it too)
+            // Prevent infinite loops if refresh itself fails
             if (originalRequest.url.includes('/auth/refresh')) {
+                return Promise.reject(error);
+            }
+
+            // Don't try to refresh if the login attempt itself failed
+            if (originalRequest.url.includes('/auth/login')) {
                 return Promise.reject(error);
             }
 
