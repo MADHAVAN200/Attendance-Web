@@ -47,7 +47,8 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
       'dep.dept_name',
       'dep.dept_id',
       's.shift_name',
-      's.shift_id'
+      's.shift_id',
+      'u.profile_image_key'
     )
     .where('u.org_id', req.user.org_id);
 
@@ -118,6 +119,7 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
       'u.dept_id',
       'u.shift_id',
       'u.org_id',
+      'u.profile_image_key',
       'd.desg_name',
       'dep.dept_name',
       's.shift_name'
