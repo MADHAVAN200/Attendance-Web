@@ -25,7 +25,8 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     const uploadResult = await uploadCompressedImage({
         fileBuffer: file.buffer,
         key: key,
-        directory: "public/profile_pics"
+        directory: "public/profile_pics",
+        quality: 90
     });
     console.log(uploadResult);
 
@@ -33,7 +34,7 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     await knexDB('users')
         .where({ user_id })
         .update({
-            profile_image_key: uploadResult.url, // Storing full URL instead of key
+            profile_image_url: uploadResult.url, // Storing full URL instead of key
             updated_at: knexDB.fn.now()
         });
 
@@ -57,7 +58,7 @@ router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
             'u.email',
             'u.phone_no',
             'u.user_type',
-            'u.profile_image_key',
+            'u.profile_image_url',
             'd.desg_name',
             'dep.dept_name'
         )
@@ -72,7 +73,7 @@ router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
         ok: true,
         user: {
             ...user,
-            avatar_url: user.profile_image_key
+            avatar_url: user.profile_image_url
         }
     });
 }));
