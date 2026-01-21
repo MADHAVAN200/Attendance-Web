@@ -26,6 +26,7 @@ import Subscription from "./pages/subscription/Subscription"
 import TestAPI from "./pages/test/TestAPI"
 import VisualScripting from "./pages/test/VisualScripting"
 import DailyActivity from "./pages/dar/DailyActivity"
+import ApplyLeave from "./pages/leaves/ApplyLeave"
 
 
 
@@ -69,6 +70,7 @@ function App() {
               <Route path="/holidays" element={<HolidayManagement />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/daily-activity" element={<DailyActivity />} />
+              <Route path="/apply-leave" element={<ApplyLeave />} />
             </Route>
 
             {/* Admin & HR Only Routes */}

@@ -61,6 +61,13 @@ const EmployeeDashboard = () => {
                                 <Coffee size={18} />
                                 Holiday List
                             </button>
+                            <button
+                                onClick={() => navigate('/apply-leave')}
+                                className="px-6 py-2.5 bg-indigo-500/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm"
+                            >
+                                <Coffee size={18} />
+                                Apply Leave
+                            </button>
                         </div>
                     </div>
                 </div>

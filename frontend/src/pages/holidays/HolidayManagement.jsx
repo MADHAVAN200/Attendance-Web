@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
+import { useAuth } from '../../context/AuthContext';
 import { holidayService } from '../../services/holidayService';
 import { toast } from 'react-toastify';
 import {
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 
 const HolidayManagement = () => {
+    const { user } = useAuth();
     const [holidays, setHolidays] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -108,18 +110,22 @@ const HolidayManagement = () => {
                         />
                     </div>
                     <div className="flex gap-3 w-full sm:w-auto">
-                        <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                            <Upload size={16} />
-                            <span className="hidden sm:inline">Import CSV</span>
-                            <span className="sm:hidden">Import</span>
-                        </button>
-                        <button
-                            onClick={() => setIsAddModalOpen(true)}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
-                        >
-                            <Plus size={16} />
-                            <span>Add Holiday</span>
-                        </button>
+                        {user?.user_type === 'admin' && (
+                            <>
+                                <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                    <Upload size={16} />
+                                    <span className="hidden sm:inline">Import CSV</span>
+                                    <span className="sm:hidden">Import</span>
+                                </button>
+                                <button
+                                    onClick={() => setIsAddModalOpen(true)}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
+                                >
+                                    <Plus size={16} />
+                                    <span>Add Holiday</span>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -132,17 +138,17 @@ const HolidayManagement = () => {
                                     <th className="px-6 py-4">Holiday Name</th>
                                     <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4">Type</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
+                                    {user?.user_type === 'admin' && <th className="px-6 py-4 text-right">Actions</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="4" className="px-6 py-8 text-center text-slate-500">Loading holidays...</td>
+                                        <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-8 text-center text-slate-500">Loading holidays...</td>
                                     </tr>
                                 ) : filteredHolidays.length === 0 ? (
                                     <tr>
-                                        <td colSpan="4" className="px-6 py-12 text-center text-slate-400">
+                                        <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-12 text-center text-slate-400">
                                             <Calendar size={48} className="mx-auto mb-4 opacity-20" />
                                             <p>No holidays found.</p>
                                         </td>
@@ -168,12 +174,14 @@ const HolidayManagement = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <button
-                                                    onClick={() => handleDelete(holiday.id)}
-                                                    className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
+                                                {user?.user_type === 'admin' && (
+                                                    <button
+                                                        onClick={() => handleDelete(holiday.id)}
+                                                        className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))

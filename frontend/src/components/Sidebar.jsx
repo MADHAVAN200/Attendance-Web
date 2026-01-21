@@ -58,6 +58,7 @@ const getNavItems = (userType) => {
         { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
         { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
         { icon: <Calendar size={20} />, text: "Holidays", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
+        { icon: <FileText size={20} />, text: "Apply Leave", to: "/apply-leave", roles: ['admin', 'hr', 'employee'] },
         { icon: <ClipboardList size={20} />, text: "Daily Activity Report", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
         { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
         { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
