@@ -47,7 +47,8 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
       'dep.dept_name',
       'dep.dept_id',
       's.shift_name',
-      's.shift_id'
+      's.shift_id',
+      'u.profile_image_url'
     )
     .where('u.org_id', req.user.org_id);
 
@@ -118,6 +119,7 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
       'u.dept_id',
       'u.shift_id',
       'u.org_id',
+      'u.profile_image_url',
       'd.desg_name',
       'dep.dept_name',
       's.shift_name'
@@ -616,7 +618,7 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
     knexDB("user_activity_logs as al")
       .leftJoin("users as u", "al.user_id", "u.user_id")
       .leftJoin("designations as d", "u.desg_id", "d.desg_id")
-      .select("al.activity_id as id", "u.user_name as user", "d.desg_name as role", "al.description as action", "al.occurred_at as time")
+      .select("al.activity_id as id", "u.user_name as user", "d.desg_name as role", "al.description as action", "al.occurred_at as time", "u.profile_image_url")
       .where("al.org_id", org_id)
       .whereRaw("DATE(al.occurred_at) = ?", [today])
       .orderBy("al.occurred_at", "desc")

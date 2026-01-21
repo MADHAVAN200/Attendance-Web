@@ -104,8 +104,16 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                                         {user?.user_type || 'Role'}
                                     </p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer">
-                                    {user?.user_name?.charAt(0).toUpperCase() || 'U'}
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer overflow-hidden">
+                                    {useAuth().user?.avatar_url || useAuth().user?.profile_image_url ? (
+                                        <img
+                                            src={useAuth().user?.avatar_url || useAuth().user?.profile_image_url}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        useAuth().user?.user_name?.charAt(0).toUpperCase() || 'U'
+                                    )}
                                 </div>
                             </button>
 

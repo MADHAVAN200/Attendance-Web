@@ -40,7 +40,7 @@ const EmployeeDashboard = () => {
 
                     <div className="relative z-10">
                         <h1 className="text-3xl font-bold mb-2">
-                            {getGreeting()}, {user?.user_name?.split(' ')[0] || 'Employee'}!
+                            {getGreeting()}, {user?.user_name || 'Employee'}!
                         </h1>
                         <p className="text-indigo-100 max-w-xl">
                             Welcome to your dashboard. You can check your daily attendance, apply for leave, and view holidays from here.

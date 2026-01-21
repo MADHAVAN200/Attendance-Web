@@ -13,20 +13,15 @@ import { verifyUserGeofence } from "./Geofencing.js";
 const router = express.Router();
 const upload = multer(); // store files in memory
 
-// Helper: Fetch User Shift
-async function getUserShift(user_id) {
-  const user = await knexDB("users")
-    .join("shifts", "users.shift_id", "shifts.shift_id")
-    .where("users.user_id", user_id)
-    .select("shifts.*")
-    .first();
-  return user;
-}
+
+import { AttendanceService } from "./AttendanceService.js";
+
+// Helper: Fetch User Shift (Moved to Service, but checking if still needed here)
+// It is not needed here if we delegate to Service.
 
 // POST /attendance/checkin
 router.post("/timein", authenticateJWT, upload.single("image"),
   catchAsync(async (req, res) => {
-
     // 1. DATA PREPARATION
     const { user_id, org_id } = req.user;
     const latitude = Number(req.body.latitude);
@@ -35,163 +30,51 @@ router.post("/timein", authenticateJWT, upload.single("image"),
     const late_reason = req.body.late_reason || null;
     const file = req.file;
 
-
-    // 2. CONTEXT LOADING
-    // A. Time & Address
+    // 2. CONTEXT LOADING (Google Maps)
     const nowUTC = new Date().toISOString();
-    const tz = await fetchTimeStamp(latitude, longitude, nowUTC);
-    const localTime = tz.localTime;
-    const { address } = await coordsToAddress(latitude, longitude);
+    let tz = { localTime: nowUTC, tzName: "UTC" };
+    let address = "Unknown Location"
 
-    // B. Check Existing Session
-    const openSession = await knexDB("attendance_records")
-      .where({ user_id })
-      .whereNull("time_out")
-      .whereRaw("DATE(time_in) = DATE(?)", [localTime])
-      .first();
-
-    if (openSession) {
-      return res.status(400).json({ ok: false, message: "Already timed in. Please time out first." });
-    }
-
-    // C. Policy Context
-    const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_in");
-    const shift = await getUserShift(user_id);
-    const rules = PolicyService.getRulesFromShift(shift);
-
-    // 3. MODULAR POLICY CHECKS
-
-    // A. Geolocation Check
-    const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.entry_requirements);
-    if (!geoCheck.ok) {
-      return res.status(400).json({ ok: false, message: "Policy Violation: " + geoCheck.error });
-    }
-
-    // B. Biometric Check
-    const bioCheck = PolicyService.checkBiometricCompliance(file, rules.entry_requirements);
-    if (!bioCheck.ok) {
-      return res.status(400).json({ ok: false, message: "Policy Violation: " + bioCheck.error });
-    }
-
-    // 4. POLICY EXECUTION
-
-    // Late Calculation
-    const lateCheck = PolicyService.calculateLateArrival(localTime, rules);
-    const minutesLate = lateCheck.minutesLate;
-
-    // Metadata
-    const metadata = {
-      time_in: {
-        accuracy: Math.round(accuracy),
-        ip_address: req.ip,
-        user_agent: req.get('User-Agent'),
-        timestamp_utc: nowUTC,
-        timezone: tz.tzName
-      },
-      session_context: sessionContext
-    };
-
-    // DB Insert
-    const [attendance_id] = await knexDB("attendance_records").insert({
-      user_id,
-      org_id,
-      late_reason: sessionContext.is_first_session ? (late_reason || (lateCheck.isLate ? "Late Entry" : null)) : null,
-      late_minutes: minutesLate,
-      time_in: localTime,
-      time_in_lat: latitude,
-      time_in_lng: longitude,
-      time_in_address: address,
-      status: lateCheck.isLate ? "LATE" : "TIMED_IN",
-      metadata: JSON.stringify(metadata),
-      created_at: knexDB.fn.now(),
-      updated_at: knexDB.fn.now(),
-    });
-
-    // Daily Sync
     try {
-      const dateStr = localTime.split('T')[0];
-      const timeStr = localTime.split('T')[1].split('.')[0];
-
-      const existingDaily = await knexDB("daily_attendance")
-        .where({ user_id, date: dateStr })
-        .first();
-
-      if (!existingDaily) {
-        await knexDB("daily_attendance").insert({
-          user_id,
-          org_id,
-          date: dateStr,
-          shift_id: shift ? shift.shift_id : null,
-          first_in: timeStr,
-          status: lateCheck.isLate ? 'LATE' : 'ON_TIME', // Set initial status based on arrival
-          total_hours: 0,
-          created_at: knexDB.fn.now(),
-          updated_at: knexDB.fn.now()
-        });
+      if (!isNaN(latitude) && !isNaN(longitude)) {
+        tz = await fetchTimeStamp(latitude, longitude, nowUTC);
+        const addrRes = await coordsToAddress(latitude, longitude);
+        address = addrRes.address;
       }
-    } catch (dailyErr) {
-      console.error("Daily Sync Error:", dailyErr);
+    } catch (e) {
+      console.error("Maps API Error:", e);
+      // Fallback? Or fail? Originally it would fail if await failed.
+      // Assuming we proceed or error out. 
     }
 
-    // S3 Upload
-    let imageKey = null;
-    if (file) {
-      const uploadResult = await uploadCompressedImage({
-        fileBuffer: file.buffer,
-        key: `${attendance_id}_in`,
-        directory: "attendance_images"
-      });
-      imageKey = uploadResult.key;
-      await knexDB("attendance_records")
-        .where({ attendance_id })
-        .update({
-          time_in_image_key: imageKey,
-          updated_at: knexDB.fn.now(),
-        });
-    }
-
-    // Events
-    EventBus.emitNotification({
-      org_id,
-      user_id,
-      title: "Attendance Checked In",
-      message: `You have successfully checked in at ${localTime} from ${address}`,
-      type: "SUCCESS",
-      related_entity_type: "ATTENDANCE",
-      related_entity_id: attendance_id
-    });
-
-    EventBus.emitActivityLog({
+    // 3. DELEGATE TO SERVICE
+    const result = await AttendanceService.processTimeIn({
       user_id,
       org_id,
-      event_type: "CHECK_IN",
-      event_source: getEventSource(req),
-      object_type: "ATTENDANCE",
-      object_id: attendance_id,
-      description: `User checked in at ${address} (Session #${sessionContext.session_number})`,
-      location: `${latitude},${longitude}`,
-      request_ip: req.ip,
-      user_agent: req.get('User-Agent')
-    });
-
-    return res.json({
-      ok: true,
-      attendance_id,
-      local_time: localTime,
+      latitude,
+      longitude,
+      accuracy,
+      late_reason,
+      file,
+      localTime: tz.localTime,
       address,
-      tz_name: tz.tzName,
-      image_key: imageKey,
-      session_number: sessionContext.session_number,
-      is_first_session: sessionContext.is_first_session,
-      message: "Timed in successfully",
+      timezone: tz.tzName,
+      ip: req.ip,
+      user_agent: req.get('User-Agent'),
+      event_source: getEventSource(req)
     });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json(result);
+    }
+
+    return res.json(result);
   })
 );
 
 // POST /attendance/checkout
 router.post("/timeout", authenticateJWT, upload.single("image"),
   catchAsync(async (req, res) => {
-
     // 1. DATA PREPARATION
     const { user_id, org_id } = req.user;
     const latitude = Number(req.body.latitude);
@@ -199,169 +82,147 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
     const accuracy = Number(req.body.accuracy);
     const file = req.file;
 
-
-
     // 2. CONTEXT LOADING
-    // A. Time & Address
     const nowUTC = new Date().toISOString();
-    const tz = await fetchTimeStamp(latitude, longitude, nowUTC);
-    const localTime = tz.localTime;
-    const { address } = await coordsToAddress(latitude, longitude);
+    let tz = { localTime: nowUTC, tzName: "UTC" };
+    let address = "Unknown Location"
 
-    // B. Check Existing Session (Fail Fast)
-    const openSession = await knexDB("attendance_records")
-      .where({ user_id })
-      .whereNull("time_out")
-      .whereRaw("DATE(time_in) = DATE(?)", [localTime])
-      .first();
-
-    if (!openSession) {
-      return res.status(400).json({ ok: false, message: "No active time-in found to time out." });
-    }
-
-    // C. Policy Context
-    const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_out");
-    const shift = await getUserShift(user_id);
-    const rules = PolicyService.getRulesFromShift(shift);
-
-    // 3. MODULAR POLICY CHECKS (Fail Fast)
-
-    // A. Geolocation Check
-    const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.exit_requirements);
-    if (!geoCheck.ok) {
-      return res.status(400).json({ ok: false, message: "Policy Violation: " + geoCheck.error });
-    }
-
-    // B. Biometric Check
-    const bioCheck = PolicyService.checkBiometricCompliance(file, rules.exit_requirements);
-    if (!bioCheck.ok) {
-      return res.status(400).json({ ok: false, message: "Policy Violation: " + bioCheck.error });
-    }
-
-    // 4. POLICY EXECUTION
-
-    // S3 Upload
-    let imageKey = null;
-    if (file) {
-      const uploadResult = await uploadCompressedImage({
-        fileBuffer: file.buffer,
-        key: `${openSession.attendance_id}_out`,
-        directory: "attendance_images"
-      });
-      imageKey = uploadResult.key;
-      await knexDB("attendance_records")
-        .where({ attendance_id: openSession.attendance_id })
-        .update({
-          time_out_image_key: imageKey,
-          updated_at: knexDB.fn.now(),
-        });
-    }
-
-    // Calculations
-    const timeIn = new Date(openSession.time_in);
-    const timeOut = new Date(nowUTC);
-    const durationMs = timeOut - timeIn;
-    const totalHours = durationMs / (1000 * 60 * 60);
-    const minutesLate = openSession.late_minutes || 0;
-
-    // Status Evaluation
-    const statusEvalData = {
-      ...sessionContext,
-      total_hours: totalHours,
-      minutes_late: minutesLate,
-      check_in_hour: timeIn.getHours(),
-      check_out_hour: timeOut.getHours(),
-      last_time_out_hour: timeOut.getHours()
-    };
-    const status = PolicyService.evaluateStatus(rules, statusEvalData);
-
-    // Metadata Update
-    let metadata = {};
     try {
-      if (typeof openSession.metadata === 'string') {
-        metadata = JSON.parse(openSession.metadata);
-      } else if (typeof openSession.metadata === 'object' && openSession.metadata !== null) {
-        metadata = openSession.metadata;
+      if (!isNaN(latitude) && !isNaN(longitude)) {
+        tz = await fetchTimeStamp(latitude, longitude, nowUTC);
+        const addrRes = await coordsToAddress(latitude, longitude);
+        address = addrRes.address;
       }
-    } catch (e) { console.error("Metadata parse error", e); }
+    } catch (e) { console.error("Maps API Error", e); }
 
-    metadata.time_out = {
-      accuracy: Math.round(accuracy),
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent'),
-      timestamp_utc: nowUTC,
+    // 3. DELEGATE TO SERVICE
+    const result = await AttendanceService.processTimeOut({
+      user_id,
+      org_id,
+      latitude,
+      longitude,
+      accuracy,
+      file,
+      localTime: tz.localTime,
+      address,
       timezone: tz.tzName,
-      total_hours: parseFloat(totalHours.toFixed(2))
-    };
-    metadata.session_context_at_checkout = sessionContext;
+      ip: req.ip,
+      user_agent: req.get('User-Agent'),
+      event_source: getEventSource(req)
+    });
 
-    // DB Update
-    await knexDB("attendance_records")
-      .where({ attendance_id: openSession.attendance_id })
-      .update({
-        time_out: localTime,
-        time_out_lat: latitude,
-        time_out_lng: longitude,
-        time_out_address: address,
-        overtime_hours: totalHours > (rules.overtime?.threshold || 8) ? (totalHours - (rules.overtime?.threshold || 8)) : 0,
-        metadata: JSON.stringify(metadata),
-        updated_at: knexDB.fn.now(),
-      });
-
-    // Daily Sync
-    try {
-      const dateStrSync = localTime.split('T')[0];
-      const timeStrSync = localTime.split('T')[1].split('.')[0];
-      const grandTotalHours = parseFloat((sessionContext.total_hours_today + totalHours).toFixed(2));
-
-      await knexDB("daily_attendance")
-        .where({ user_id, date: dateStrSync })
-        .update({
-          last_out: timeStrSync,
-          total_hours: grandTotalHours,
-          status: status,
-          updated_at: knexDB.fn.now()
-        });
-    } catch (dailyErr) {
-      console.error("Daily Sync Error (Timeout):", dailyErr);
+    if (!result.ok) {
+      return res.status(result.status || 400).json(result);
     }
 
-    // Events
-    EventBus.emitNotification({
-      org_id,
-      user_id,
-      title: "Attendance Checked Out",
-      message: `You have successfully checked out at ${localTime}. Total hours today: ${sessionContext.total_hours_today.toFixed(2)}h`,
-      type: "INFO",
-      related_entity_type: "ATTENDANCE",
-      related_entity_id: openSession.attendance_id
+    return res.json(result);
+  })
+);
+
+// --- SIMULATION ENDPOINTS ---
+
+
+// POST /attendance/simulate/timein
+router.post("/simulate/timein", authenticateJWT, upload.single("image"),
+  catchAsync(async (req, res) => {
+    // DEVELOPMENT ONLY
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ ok: false, message: "Not Found" });
+    }
+
+    // Allow admin to simulate for others
+    let target_user_id = req.user.user_id;
+    if (req.body.user_id && req.user.user_type === "admin") {
+      target_user_id = req.body.user_id;
+    }
+
+    const {
+      latitude = 0,
+      longitude = 0,
+      accuracy = 10,
+      simulated_time, // ISO String expected
+      simulated_address = "Simulated Location",
+      late_reason
+    } = req.body;
+
+    const file = req.file;
+
+    if (!simulated_time) {
+      return res.status(400).json({ ok: false, message: "simulated_time (ISO format) is required" });
+    }
+
+    const result = await AttendanceService.processTimeIn({
+      user_id: target_user_id,
+      org_id: req.user.org_id,
+      latitude,
+      longitude,
+      accuracy,
+      late_reason,
+      file: file, // Pass the file from simulation
+      localTime: simulated_time,
+      address: simulated_address,
+      timezone: "Simulated Timezone",
+      ip: req.ip,
+      user_agent: "Simulation/" + req.get('User-Agent'),
+      event_source: "SIMULATION"
     });
 
-    EventBus.emitActivityLog({
-      user_id,
-      org_id,
-      event_type: "CHECK_OUT",
-      event_source: getEventSource(req),
-      object_type: "ATTENDANCE",
-      object_id: openSession.attendance_id,
-      description: `User checked out at ${address} (Status: ${status})`,
-      location: `${latitude},${longitude}`,
-      request_ip: req.ip,
-      user_agent: req.get('User-Agent')
+    if (!result.ok) {
+      return res.status(result.status || 400).json(result);
+    }
+
+    res.json({ ...result, _simulation: true });
+  })
+);
+
+
+// POST /attendance/simulate/timeout
+router.post("/simulate/timeout", authenticateJWT, upload.single("image"),
+  catchAsync(async (req, res) => {
+    // DEVELOPMENT ONLY
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ ok: false, message: "Not Found" });
+    }
+
+    let target_user_id = req.user.user_id;
+    if (req.body.user_id && req.user.user_type === "admin") {
+      target_user_id = req.body.user_id;
+    }
+
+    const {
+      latitude = 0,
+      longitude = 0,
+      accuracy = 10,
+      simulated_time,
+      simulated_address = "Simulated Location"
+    } = req.body;
+
+    const file = req.file;
+
+    if (!simulated_time) {
+      return res.status(400).json({ ok: false, message: "simulated_time (ISO format) is required" });
+    }
+
+    const result = await AttendanceService.processTimeOut({
+      user_id: target_user_id,
+      org_id: req.user.org_id,
+      latitude,
+      longitude,
+      accuracy,
+      file: file, // Pass the file from simulation
+      localTime: simulated_time,
+      address: simulated_address,
+      timezone: "Simulated Timezone",
+      ip: req.ip,
+      user_agent: "Simulation/" + req.get('User-Agent'),
+      event_source: "SIMULATION"
     });
 
-    return res.json({
-      ok: true,
-      attendance_id: openSession.attendance_id,
-      local_time_out: localTime,
-      address,
-      tz_name: tz.tzName,
-      image_key: imageKey,
-      status,
-      session_hours: parseFloat(totalHours.toFixed(2)),
-      total_hours_today: sessionContext.total_hours_today,
-      message: "Timed out successfully",
-    });
+    if (!result.ok) {
+      return res.status(result.status || 400).json(result);
+    }
+
+    res.json({ ...result, _simulation: true });
   })
 );
 

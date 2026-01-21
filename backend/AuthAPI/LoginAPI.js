@@ -60,21 +60,22 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
     .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
     .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
     .select(
-      'users.user_id', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
-      'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
+      'users.user_id', 'users.user_code', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
+      'users.profile_image_url', 'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
     )
     .where('users.email', user_input)
     .orWhere('users.phone_no', user_input)
     .first();
 
+
   if (!user) {
-    return res.status(401).json({ error: 'Invalid Email/Phone or Password' });
+    return res.status(401).json({ message: 'User not found' });
   }
 
   // 2. Compare password
   const isMatch = await bcrypt.compare(user_password, user.user_password);
   if (!isMatch) {
-    return res.status(401).json({ error: 'Invalid Email/Phone or Password' });
+    return res.status(401).json({ message: 'Incorrect Password' });
   }
 
   // 3. Generate Access Token (JWT)
@@ -83,7 +84,8 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
     user_name: user.user_name,
     email: user.email,
     user_type: user.user_type,
-    org_id: user.org_id
+    org_id: user.org_id,
+    profile_image_url: user.profile_image_url
   };
 
   const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
@@ -122,6 +124,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
     accessToken: accessToken,
     user: {
       id: user.user_id,
+      user_code: user.user_code,
       name: user.user_name,
       email: user.email,
       phone: user.phone_no,
@@ -129,6 +132,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
       designation: user.desg_name,
       department: user.dept_name,
       org_id: user.org_id,
+      avatar_url: user.profile_image_url
     }
   });
 
@@ -137,11 +141,9 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
 
 // Refresh Token Route
 router.post("/refresh", async (req, res) => {
-  console.log("REFRESH: Route Called. Cookies:", req.cookies);
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
-    console.log("REFRESH: No token found in cookies.");
     return res.status(401).json({ message: "No refresh token provided" });
   }
 
@@ -151,14 +153,12 @@ router.post("/refresh", async (req, res) => {
     if (!result) {
       // Invalid or expired
       res.clearCookie('refreshToken');
-      console.log("REFRESH: Invalid or expired token.");
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
     if (result.error) {
       // Reuse detected!
       res.clearCookie('refreshToken');
-      console.log("REFRESH: Reuse detected!");
       return res.status(403).json({ message: "Security Alert: Token reuse detected. Re-login required." });
     }
 
@@ -178,7 +178,8 @@ router.post("/refresh", async (req, res) => {
       user_name: user.user_name,
       email: user.email,
       user_type: user.user_type,
-      org_id: user.org_id
+      org_id: user.org_id,
+      profile_image_url: user.profile_image_url
     };
     const newAccessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 
@@ -201,20 +202,32 @@ router.post("/refresh", async (req, res) => {
 
 
 // Route: GET /me - Check current auth/session
-router.get("/me", authenticateJWT, (req, res) => {
+router.get("/me", authenticateJWT, catchAsync(async (req, res) => {
+  // Fetch fresh user data to ensure avatar updates are reflected immediately
+  const user = await DB.knexDB('users')
+    .where('user_id', req.user.user_id)
+    .select('user_code', 'user_name', 'email', 'user_type', 'org_id', 'profile_image_url')
+    .first();
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
   res.json({
     user_id: req.user.user_id,
-    user_name: req.user.user_name,
-    email: req.user.email,
-    user_type: req.user.user_type,
-    org_id: req.user.org_id
+    user_code: user.user_code,
+    user_name: user.user_name,
+    email: user.email,
+    user_type: user.user_type,
+    org_id: user.org_id,
+    avatar_url: user.profile_image_url,
+    profile_image_url: user.profile_image_url
   });
-});
+}));
 
 
 // Route: POST /logout - Clear cookie
 router.post("/logout", async (req, res) => {
-  console.log("Logout called");
   const refreshToken = req.cookies.refreshToken;
   if (refreshToken) {
     await TokenService.revokeRefreshToken(refreshToken);
@@ -223,7 +236,6 @@ router.post("/logout", async (req, res) => {
   res.clearCookie("refreshToken", {
     path: '/' // Important to match the path used to set it
   });
-  console.log("REFRESH: Cookie cleared");
   res.json({ message: "Logged out successfully" });
 });
 

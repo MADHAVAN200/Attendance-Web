@@ -282,19 +282,22 @@ export const PolicyService = {
         const startTimeStr = timing.start_time;
 
         if (startTimeStr) {
-            const [sH, sM] = startTimeStr.split(':').map(Number);
-            const localDate = new Date(localTime);
-            const shiftStart = new Date(localDate);
-            shiftStart.setHours(sH, sM, 0, 0);
-
-            const diffMs = localDate - shiftStart;
-            // Only count if positive (late)
-            if (diffMs > 0) {
-                minutesLate = Math.floor(diffMs / 60000);
+            
+            const localDatePart = localTime.split('T')[0]; // YYYY-MM-DD
+            const localTimePart = localTime.split('T')[1].split('.')[0]; // HH:MM:SS
+            
+            const [curH, curM] = localTimePart.split(':').map(Number);
+            const currentMinutes = curH * 60 + curM;
+            
+            const [shiftH, shiftM] = startTimeStr.split(':').map(Number);
+            const shiftMinutes = shiftH * 60 + shiftM;
+            
+            if (currentMinutes > shiftMinutes) {
+                minutesLate = currentMinutes - shiftMinutes;
             }
         }
-
-        const gracePeriod = timing.grace_period_mins || 0; // Default 0 if undefined
+        
+        const gracePeriod = rules.grace_period.minutes || 0; // Default 0 if undefined
         const isLate = minutesLate > gracePeriod;
 
         return {
@@ -303,6 +306,7 @@ export const PolicyService = {
             gracePeriod
         };
     },
+
 
     /**
      * Build session context for policy evaluation

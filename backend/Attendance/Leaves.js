@@ -40,7 +40,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
     // Check for overlapping requests (optional but recommended)
     const overlap = await knexDB('leave_requests')
         .where({ user_id, org_id })
-        .whereIn('status', ['pending', 'approved'])
+        .whereIn('status', ['Pending', 'Approved']) // Changed to Title Case
         .where(builder => {
             builder.whereBetween('start_date', [start_date, end_date])
                 .orWhereBetween('end_date', [start_date, end_date])
@@ -62,7 +62,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
         start_date,
         end_date,
         reason,
-        status: 'pending',
+        status: 'Pending',
         applied_at: new Date()
     });
 
@@ -82,7 +82,7 @@ router.post('/request', authenticateJWT, catchAsync(async (req, res) => {
         });
 
         // Notify Admins (Future: Broadcast to 'admin' room via socket)
-        // NotificationService.sendToRole('admin', ...); 
+        // NotificationService.sendToRole('admin', ...);
     } catch (e) { console.error("Log error", e); }
 
     res.status(201).json({ ok: true, message: "Leave request submitted", leave_id: insertId });
@@ -99,7 +99,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(404).json({ ok: false, message: "Request not found" });
     }
 
-    if (request.status !== 'pending') {
+    if (request.status !== 'Pending') { // Changed to Title Case
         return res.status(400).json({ ok: false, message: "Cannot withdraw processed request" });
     }
 
@@ -128,7 +128,7 @@ router.get('/admin/pending', authenticateJWT, catchAsync(async (req, res) => {
             'u.phone_no'
         )
         .where('lr.org_id', req.user.org_id)
-        .where('lr.status', 'pending')
+        .where('lr.status', 'Pending')
         .orderBy('lr.applied_at', 'asc');
 
     res.json({ ok: true, requests });
@@ -156,8 +156,8 @@ router.get('/admin/history', authenticateJWT, catchAsync(async (req, res) => {
     res.json({ ok: true, history });
 }));
 
-// PUT /leaves/admin/approve/:id - Approve/Reject
-router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
+// PUT /leaves/admin/status/:id - Approve/Reject/Update Status
+router.put('/admin/status/:id', authenticateJWT, catchAsync(async (req, res) => {
     if (req.user.user_type !== 'admin' && req.user.user_type !== 'hr') {
         return res.status(403).json({ ok: false, message: "Access denied" });
     }
@@ -165,11 +165,11 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
     const { id } = req.params;
     const { status, pay_type, pay_percentage, admin_comment } = req.body;
 
-    if (!['approved', 'rejected'].includes(status)) {
+    if (!['Approved', 'Rejected'].includes(status)) {
         return res.status(400).json({ ok: false, message: "Invalid status" });
     }
 
-    if (status === 'approved' && !pay_type) {
+    if (status === 'Approved' && !pay_type) { // Changed to Title Case
         return res.status(400).json({ ok: false, message: "Payment type required for approval (Paid, Unpaid, or Partial)" });
     }
 
@@ -180,7 +180,7 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
         reviewed_at: new Date()
     };
 
-    if (status === 'approved') {
+    if (status === 'Approved') {
         updateData.pay_type = pay_type;
         updateData.pay_percentage = pay_type === 'Partial' ? (pay_percentage || 50) : (pay_type === 'Paid' ? 100 : 0);
     }
@@ -199,7 +199,7 @@ router.put('/admin/approve/:id', authenticateJWT, catchAsync(async (req, res) =>
         NotificationService.handleNotification({
             org_id: req.user.org_id,
             user_id: request.user_id,
-            type: status === 'approved' ? 'SUCCESS' : 'ERROR',
+            type: status === 'Approved' ? 'SUCCESS' : 'ERROR',
             title: `Leave Request ${status}`,
             message: `Your leave request from ${new Date(request.start_date).toLocaleDateString()} has been ${status.toLowerCase()}.`,
             related_entity_type: 'LEAVE',

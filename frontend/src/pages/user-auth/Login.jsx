@@ -36,7 +36,8 @@ const Login = () => {
       // Redirect to dashboard (DashboardHandler in App.jsx will decide which view to show)
       navigate("/");
     } catch (err) {
-      toast.error(err.message || "Invalid credentials");
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Invalid credentials";
+      toast.error(errorMessage);
       window.grecaptcha?.reset();
       setCaptchaToken(null);
     } finally {

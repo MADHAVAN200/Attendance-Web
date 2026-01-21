@@ -11,7 +11,7 @@ import path from "path";
 import sharp from "sharp";
 import '../config.js';
 
-const s3 = new S3Client({ 
+const s3 = new S3Client({
   region: process.env.S3_REGION,
   credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY_ID,
@@ -121,10 +121,11 @@ export async function uploadCompressedImage({
   quality = 50
 }) {
   try {
-    // Process image: Resize -> WebP -> Buffer
-    const processedBuffer = await sharp(fileBuffer)
+    // Process image: Resize -> WebP (supports animation) -> Buffer
+    // 'animated: true' allows sharp to handle multi-frame GIFs/WebP
+    const processedBuffer = await sharp(fileBuffer, { animated: true })
       .resize({ width, withoutEnlargement: true })
-      .webp({ quality })
+      .webp({ quality, lossless: false })
       .toBuffer();
 
     // Ensure extension is .webp

@@ -131,7 +131,7 @@ const AttendanceMonitoring = () => {
                     id: user.user_id,
                     name: user.user_name || 'Unknown',
                     role: user.desg_name || user.designation_title || 'Employee',
-                    avatar: (user.user_name || 'U').charAt(0).toUpperCase(),
+                    avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
                     department: user.dept_name || user.department_title || 'General',
                     sessions,
                     status,
@@ -533,8 +533,12 @@ const AttendanceMonitoring = () => {
                                                             {/* Card Header */}
                                                             <div className="p-5 flex items-start justify-between">
                                                                 <div className="flex gap-4">
-                                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
-                                                                        {item.avatar}
+                                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
+                                                                        {item.avatar.startsWith('http') ? (
+                                                                            <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            item.avatar
+                                                                        )}
                                                                     </div>
                                                                     <div>
                                                                         <h3 className="font-bold text-slate-800 dark:text-white line-clamp-1" title={item.name}>{item.name}</h3>
