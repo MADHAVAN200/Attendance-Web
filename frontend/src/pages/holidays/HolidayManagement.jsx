@@ -99,7 +99,7 @@ const HolidayManagement = () => {
         <DashboardLayout title="Holiday Management">
             <div className="space-y-6">
 
-<<<<<<< HEAD
+
                 {/* Tabs */}
                 <div className="flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
                     <button
@@ -131,22 +131,25 @@ const HolidayManagement = () => {
                                 />
                             </div>
                             <div className="flex gap-3 w-full sm:w-auto">
-                                <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                                    <Upload size={16} />
-                                    <span className="hidden sm:inline">Import CSV</span>
-                                    <span className="sm:hidden">Import</span>
-                                </button>
-                                <button
-                                    onClick={() => setIsAddModalOpen(true)}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
-                                >
-                                    <Plus size={16} />
-                                    <span>Add Holiday</span>
-                                </button>
+                                {user?.user_type === 'admin' && (
+                                    <>
+                                        <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                            <Upload size={16} />
+                                            <span className="hidden sm:inline">Import CSV</span>
+                                            <span className="sm:hidden">Import</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setIsAddModalOpen(true)}
+                                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
+                                        >
+                                            <Plus size={16} />
+                                            <span>Add Holiday</span>
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
 
-                        {/* Holiday List Table */}
                         <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
@@ -155,105 +158,18 @@ const HolidayManagement = () => {
                                             <th className="px-6 py-4">Holiday Name</th>
                                             <th className="px-6 py-4">Date</th>
                                             <th className="px-6 py-4">Type</th>
-                                            <th className="px-6 py-4 text-right">Actions</th>
-=======
-                {/* Header Actions */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-dark-card p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                    <div className="relative w-full sm:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search holidays..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200"
-                        />
-                    </div>
-                    <div className="flex gap-3 w-full sm:w-auto">
-                        {user?.user_type === 'admin' && (
-                            <>
-                                <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                                    <Upload size={16} />
-                                    <span className="hidden sm:inline">Import CSV</span>
-                                    <span className="sm:hidden">Import</span>
-                                </button>
-                                <button
-                                    onClick={() => setIsAddModalOpen(true)}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
-                                >
-                                    <Plus size={16} />
-                                    <span>Add Holiday</span>
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Holiday List Table */}
-                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
-                                    <th className="px-6 py-4">Holiday Name</th>
-                                    <th className="px-6 py-4">Date</th>
-                                    <th className="px-6 py-4">Type</th>
-                                    {user?.user_type === 'admin' && <th className="px-6 py-4 text-right">Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {isLoading ? (
-                                    <tr>
-                                        <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-8 text-center text-slate-500">Loading holidays...</td>
-                                    </tr>
-                                ) : filteredHolidays.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-12 text-center text-slate-400">
-                                            <Calendar size={48} className="mx-auto mb-4 opacity-20" />
-                                            <p>No holidays found.</p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredHolidays.map((holiday) => (
-                                        <tr key={holiday.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="font-medium text-slate-800 dark:text-white">{holiday.name}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={14} className="text-slate-400" />
-                                                    {new Date(holiday.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', weekday: 'short' })}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${holiday.type === 'Public'
-                                                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300'
-                                                    : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
-                                                    }`}>
-                                                    {holiday.type}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                {user?.user_type === 'admin' && (
-                                                    <button
-                                                        onClick={() => handleDelete(holiday.id)}
-                                                        className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
-                                            </td>
->>>>>>> 980f59f710582984cdfe653d0a384b45f193051a
+                                            {user?.user_type === 'admin' && <th className="px-6 py-4 text-right">Actions</th>}
                                         </tr>
+
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="4" className="px-6 py-8 text-center text-slate-500">Loading holidays...</td>
+                                                <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-8 text-center text-slate-500">Loading holidays...</td>
                                             </tr>
                                         ) : filteredHolidays.length === 0 ? (
                                             <tr>
-                                                <td colSpan="4" className="px-6 py-12 text-center text-slate-400">
+                                                <td colSpan={user?.user_type === 'admin' ? "4" : "3"} className="px-6 py-12 text-center text-slate-400">
                                                     <Calendar size={48} className="mx-auto mb-4 opacity-20" />
                                                     <p>No holidays found.</p>
                                                 </td>
@@ -279,12 +195,14 @@ const HolidayManagement = () => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
-                                                        <button
-                                                            onClick={() => handleDelete(holiday.id)}
-                                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {user?.user_type === 'admin' && (
+                                                            <button
+                                                                onClick={() => handleDelete(holiday.id)}
+                                                                className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
@@ -375,7 +293,7 @@ const HolidayManagement = () => {
                 )}
 
             </div>
-        </DashboardLayout>
+        </DashboardLayout >
     );
 };
 

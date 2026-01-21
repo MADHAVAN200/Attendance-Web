@@ -14,9 +14,11 @@ import {
     Search,
     Filter,
     MessageSquare,
-    User,
     Activity,
-    MapPin
+    MapPin,
+    Plus,
+    X,
+    Trash2
 } from 'lucide-react';
 
 const LeaveApplication = () => {
@@ -37,6 +39,8 @@ const LeaveApplication = () => {
         end_date: '',
         reason: ''
     });
+
+    const [showForm, setShowForm] = useState(false);
 
     const isAdmin = user?.user_type === 'admin' || user?.user_type === 'hr';
 
@@ -78,6 +82,7 @@ const LeaveApplication = () => {
             if (res.data.ok) {
                 toast.success("Leave request submitted successfully");
                 setFormData({ leave_type: 'Casual Leave', start_date: '', end_date: '', reason: '' });
+                setShowForm(false);
                 fetchLeaves();
             }
         } catch (error) {
@@ -102,29 +107,25 @@ const LeaveApplication = () => {
 
     const handleAdminAction = async () => {
         if (!selectedLeave) return;
-        if (adminAction.status === 'rejected' && !adminAction.remarks) {
-            return toast.error("Remarks are required for rejection");
-        }
-
         try {
             const payload = {
-                status: adminAction.status,
+                status: adminAction.status.charAt(0).toUpperCase() + adminAction.status.slice(1), // Capitalize for backend
                 admin_comment: adminAction.remarks,
                 pay_type: adminAction.payType,
                 pay_percentage: adminAction.payPercentage
             };
 
-            const res = await api.put(`/leaves/admin/approve/${selectedLeave.lr_id}`, payload);
+            const res = await api.put(`/leaves/admin/status/${selectedLeave.lr_id}`, payload);
             if (res.data.ok) {
                 toast.success(`Leave request ${adminAction.status.toLowerCase()}`);
                 // Update local state
                 const updatedLeaves = leaves.map(l =>
                     l.lr_id === selectedLeave.lr_id
-                        ? { ...l, status: adminAction.status, admin_comment: adminAction.remarks }
+                        ? { ...l, status: adminAction.status.toLowerCase(), admin_comment: adminAction.remarks }
                         : l
                 );
                 setLeaves(updatedLeaves);
-                setSelectedLeave({ ...selectedLeave, status: adminAction.status, admin_comment: adminAction.remarks });
+                setSelectedLeave({ ...selectedLeave, status: adminAction.status.toLowerCase(), admin_comment: adminAction.remarks });
                 setAdminAction({ status: '', remarks: '', payType: 'Paid', payPercentage: 100 });
             }
         } catch (error) {
@@ -160,7 +161,7 @@ const LeaveApplication = () => {
     }
 
     // --- ADMIN VIEW (New Split Layout) ---
-    if (isAdmin) {
+    if (isAdmin && !showForm) {
         const filteredLeaves = leaves.filter(leaf => {
             const matchesSearch = leaf.user_name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'all' || leaf.status === statusFilter;
@@ -176,9 +177,13 @@ const LeaveApplication = () => {
                     <div className="p-4 border-b border-slate-200 dark:border-slate-700 space-y-4">
                         <div className="flex justify-between items-center px-1">
                             <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Leave Requests</h3>
-                            <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-                                {leaves.length} Total
-                            </div>
+                            <button
+                                onClick={() => setShowForm(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-xs font-bold"
+                            >
+                                <Plus size={14} />
+                                Apply
+                            </button>
                         </div>
 
                         <div className="flex gap-2">
@@ -428,90 +433,193 @@ const LeaveApplication = () => {
 
     // --- USER VIEW ---
     return (
-        <div className="max-w-xl mx-auto py-8">
-            <div className="bg-white dark:bg-dark-card rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-8">
-                <div className="text-center mb-8">
-                    <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400">
-                        <FileText size={24} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">
-                        Apply for Leave
-                    </h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">
-                        Submit a new leave request. Tracking and status are managed by HR.
-                    </p>
+        <div className="max-w-5xl mx-auto py-8 px-4">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My Leave Applications</h2>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">Manage and track your leave requests</p>
                 </div>
+                {!showForm && (
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                    >
+                        <Plus size={18} />
+                        Apply Leave
+                    </button>
+                )}
+            </div>
 
-                <form onSubmit={handleApply} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Leave Type</label>
-                        <div className="relative">
-                            <select
-                                value={formData.leave_type}
-                                onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+            {showForm ? (
+                <div className="max-w-xl mx-auto bg-white dark:bg-dark-card rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-8 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setShowForm(false)}
+                                className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
                             >
-                                <option>Casual Leave</option>
-                                <option>Sick Leave</option>
-                                <option>Privilege Leave</option>
-                                <option>Unpaid Leave</option>
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                                <X size={20} />
+                            </button>
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-white">New Leave Request</h3>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleApply} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
-                            <input
-                                type="date"
-                                required
-                                value={formData.start_date}
-                                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                            />
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Leave Type</label>
+                            <div className="relative">
+                                <select
+                                    value={formData.leave_type}
+                                    onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                >
+                                    <option>Casual Leave</option>
+                                    <option>Sick Leave</option>
+                                    <option>Privilege Leave</option>
+                                    <option>Unpaid Leave</option>
+                                </select>
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">End Date</label>
-                            <input
-                                type="date"
-                                required
-                                value={formData.end_date}
-                                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                            />
-                        </div>
-                    </div>
 
-                    {formData.start_date && formData.end_date && (
-                        <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-sm text-indigo-700 dark:text-indigo-300 font-medium flex items-center justify-center gap-2">
-                            <Clock size={16} />
-                            Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.start_date}
+                                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">End Date</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.end_date}
+                                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
+                                />
+                            </div>
+                        </div>
+
+                        {formData.start_date && formData.end_date && (
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-sm text-indigo-700 dark:text-indigo-300 font-medium flex items-center justify-center gap-2">
+                                <Clock size={16} />
+                                Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Reason</label>
+                            <textarea
+                                required
+                                rows="4"
+                                value={formData.reason}
+                                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200 resize-none"
+                                placeholder="Please provide a detailed reason for your leave request..."
+                            ></textarea>
+                        </div>
+
+                        <div className="pt-2 flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowForm(false)}
+                                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
+                            >
+                                Submit Application
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            ) : (
+                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    {leaves.length === 0 ? (
+                        <div className="p-12 text-center text-slate-400">
+                            <Calendar size={48} className="mx-auto mb-4 opacity-20" />
+                            <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Leave History</h3>
+                            <p className="max-w-sm mx-auto mb-6">You haven't applied for any leaves yet. Click the "Apply Leave" button to submit a request.</p>
+                            <button
+                                onClick={() => setShowForm(true)}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                            >
+                                <Plus size={18} />
+                                Apply First Leave
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 font-semibold">
+                                    <tr>
+                                        <th className="px-6 py-4">Type</th>
+                                        <th className="px-6 py-4">Duration</th>
+                                        <th className="px-6 py-4">Reason</th>
+                                        <th className="px-6 py-4">Applied On</th>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                    {leaves.map((leave) => (
+                                        <tr key={leave.lr_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="font-medium text-slate-800 dark:text-white">{leave.leave_type}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                                                <div className="flex flex-col">
+                                                    <span>{calculateDays(leave.start_date, leave.end_date)} Days</span>
+                                                    <span className="text-xs opacity-70">
+                                                        {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                                                <div className="max-w-xs truncate" title={leave.reason}>{leave.reason}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-500">
+                                                {new Date(leave.applied_at || Date.now()).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' :
+                                                    leave.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' :
+                                                        'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
+                                                    }`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-emerald-500' :
+                                                        leave.status === 'rejected' ? 'bg-red-500' :
+                                                            'bg-amber-500'
+                                                        }`}></span>
+                                                    {leave.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {leave.status === 'pending' && (
+                                                    <button
+                                                        onClick={() => handleWithdraw(leave.lr_id)}
+                                                        className="text-slate-400 hover:text-red-600 transition-colors"
+                                                        title="Withdraw Request"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Reason</label>
-                        <textarea
-                            required
-                            rows="4"
-                            value={formData.reason}
-                            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200 resize-none"
-                            placeholder="Please provide a detailed reason for your leave request..."
-                        ></textarea>
-                    </div>
-
-                    <div className="pt-2">
-                        <button
-                            type="submit"
-                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
-                        >
-                            Submit Application
-                        </button>
-                    </div>
-                </form>
-            </div>
+                </div>
+            )}
         </div>
     );
 };
