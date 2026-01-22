@@ -26,6 +26,7 @@ import Subscription from "./pages/subscription/Subscription"
 import TestAPI from "./pages/test/TestAPI"
 import VisualScripting from "./pages/test/VisualScripting"
 import DailyActivity from "./pages/dar/DailyActivity"
+import DARAdmin from "./pages/dar/DARAdmin"
 import LeaveApplication from "./pages/holidays/LeaveApplication"
 
 
@@ -88,6 +89,7 @@ function App() {
             {/* Admin Only Routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
               <Route path="/subscription" element={<Subscription />} />
+              <Route path="/dar/admin-test" element={<DARAdmin />} />
             </Route>
           </Route>
 
