@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
-import { X, Plus, Clock, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Plus, Clock, AlertCircle, Trash2, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
+import MiniCalendar from '../dar/MiniCalendar';
 
-const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlightTaskId }) => {
+const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlightTaskId, initialDate }) => {
 
 
     // Helper to add minutes to HH:MM time
@@ -21,7 +23,31 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
         return t1.localeCompare(t2) < 0;
     };
 
+    const [date, setDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
+
+    // Sync state with prop if it changes
+    useEffect(() => {
+        if (initialDate) setDate(initialDate);
+    }, [initialDate]);
+
+    const [showCalendar, setShowCalendar] = useState(false);
+    const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
+    const buttonRef = useRef(null);
+
+    const toggleCalendar = () => {
+        if (!showCalendar && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setCalendarPos({
+                top: rect.bottom + 8,
+                left: rect.left
+            });
+        }
+        setShowCalendar(!showCalendar);
+    };
+
     const [inputs, setInputs] = useState([]);
+    const today = new Date().toISOString().split('T')[0];
+    const isPastDate = date < today;
 
     // Auto-scroll to highlight
     useEffect(() => {
@@ -34,44 +60,39 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
         }
     }, [highlightTaskId, inputs]);
 
-    // Initialize defaults on mount
-    // Initialize defaults on mount
+    // Initialize defaults on mount or date change
     useEffect(() => {
         const fetchActivities = async () => {
             try {
-                const today = new Date().toISOString().split('T')[0];
-                const res = await api.get(`/dar/activities/list?date=${today}`);
+                const res = await api.get(`/dar/activities/list?date=${date}`);
                 const activities = res.data.data.map(a => ({
                     id: a.activity_id,
                     title: a.title,
                     description: a.description,
                     startTime: a.start_time ? a.start_time.slice(0, 5) : '',
                     endTime: a.end_time ? a.end_time.slice(0, 5) : '',
+                    category: a.activity_type ? (a.activity_type.charAt(0) + a.activity_type.slice(1).toLowerCase()) : 'General',
                     isValid: true,
-                    isSaved: true // Mark as already saved
+                    isSaved: true
                 }));
                 // If no activities, maybe add one empty slot?
-                if (activities.length === 0) {
-                    setInputs([{
-                        id: `new-${Date.now()}`,
-                        title: '',
-                        description: '',
-                        startTime: initialTimeIn, // Start at Time In
-                        endTime: addMinutes(initialTimeIn, 60),
-                        isValid: true,
-                        error: null,
-                        isSaved: false
-                    }]);
-                } else {
-                    setInputs(activities);
-                }
+                setInputs(activities.length > 0 ? activities : [{
+                    id: `new-${Date.now()}`,
+                    title: '',
+                    description: '',
+                    startTime: initialTimeIn, // Start at Time In
+                    endTime: addMinutes(initialTimeIn, 60),
+                    isValid: true,
+                    error: null,
+                    isSaved: false
+                }]);
             } catch (err) {
                 console.error("Failed to fetch activities", err);
             }
         };
 
         fetchActivities();
-    }, [initialTimeIn]);
+    }, [initialTimeIn, date]);
 
 
     const handleInputChange = (index, field, value) => {
@@ -102,7 +123,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                 startTime: task.startTime,
                 endTime: task.endTime,
                 type: 'task',
-                date: new Date().toISOString().split('T')[0]
+                category: task.category || 'General',
+                date: date
             });
         }
     };
@@ -132,7 +154,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
             startTime: newTask.startTime,
             endTime: newTask.endTime,
             type: 'task',
-            date: new Date().toISOString().split('T')[0]
+            date: date
         });
     };
 
@@ -162,18 +184,63 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -20, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col overflow-hidden"
+            className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col"
         >
 
             {/* Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-start bg-white dark:bg-dark-card z-10">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-start bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
                 <div>
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Daily Tasks</h3>
                     <p className="text-sm text-gray-400 dark:text-gray-400 mt-1">Plan your day effectively</p>
 
-                    <div className="flex items-center gap-2 mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full w-fit border border-emerald-100 dark:border-emerald-800">
-                        <Clock size={14} />
-                        <span>Time In: {initialTimeIn}</span>
+                    <div className="flex items-center gap-3 mt-3">
+                        <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full w-fit border border-emerald-100 dark:border-emerald-800">
+                            <Clock size={14} />
+                            <span>Time In: {initialTimeIn}</span>
+                        </div>
+
+                        {/* Date Picker using MiniCalendar (Portal) */}
+                        <div className="relative">
+                            <button
+                                ref={buttonRef}
+                                onClick={toggleCalendar}
+                                className="flex items-center gap-2 pl-3 pr-4 py-1.5 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                            >
+                                <Calendar size={14} className="text-indigo-500" />
+                                <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
+                                    {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                            </button>
+
+                            {showCalendar && createPortal(
+                                <div className="fixed inset-0 z-[9999] isolate">
+                                    {/* Backdrop */}
+                                    <div
+                                        className="fixed inset-0 bg-transparent"
+                                        onClick={() => setShowCalendar(false)}
+                                    />
+                                    {/* Popup */}
+                                    <div
+                                        className="fixed z-[10000] drop-shadow-2xl"
+                                        style={{
+                                            top: calendarPos.top,
+                                            left: calendarPos.left,
+                                            maxWidth: '320px'
+                                        }}
+                                    >
+                                        <MiniCalendar
+                                            selectedDate={date}
+                                            disableRange={true}
+                                            onDateSelect={(range) => {
+                                                setDate(range.start);
+                                                setShowCalendar(false);
+                                            }}
+                                        />
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </div>
                     </div>
                 </div>
                 <button
@@ -192,25 +259,32 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                         {/* Indicator Line */}
                         <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${task.error ? 'bg-red-400' : 'bg-gray-200 group-hover:bg-indigo-500'}`}></div>
 
-                        {/* Top Row: TITLE INPUT & Hidden Delete */}
-                        <div className="flex items-center justify-between relative border-b border-gray-50 pb-2 mb-1">
-                            {/* TITLE INPUT replacing the Label */}
+                        {/* Top Row: TITLE & Category */}
+                        <div className="flex items-center justify-between relative border-b border-gray-50 pb-2 mb-1 gap-2">
+                            {/* TITLE INPUT */}
                             <input
                                 type="text"
                                 placeholder={`TASK ${i + 1 < 10 ? '0' + (i + 1) : i + 1}`}
                                 value={task.title}
                                 onChange={(e) => handleInputChange(i, 'title', e.target.value)}
-                                className="w-full text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
+                                className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
                             />
 
-                            {/* Hidden Delete Button (Top Right) */}
-                            <button
-                                onClick={() => handleDelete(i)}
-                                className="absolute -top-1 -right-1 p-1.5 bg-red-50 text-red-400 rounded-full hover:bg-red-100 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
-                                title="Remove Task"
-                            >
-                                <Trash2 size={12} />
-                            </button>
+                            {/* Category Pill Dropdown (Top Right) */}
+                            <div className="relative flex-shrink-0">
+                                <select
+                                    value={task.category || 'General'}
+                                    onChange={(e) => handleInputChange(i, 'category', e.target.value)}
+                                    className="appearance-none pl-3 pr-6 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 rounded-full border border-indigo-100 dark:border-indigo-800 focus:ring-0 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-right"
+                                >
+                                    {['General', 'Site Visit', 'Inspection', 'Material', 'Meeting', 'Safety', 'Doc'].map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-500">
+                                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="space-y-3">
@@ -224,33 +298,43 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                             />
 
                             {/* Time Intervals */}
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-3 pt-2 border-t border-dashed border-gray-100 dark:border-slate-700">
-                                    <div className={`flex-1 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-2 py-1.5 focus-within:bg-white dark:focus-within:bg-slate-700 focus-within:ring-2 transition-all flex items-center gap-2 ${task.error ? 'focus-within:ring-red-500/20' : 'focus-within:ring-indigo-500/20'}`}>
-                                        <Clock size={14} className={task.error ? "text-red-400" : "text-gray-400 dark:text-slate-500"} />
+                            {/* Time Intervals & Actions Row */}
+                            <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-100 dark:border-slate-700">
+                                {/* Time Group */}
+                                <div className="flex-1 flex items-center gap-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg p-1.5 border border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-800 transition-colors">
+                                    <Clock size={14} className={task.error ? "text-red-400 ml-1" : "text-gray-400 dark:text-slate-500 ml-1"} />
+
+                                    <div className="flex items-center gap-1 flex-1">
                                         <input
                                             type="time"
                                             value={task.startTime}
                                             onChange={(e) => handleInputChange(i, 'startTime', e.target.value)}
-                                            className={`w-full bg-transparent border-none p-0 text-xs font-medium focus:ring-0 ${task.error ? 'text-red-600' : 'text-gray-600 dark:text-gray-300'}`}
+                                            className={`w-full bg-transparent border-none p-0 text-xs font-medium focus:ring-0 text-center no-calendar-picker ${task.error ? 'text-red-600' : 'text-gray-600 dark:text-gray-300'}`}
                                         />
-                                    </div>
-                                    <span className="text-gray-300">to</span>
-                                    <div className="flex-1 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-2 py-1.5 focus-within:bg-white dark:focus-within:bg-slate-700 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all flex items-center gap-2">
+                                        <span className="text-gray-300 text-[10px]">•</span>
                                         <input
                                             type="time"
                                             value={task.endTime}
                                             onChange={(e) => handleInputChange(i, 'endTime', e.target.value)}
-                                            className="w-full bg-transparent border-none p-0 text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-0 text-right"
+                                            className="w-full bg-transparent border-none p-0 text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-0 text-center no-calendar-picker"
                                         />
                                     </div>
                                 </div>
-                                {task.error && (
-                                    <span className="text-[10px] text-red-500 font-medium flex items-center gap-1">
-                                        <AlertCircle size={10} /> {task.error}
-                                    </span>
-                                )}
+
+                                {/* Delete Action */}
+                                <button
+                                    onClick={() => handleDelete(i)}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Delete Task"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
                             </div>
+                            {task.error && (
+                                <span className="text-[10px] text-red-500 font-medium flex items-center gap-1 mt-1">
+                                    <AlertCircle size={10} /> {task.error}
+                                </span>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -278,14 +362,24 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-dark-card">
+            <div className="p-6 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-dark-card rounded-b-2xl">
                 <button
-                    className="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg shadow-gray-200 dark:shadow-none transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2"
+                    className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 ${isPastDate
+                        ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
+                        : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
                     onClick={async () => {
                         // Filter for unsaved or modified tasks
                         const unsavedTasks = inputs.filter(t => !t.isSaved);
 
                         if (unsavedTasks.length === 0) {
+                            onClose();
+                            return;
+                        }
+
+                        // MOCK REQUEST FLOW
+                        if (isPastDate) {
+                            // In real app, we would enable partials.isRequest = true
+                            alert(`Request sent to Admin for approval: ${unsavedTasks.length} changes on ${date}`);
                             onClose();
                             return;
                         }
@@ -298,8 +392,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                     description: task.description,
                                     start_time: task.startTime,
                                     end_time: task.endTime,
-                                    activity_date: new Date().toISOString().split('T')[0],
-                                    activity_type: 'TASK',
+                                    activity_date: date, // Use selected date
+                                    activity_type: (task.category || 'General').toUpperCase(),
                                     status: 'COMPLETED'
                                 };
 
@@ -323,11 +417,18 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                         onClose();
                     }}
                 >
-                    Save & Continue
+                    {isPastDate ? (
+                        <>
+                            <AlertCircle size={18} />
+                            Submit Request for Approval
+                        </>
+                    ) : (
+                        "Save & Continue"
+                    )}
                 </button>
             </div>
 
-        </motion.div>
+        </motion.div >
     );
 };
 

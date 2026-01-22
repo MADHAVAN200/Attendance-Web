@@ -26,6 +26,7 @@ const DailyActivity = () => {
 
     // Selection for Edit
     const [selectedTaskId, setSelectedTaskId] = useState(null);
+    const [panelDate, setPanelDate] = useState(new Date().toISOString().split('T')[0]); // Track date for panel
 
     // Mode State
     const [sidebarMode, setSidebarMode] = useState('default'); // 'default' | 'create-task'
@@ -141,6 +142,7 @@ const DailyActivity = () => {
         setIsCreateOpen(false);
         if (type === 'Task') {
             setSidebarMode('create-task');
+            setPanelDate(selectedDate); // Default to current view's start date
         } else if (type === 'Event' || type === 'Meeting') {
             setEventModal({ isOpen: true, type });
         } else {
@@ -197,8 +199,9 @@ const DailyActivity = () => {
                                     fetchRangeData(); // Refresh after save
                                 }}
                                 onUpdate={handleTaskPreviewUpdate} // Optional: keep for live preview if logic supports
-                                initialTimeIn={attendanceData[new Date().toISOString().split('T')[0]]?.timeIn || "09:00"}
+                                initialTimeIn={attendanceData[panelDate]?.timeIn || "09:00"}
                                 highlightTaskId={selectedTaskId}
+                                initialDate={panelDate}
                             />
                         ) : (
                             <motion.div
@@ -287,7 +290,7 @@ const DailyActivity = () => {
                                     animate={{ scale: 1, opacity: 1 }}
                                     className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-xs font-bold animate-pulse"
                                 >
-                                    Editing Today...
+                                    Editing {new Date(panelDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}...
                                 </motion.span>
                             )}
                         </div>
@@ -312,6 +315,7 @@ const DailyActivity = () => {
                                         setSidebarMode('create-task');
                                         const rawId = t.id.startsWith('act-') ? t.id.split('-')[1] : null;
                                         if (rawId) setSelectedTaskId(Number(rawId));
+                                        setPanelDate(t.date); // Set panel date to task's date
                                     } else {
                                         // It's an Event or Meeting
                                         // Open Modal in Edit Mode

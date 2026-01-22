@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const MiniCalendar = ({ selectedDate, endDate, onDateSelect }) => {
+const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = false }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
 
     // Helper: Get days in month
@@ -47,19 +47,24 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect }) => {
     };
 
     const handleMouseDown = (dateStr) => {
+        if (disableRange) {
+            // Immediate selection for single date mode
+            onDateSelect({ start: dateStr, end: dateStr });
+            return;
+        }
         setIsDragging(true);
         setDragStart(dateStr);
         setDragEnd(dateStr);
     };
 
     const handleMouseEnter = (dateStr) => {
-        if (isDragging) {
+        if (isDragging && !disableRange) {
             setDragEnd(dateStr);
         }
     };
 
     const handleMouseUp = () => {
-        if (isDragging && dragStart && dragEnd) {
+        if (isDragging && dragStart && dragEnd && !disableRange) {
             setIsDragging(false);
 
             // Determine actual start/end (user might drag backwards)
