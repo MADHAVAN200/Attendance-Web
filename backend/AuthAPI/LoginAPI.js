@@ -127,7 +127,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
     user: {
       id: user.user_id,
       user_code: user.user_code,
-      name: user.user_name,
+      user_name: user.user_name,
       email: user.email,
       phone: user.phone_no,
       user_type: user.user_type,
