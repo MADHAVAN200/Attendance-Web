@@ -72,39 +72,57 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
     }, [highlightTaskId, inputs, hasScrolled]);
 
     // Initialize defaults on mount or date change
+    const [availableCategories, setAvailableCategories] = useState(['General']);
+
     useEffect(() => {
-        const fetchActivities = async () => {
+        const fetchActivitiesAndSettings = async () => {
             try {
-                const res = await api.get(`/dar/activities/list?date=${date}`);
-                const activities = res.data.data.map(a => ({
+                // Parallel fetch
+                const [actRes, setRes] = await Promise.all([
+                    api.get(`/dar/activities/list?date=${date}`),
+                    api.get('/dar/settings/list')
+                ]);
+
+                // 1. Process Settings
+                if (setRes.data.ok) {
+                    const cats = setRes.data.data.categories;
+                    if (Array.isArray(cats) && cats.length > 0) {
+                        setAvailableCategories(cats);
+                    }
+                }
+
+                // 2. Process Activities
+                const activities = actRes.data.data.map(a => ({
                     id: a.activity_id,
                     title: a.title,
                     description: a.description,
                     startTime: a.start_time ? a.start_time.slice(0, 5) : '',
                     endTime: a.end_time ? a.end_time.slice(0, 5) : '',
-                    category: a.activity_type ? (a.activity_type.charAt(0) + a.activity_type.slice(1).toLowerCase()) : 'General',
+                    // Category normalization
+                    category: a.activity_type ? a.activity_type : 'General',
                     status: a.status, // Capture status
                     isValid: true,
                     isSaved: true
                 }));
-                // If no activities, maybe add one empty slot?
+
                 setInputs(activities.length > 0 ? activities : [{
                     id: `new-${Date.now()}`,
                     title: '',
                     description: '',
-                    startTime: initialTimeIn, // Start at Time In
+                    startTime: initialTimeIn,
                     endTime: addMinutes(initialTimeIn, 60),
                     isValid: true,
                     error: null,
                     isSaved: false,
                     status: 'PENDING'
                 }]);
+
             } catch (err) {
-                console.error("Failed to fetch activities", err);
+                console.error("Failed to fetch data", err);
             }
         };
 
-        fetchActivities();
+        fetchActivitiesAndSettings();
     }, [initialTimeIn, date]);
 
 
@@ -294,20 +312,30 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                 </span>
                             )}
 
-                            {/* Category Pill Dropdown (Top Right) */}
+                            {/* Category Pill Dropdown (Dynamic Width) */}
                             <div className="relative flex-shrink-0">
+                                {/* Visual Layer (Dictates Layout) */}
+                                <div className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 transition-colors">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                                        {task.category || 'General'}
+                                    </span>
+                                    <div className="text-indigo-500">
+                                        <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Input Layer (Invisible Overlay) */}
                                 <select
                                     value={task.category || 'General'}
                                     onChange={(e) => handleInputChange(i, 'category', e.target.value)}
-                                    className="appearance-none pl-3 pr-6 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 rounded-full border border-indigo-100 dark:border-indigo-800 focus:ring-0 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-right"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
                                 >
-                                    {['General', 'Site Visit', 'Inspection', 'Material', 'Meeting', 'Safety', 'Doc'].map(cat => (
+                                    {availableCategories.map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
                                     ))}
                                 </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-500">
-                                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                                </div>
                             </div>
                         </div>
 
