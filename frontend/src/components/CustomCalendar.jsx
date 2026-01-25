@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CustomCalendar = ({ selectedDate, onChange, onClose }) => {
+const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
     // Parse the initial date or default to today
     const initialDate = selectedDate ? new Date(selectedDate) : new Date();
 
@@ -56,46 +56,46 @@ const CustomCalendar = ({ selectedDate, onChange, onClose }) => {
         setCurrentDate(new Date(year, month + 1, 1));
     };
 
-    const handleDateClick = (dayObj) => {
-        if (dayObj.type === 'prev') {
-            const newDate = new Date(year, month - 1, dayObj.day);
-            // formatting manually to avoid timezone issues: YYYY-MM-DD
-            onChange(formatDate(newDate));
-        } else if (dayObj.type === 'next') {
-            const newDate = new Date(year, month + 1, dayObj.day);
-            onChange(formatDate(newDate));
-        } else {
-            const newDate = new Date(year, month, dayObj.day);
-            onChange(formatDate(newDate));
-        }
-        onClose(); // Close picker after selection
+    // YYYY-MM-DD formatter
+    const formatDate = (y, m, d) => {
+        return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     };
 
-    // YYYY-MM-DD formatter
-    const formatDate = (date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+    const handleDateClick = (dayObj) => {
+        let newDate;
+        if (dayObj.type === 'prev') {
+            newDate = new Date(year, month - 1, dayObj.day);
+        } else if (dayObj.type === 'next') {
+            newDate = new Date(year, month + 1, dayObj.day);
+        } else {
+            newDate = new Date(year, month, dayObj.day);
+        }
+
+        // Format to YYYY-MM-DD
+        const dateStr = formatDate(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+        onChange(dateStr);
+        onClose(); // Close picker after selection
     };
 
     // Check if a day is the selected date
     const isSelected = (dayObj) => {
-        if (dayObj.type !== 'current') return false; // simple check logic for current month view
-
-        // Accurate check requires reconstructing full date
-        const checkDate = new Date(year, month, dayObj.day);
-        const sDate = new Date(selectedDate);
-
-        return checkDate.getFullYear() === sDate.getFullYear() &&
-            checkDate.getMonth() === sDate.getMonth() &&
-            checkDate.getDate() === sDate.getDate();
+        if (dayObj.type !== 'current') return false;
+        const dateStr = formatDate(year, month, dayObj.day);
+        return dateStr === selectedDate;
     };
+
+    // Check if today
+    const isToday = (dayObj) => {
+        if (dayObj.type !== 'current') return false;
+        const today = new Date();
+        return dayObj.day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+    };
+
 
     return (
         <div
-            className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()} // Prevent close when clicking inside
+            className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
@@ -128,27 +128,48 @@ const CustomCalendar = ({ selectedDate, onChange, onClose }) => {
             {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1">
                 {days.map((dayObj, index) => {
-                    const selected = isSelected(dayObj);
                     const isCurrentMonth = dayObj.type === 'current';
+                    // Construct date key for event lookup
+                    const dateKey = isCurrentMonth ? formatDate(year, month, dayObj.day) : null;
+                    const eventType = isCurrentMonth && events[dateKey] ? events[dateKey].type : null;
+
+                    const selected = isSelected(dayObj);
+                    const today = isToday(dayObj);
+
+                    let bgClass = "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700";
+
+                    if (!isCurrentMonth) {
+                        bgClass = "text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800";
+                    } else if (selected) {
+                        bgClass = "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/30";
+                    } else if (today) {
+                        bgClass = "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
+                    } else if (eventType === 'absent') {
+                        bgClass = "bg-red-50 text-red-600 border border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50";
+                    } else if (eventType === 'holiday') {
+                        bgClass = "bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50";
+                    }
 
                     return (
                         <button
                             key={index}
                             onClick={() => handleDateClick(dayObj)}
                             className={`
-                                h-9 w-9 rounded-lg flex items-center justify-center text-sm font-medium transition-all
-                                ${isCurrentMonth
-                                    ? selected
-                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/30'
-                                        : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                    : 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
-                                }
+                                h-9 w-9 rounded-lg flex items-center justify-center text-sm font-medium transition-all relative
+                                ${bgClass}
                             `}
                         >
                             {dayObj.day}
                         </button>
                     );
                 })}
+            </div>
+
+            {/* Legend */}
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between text-[10px] text-slate-500">
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Today</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-400"></div>Absent</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div>Holiday</div>
             </div>
         </div>
     );

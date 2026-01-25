@@ -101,16 +101,22 @@ const HolidayManagement = () => {
 
 
                 {/* Tabs */}
-                <div className="flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
+                <div className="flex p-1 space-x-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl max-w-fit mb-6 border border-slate-200 dark:border-slate-700/50">
                     <button
                         onClick={() => setActiveTab('holidays')}
-                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'holidays' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'holidays'
+                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
                     >
                         Holidays List
                     </button>
                     <button
                         onClick={() => setActiveTab('leave_application')}
-                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'leave_application' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'leave_application'
+                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
                     >
                         Leave Application
                     </button>

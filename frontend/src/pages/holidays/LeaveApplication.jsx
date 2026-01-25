@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import DatePicker from '../../components/DatePicker';
 import { toast } from 'react-toastify';
 import {
     Calendar,
@@ -18,7 +19,8 @@ import {
     MapPin,
     Plus,
     X,
-    Trash2
+    Trash2,
+    Paperclip
 } from 'lucide-react';
 
 const LeaveApplication = () => {
@@ -37,11 +39,51 @@ const LeaveApplication = () => {
         leave_type: 'Casual Leave',
         start_date: '',
         end_date: '',
-        reason: ''
+        reason: '',
+        attachment: null
     });
 
     const [showForm, setShowForm] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
+
+    // --- FILTER & SUMMARY LOGIC (Moved to top level) ---
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+    // Filter leaves based on selected month
+    const filteredLeaves = React.useMemo(() => {
+        const monthStr = String(selectedMonth + 1).padStart(2, '0');
+        const filterDateStr = `${selectedYear}-${monthStr}`;
+
+        return leaves.filter(leave => {
+            if (!leave.start_date) return false;
+            return leave.start_date.startsWith(filterDateStr);
+        });
+    }, [leaves, selectedMonth, selectedYear]);
+
+    // Calculate total approved days
+    const totalApprovedDays = React.useMemo(() => {
+        return filteredLeaves
+            .filter(l => l.status === 'approved')
+            .reduce((acc, curr) => {
+                // Inline calculateDays since helper is defined below, or move helper up.
+                // Better yet, just use the helper if it's defined in scope or move helper up.
+                // Helper is defined inside component? Yes at line 138.
+                // Since this is inside component, we can use it if defined before use?
+                // Javascript function declarations are hoisted, but const arrow functions are NOT.
+                // calculateDays is const arrow function at line 138.
+                // So we need to move calculateDays UP as well or define it as function.
+                if (!curr.start_date || !curr.end_date) return acc; // safety check
+
+                // Re-implementing logic inline to be safe or I'll move calculateDays up.
+                // Let's move calculateDays to module scope or top of component.
+                const s = new Date(curr.start_date);
+                const e = new Date(curr.end_date);
+                const diffTime = Math.abs(e - s);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                return acc + (diffDays > 0 ? diffDays : 0);
+            }, 0);
+    }, [filteredLeaves]);
 
     const isAdmin = user?.user_type === 'admin' || user?.user_type === 'hr';
 
@@ -79,10 +121,23 @@ const LeaveApplication = () => {
     const handleApply = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/leaves/request', formData);
+            // Create FormData to handle file upload
+            const data = new FormData();
+            data.append('leave_type', formData.leave_type);
+            data.append('start_date', formData.start_date);
+            data.append('end_date', formData.end_date);
+            data.append('reason', formData.reason);
+            if (formData.attachment) {
+                data.append('attachment', formData.attachment);
+            }
+
+            const res = await api.post('/leaves/request', data, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
             if (res.data.ok) {
                 toast.success("Leave request submitted successfully");
-                setFormData({ leave_type: 'Casual Leave', start_date: '', end_date: '', reason: '' });
+                setFormData({ leave_type: 'Casual Leave', start_date: '', end_date: '', reason: '', attachment: null });
                 setShowForm(false);
                 setIsCustomType(false);
                 fetchLeaves();
@@ -91,6 +146,17 @@ const LeaveApplication = () => {
             console.error("Apply error", error);
             toast.error(error.response?.data?.message || "Failed to submit request");
         }
+    };
+
+    const handleFileChange = (e) => {
+        if (e.target.files[0]) {
+            setFormData({ ...formData, attachment: e.target.files[0] });
+        }
+    };
+
+    const handleTextareaInput = (e) => {
+        e.target.style.height = 'auto';
+        e.target.style.height = e.target.scrollHeight + 'px';
     };
 
     const handleWithdraw = async (leaveId) => {
@@ -397,213 +463,279 @@ const LeaveApplication = () => {
         );
     }
 
+
+
     // --- USER VIEW ---
     return (
-        <div className="max-w-5xl mx-auto py-8 px-4">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My Leave Applications</h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">Manage and track your leave requests</p>
-                </div>
-                {!showForm && (
-                    <button
-                        onClick={() => setShowForm(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
-                    >
-                        <Plus size={18} />
-                        Apply Leave
-                    </button>
-                )}
-            </div>
+        <div className="w-full">
 
-            {showForm ? (
-                <div className="max-w-xl mx-auto bg-white dark:bg-dark-card rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-8 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setShowForm(false)}
-                                className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white">New Leave Request</h3>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                {/* --- LEFT COLUMN: APPLY FORM --- */}
+                <div className="lg:col-span-4">
+                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sticky top-6">
+                        <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
+                            <Plus className="text-indigo-600 dark:text-indigo-400" size={20} />
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Apply for Leave</h3>
                         </div>
-                    </div>
 
-                    <form onSubmit={handleApply} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Leave Type</label>
-                            <div className="relative">
-                                <select
-                                    value={['Casual Leave', 'Sick Leave', 'Privilege Leave', 'Unpaid Leave'].includes(formData.leave_type) ? formData.leave_type : 'Other'}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'Other') {
-                                            setIsCustomType(true);
-                                            setFormData({ ...formData, leave_type: '' });
-                                        } else {
-                                            setIsCustomType(false);
-                                            setFormData({ ...formData, leave_type: e.target.value });
-                                        }
-                                    }}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                                >
-                                    <option>Casual Leave</option>
-                                    <option>Sick Leave</option>
-                                    <option>Privilege Leave</option>
-                                    <option>Unpaid Leave</option>
-                                    <option>Other</option>
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                        <form onSubmit={handleApply} className="space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Leave Type</label>
+                                <div className="relative">
+                                    <select
+                                        value={['Casual Leave', 'Sick Leave'].includes(formData.leave_type) ? formData.leave_type : 'Other'}
+                                        onChange={(e) => {
+                                            if (e.target.value === 'Other') {
+                                                setIsCustomType(true);
+                                                setFormData({ ...formData, leave_type: '' });
+                                            } else {
+                                                setIsCustomType(false);
+                                                setFormData({ ...formData, leave_type: e.target.value });
+                                            }
+                                        }}
+                                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-slate-200 font-medium cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900"
+                                    >
+                                        <option>Casual Leave</option>
+                                        <option>Sick Leave</option>
+                                        <option>Other</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                                </div>
+                                {isCustomType && (
+                                    <input
+                                        type="text"
+                                        placeholder="Enter custom leave type"
+                                        value={formData.leave_type}
+                                        onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
+                                        className="w-full px-3 py-2.5 mt-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-slate-200"
+                                    />
+                                )}
                             </div>
-                            {isCustomType && (
-                                <input
-                                    type="text"
-                                    placeholder="Enter custom leave type"
-                                    value={formData.leave_type}
-                                    onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
-                                    className="w-full px-4 py-3 mt-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                                />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <DatePicker
+                                        label="Start Date"
+                                        value={formData.start_date}
+                                        onChange={(date) => setFormData({ ...formData, start_date: date })}
+                                        placeholder="Select date"
+                                    />
+                                </div>
+                                <div>
+                                    <DatePicker
+                                        label="End Date"
+                                        value={formData.end_date}
+                                        onChange={(date) => setFormData({ ...formData, end_date: date })}
+                                        placeholder="Select date"
+                                    />
+                                </div>
+                            </div>
+
+                            {formData.start_date && formData.end_date && (
+                                <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-xs text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center gap-2">
+                                    <Clock size={14} />
+                                    Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
+                                </div>
                             )}
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
-                                <input
-                                    type="date"
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Reason</label>
+                                <textarea
                                     required
-                                    value={formData.start_date}
-                                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                                />
+                                    rows="1"
+                                    value={formData.reason}
+                                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                                    onInput={handleTextareaInput}
+                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-slate-200 resize-none placeholder-slate-400 overflow-hidden min-h-[42px]"
+                                    placeholder="Why do you need leave?"
+                                ></textarea>
                             </div>
+
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">End Date</label>
-                                <input
-                                    type="date"
-                                    required
-                                    value={formData.end_date}
-                                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
-                                />
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Attachment (Optional)</label>
+                                <div className="relative group">
+                                    <input
+                                        type="file"
+                                        id="leave-attachment"
+                                        className="hidden"
+                                        onChange={handleFileChange}
+                                    />
+                                    <label
+                                        htmlFor="leave-attachment"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                            <Paperclip size={16} />
+                                        </div>
+                                        <div className="flex-1 truncate">
+                                            {formData.attachment ? (
+                                                <span className="text-sm text-slate-700 dark:text-slate-200 font-medium">
+                                                    {formData.attachment.name}
+                                                </span>
+                                            ) : (
+                                                <span className="text-sm text-slate-400">
+                                                    Click to attach document...
+                                                </span>
+                                            )}
+                                        </div>
+                                        {formData.attachment && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setFormData({ ...formData, attachment: null });
+                                                }}
+                                                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full text-slate-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        )}
+                                    </label>
+                                </div>
                             </div>
-                        </div>
 
-                        {formData.start_date && formData.end_date && (
-                            <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-sm text-indigo-700 dark:text-indigo-300 font-medium flex items-center justify-center gap-2">
-                                <Clock size={16} />
-                                Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Reason</label>
-                            <textarea
-                                required
-                                rows="4"
-                                value={formData.reason}
-                                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 dark:text-slate-200 resize-none"
-                                placeholder="Please provide a detailed reason for your leave request..."
-                            ></textarea>
-                        </div>
-
-                        <div className="pt-2 flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowForm(false)}
-                                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all"
-                            >
-                                Cancel
-                            </button>
                             <button
                                 type="submit"
-                                className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
+                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                             >
-                                Submit Application
+                                <CheckCircle size={18} />
+                                Submit Request
                             </button>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
-            ) : (
-                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    {leaves.length === 0 ? (
-                        <div className="p-12 text-center text-slate-400">
-                            <Calendar size={48} className="mx-auto mb-4 opacity-20" />
-                            <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Leave History</h3>
-                            <p className="max-w-sm mx-auto mb-6">You haven't applied for any leaves yet. Click the "Apply Leave" button to submit a request.</p>
-                            <button
-                                onClick={() => setShowForm(true)}
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
-                            >
-                                <Plus size={18} />
-                                Apply First Leave
-                            </button>
+
+                {/* --- RIGHT COLUMN: HISTORY LIST --- */}
+                <div className="lg:col-span-8">
+                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full min-h-[500px]">
+
+                        {/* --- LIST HEADER WITH FILTERS --- */}
+                        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-4 justify-between items-center bg-slate-50/50 dark:bg-slate-800/10">
+                            <div>
+                                <h3 className="font-bold text-slate-800 dark:text-white">Leave History</h3>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">
+                                        {filteredLeaves.length} Records
+                                    </div>
+                                    <div className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 dark:text-indigo-200 px-3 py-1.5 rounded-md border border-indigo-100 dark:border-indigo-500/30">
+                                        Total Approved: {totalApprovedDays} Days
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {/* Month Picker */}
+                                <div className="relative">
+                                    <select
+                                        value={selectedMonth}
+                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                        className="pl-3 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm appearance-none cursor-pointer"
+                                    >
+                                        {Array.from({ length: 12 }, (_, i) => (
+                                            <option key={i} value={i}>
+                                                {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                                </div>
+
+                                {/* Year Picker */}
+                                <div className="relative">
+                                    <select
+                                        value={selectedYear}
+                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                        className="pl-3 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm appearance-none cursor-pointer"
+                                    >
+                                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                                </div>
+                            </div>
                         </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 font-semibold">
-                                    <tr>
-                                        <th className="px-6 py-4">Type</th>
-                                        <th className="px-6 py-4">Duration</th>
-                                        <th className="px-6 py-4">Reason</th>
-                                        <th className="px-6 py-4">Applied On</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                    {leaves.map((leave) => (
-                                        <tr key={leave.lr_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="font-medium text-slate-800 dark:text-white">{leave.leave_type}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                                                <div className="flex flex-col">
-                                                    <span>{calculateDays(leave.start_date, leave.end_date)} Days</span>
-                                                    <span className="text-xs opacity-70">
-                                                        {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                                                <div className="max-w-xs truncate" title={leave.reason}>{leave.reason}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-500">
-                                                {new Date(leave.applied_at || Date.now()).toLocaleDateString()}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' :
-                                                    leave.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' :
-                                                        'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
-                                                    }`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-emerald-500' :
-                                                        leave.status === 'rejected' ? 'bg-red-500' :
-                                                            'bg-amber-500'
-                                                        }`}></span>
-                                                    {leave.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                {leave.status === 'pending' && (
-                                                    <button
-                                                        onClick={() => handleWithdraw(leave.lr_id)}
-                                                        className="text-slate-400 hover:text-red-600 transition-colors"
-                                                        title="Withdraw Request"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
-                                            </td>
+
+                        {filteredLeaves.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400">
+                                <FileText size={48} className="mx-auto mb-4 opacity-20" />
+                                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Leave Records</h3>
+                                <p className="max-w-sm mx-auto text-sm">No leave requests found for {new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-4">Type</th>
+                                            <th className="px-6 py-4">Current Status</th>
+                                            <th className="px-6 py-4">Duration</th>
+                                            <th className="px-6 py-4">Reason</th>
+                                            <th className="px-6 py-4">Date Applied</th>
+                                            <th className="px-6 py-4 text-right">Action</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                        {filteredLeaves.map((leave) => (
+                                            <tr key={leave.lr_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                                                <td className="px-6 py-4">
+                                                    <div className="font-semibold text-sm text-slate-800 dark:text-white">{leave.leave_type}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                                        leave.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
+                                                            'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                                                        }`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-emerald-500' :
+                                                            leave.status === 'rejected' ? 'bg-red-500' :
+                                                                'bg-amber-500'
+                                                            }`}></span>
+                                                        {leave.status}
+                                                    </span>
+                                                    {leave.admin_comment && (
+                                                        <p className="text-[10px] text-slate-500 mt-1 max-w-[120px] truncate" title={leave.admin_comment}>
+                                                            Note: {leave.admin_comment}
+                                                        </p>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{calculateDays(leave.start_date, leave.end_date)} Days</span>
+                                                        <span className="text-[10px] text-slate-400 mt-0.5">
+                                                            {new Date(leave.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(leave.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 max-w-[200px]">
+                                                    <p className="text-sm text-slate-600 dark:text-slate-400 truncate" title={leave.reason}>
+                                                        {leave.reason}
+                                                    </p>
+                                                </td>
+                                                <td className="px-6 py-4 text-xs text-slate-500 font-mono">
+                                                    {new Date(leave.applied_at || Date.now()).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    {leave.status === 'pending' && (
+                                                        <button
+                                                            onClick={() => handleWithdraw(leave.lr_id)}
+                                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100"
+                                                            title="Withdraw Request"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
