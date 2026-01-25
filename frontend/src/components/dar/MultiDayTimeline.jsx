@@ -289,6 +289,16 @@ const MultiDayTimeline = ({
                                             if (task.type === 'event') bgClass = "bg-blue-100/90 border-blue-200 text-blue-700 hover:bg-blue-100";
                                             if (task.type === 'break') bgClass = "bg-amber-100/90 border-amber-200 text-amber-700 hover:bg-amber-100";
 
+                                            // Planned Status Overlay (Stripes)
+                                            let extraStyle = {};
+                                            if (task.status === 'PLANNED') {
+                                                // Keep base color but add stripes and dashed border
+                                                bgClass = "bg-gray-50/50 border-gray-300 text-gray-500 hover:bg-gray-100 border-dashed dark:bg-slate-800/50 dark:border-slate-600 dark:text-slate-400";
+                                                extraStyle = {
+                                                    backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.05) 5px, rgba(0,0,0,0.05) 10px)"
+                                                };
+                                            }
+
                                             return (
                                                 <div
                                                     key={task.id}
@@ -298,9 +308,10 @@ const MultiDayTimeline = ({
                                                         left: `${left}px`,
                                                         width: `${width}px`,
                                                         top: `${topPos}px`,
-                                                        height: `${itemHeight - 2}px` // -2 for slight gap between stacked items
+                                                        height: `${itemHeight - 2}px`, // -2 for slight gap between stacked items
+                                                        ...extraStyle
                                                     }}
-                                                    title={`${task.title} (${task.startTime} - ${task.endTime})`}
+                                                    title={`${task.title} (${task.startTime} - ${task.endTime}) ${task.status === 'PLANNED' ? '[PLANNED]' : ''}`}
                                                 >
                                                     {/* Title (Dynamic Size) */}
                                                     <div className={`font-bold leading-tight truncate ${maxLanes > 1 || width < 60 ? 'text-[10px]' : 'text-sm'}`}>

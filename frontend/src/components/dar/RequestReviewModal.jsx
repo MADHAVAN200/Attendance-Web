@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, ArrowRight, Clock, FileText, Activity, AlertCircle, Calendar } from 'lucide-react';
 
-const RequestReviewModal = ({ isOpen, onClose, request }) => {
+const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject }) => {
     // Mock Data if no request is passed (for development/preview)
     const mockRequest = {
         employeeName: "John Civil",
@@ -60,28 +60,44 @@ const RequestReviewModal = ({ isOpen, onClose, request }) => {
         return timeToPos(end) - timeToPos(start);
     };
 
+    // Helper to normalize HH:MM:SS -> HH:MM
+    const fmtTime = (t) => t ? t.slice(0, 5) : '';
+
     // Identify Changes for Diff List
     const changes = useMemo(() => {
         const changesList = [];
         const originalTasks = data.originalTasks || [];
         const proposedTasks = data.proposedTasks || [];
 
-        const proposedIds = new Set(proposedTasks.map(t => t.id));
-        const originalIds = new Set(originalTasks.map(t => t.id));
+        const proposedIds = new Set(proposedTasks.map(t => String(t.id)));
+        const originalIds = new Set(originalTasks.map(t => String(t.id)));
 
         // Modified & Deleted
         originalTasks.forEach(orig => {
-            const prop = proposedTasks.find(p => p.id === orig.id);
+            const prop = proposedTasks.find(p => String(p.id) === String(orig.id));
             if (!prop) {
                 changesList.push({ type: 'DELETE', task: orig, reason: 'Task removed' });
             } else {
                 // Check for modifications
-                if (orig.startTime !== prop.startTime || orig.endTime !== prop.endTime) {
+                // Normalize times before comparing
+                const origStart = fmtTime(orig.startTime);
+                const origEnd = fmtTime(orig.endTime);
+                const propStart = fmtTime(prop.startTime);
+                const propEnd = fmtTime(prop.endTime);
+
+                if (origStart !== propStart || origEnd !== propEnd) {
                     changesList.push({
                         type: 'MODIFY',
                         task: prop,
                         original: orig,
-                        reason: `Time changed: ${orig.startTime}-${orig.endTime} → ${prop.startTime}-${prop.endTime}`
+                        reason: `Time changed: ${origStart}-${origEnd} → ${propStart}-${propEnd}`
+                    });
+                } else if (orig.title !== prop.title || orig.description !== prop.description) {
+                    changesList.push({
+                        type: 'MODIFY',
+                        task: prop,
+                        original: orig,
+                        reason: 'Task details updated'
                     });
                 }
             }
@@ -89,7 +105,7 @@ const RequestReviewModal = ({ isOpen, onClose, request }) => {
 
         // Added
         proposedTasks.forEach(prop => {
-            if (!originalIds.has(prop.id)) {
+            if (!originalIds.has(String(prop.id))) {
                 changesList.push({ type: 'ADD', task: prop, reason: 'New task added' });
             }
         });
@@ -243,13 +259,15 @@ const RequestReviewModal = ({ isOpen, onClose, request }) => {
                                         <div>
                                             <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{change.task.title}</h4>
                                             <p className="text-xs text-slate-500 mt-1">{change.reason}</p>
-                                            {change.type === 'MODIFY' && (
-                                                <div className="flex items-center gap-2 text-xs mt-2 font-mono bg-slate-100 dark:bg-slate-900 p-1.5 rounded">
-                                                    <span className="text-slate-400 line-through">{change.original.startTime}-{change.original.endTime}</span>
-                                                    <ArrowRight size={12} className="text-slate-400" />
-                                                    <span className="text-amber-500 font-bold">{change.task.startTime}-{change.task.endTime}</span>
-                                                </div>
-                                            )}
+                                            {change.type === 'MODIFY' &&
+                                                (fmtTime(change.original.startTime) !== fmtTime(change.task.startTime) ||
+                                                    fmtTime(change.original.endTime) !== fmtTime(change.task.endTime)) && (
+                                                    <div className="flex items-center gap-2 text-xs mt-2 font-mono bg-slate-100 dark:bg-slate-900 p-1.5 rounded">
+                                                        <span className="text-slate-400 line-through">{fmtTime(change.original.startTime)}-{fmtTime(change.original.endTime)}</span>
+                                                        <ArrowRight size={12} className="text-slate-400" />
+                                                        <span className="text-amber-500 font-bold">{fmtTime(change.task.startTime)}-{fmtTime(change.task.endTime)}</span>
+                                                    </div>
+                                                )}
                                         </div>
                                     </div>
                                 ))}
@@ -279,13 +297,13 @@ const RequestReviewModal = ({ isOpen, onClose, request }) => {
                 {/* Footer Actions */}
                 <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f111a] flex justify-end gap-3">
                     <button
-                        onClick={() => { alert('Rejected'); onClose(); }}
+                        onClick={onReject}
                         className="px-5 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
                         Reject Request
                     </button>
                     <button
-                        onClick={() => { alert('Approved'); onClose(); }}
+                        onClick={onApprove}
                         className="px-5 py-2.5 rounded-xl font-bold bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/25 transition-all active:scale-95 flex items-center gap-2"
                     >
                         <Check size={18} />

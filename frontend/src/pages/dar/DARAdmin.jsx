@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
@@ -21,6 +21,8 @@ import {
 } from 'recharts';
 import RequestReviewModal from '../../components/dar/RequestReviewModal';
 import MiniCalendar from '../../components/dar/MiniCalendar';
+import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 const DARAdmin = () => {
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'settings' | 'data'
@@ -62,6 +64,71 @@ const DARAdmin = () => {
     const [selectedShift, setSelectedShift] = useState('General'); // General, Morning, Night
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [requests, setRequests] = useState([]); // Real Requests State
+    const [loadingRequests, setLoadingRequests] = useState(false);
+
+    // Fetch Requests
+    const fetchRequests = async () => {
+        setLoadingRequests(true);
+        try {
+            const res = await api.get('/dar/requests/list');
+            // Map API data to UI format
+            const mapped = res.data.data.map(r => ({
+                id: r.request_id,
+                user: r.user_name, // from join
+                date: r.request_date,
+                changes: (r.proposed_data?.length || 0), // Rough count
+                employeeName: r.user_name,
+                originalTasks: r.original_data.map(t => ({
+                    ...t,
+                    id: t.id || Math.random(),
+                    startTime: t.start_time || t.startTime,
+                    endTime: t.end_time || t.endTime
+                })),
+                proposedTasks: r.proposed_data.map(t => ({
+                    ...t,
+                    id: t.id || Math.random(),
+                    startTime: t.start_time || t.startTime,
+                    endTime: t.end_time || t.endTime
+                })),
+                status: r.status
+            }));
+            setRequests(mapped);
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load requests");
+        } finally {
+            setLoadingRequests(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'insights') {
+            fetchRequests();
+        }
+    }, [activeTab]);
+
+    const handleApproveRequest = async (reqId) => {
+        try {
+            await api.post(`/dar/requests/approve/${reqId}`);
+            toast.success("Request Approved & Applied");
+            setSelectedRequest(null);
+            fetchRequests(); // Refresh
+        } catch (err) {
+            toast.error("Approval Failed: " + (err.response?.data?.message || err.message));
+        }
+    };
+
+    const handleRejectRequest = async (reqId) => {
+        try {
+            await api.post(`/dar/requests/reject/${reqId}`, { comment: "Rejected by Admin" });
+            toast.info("Request Rejected");
+            setSelectedRequest(null);
+            fetchRequests(); // Refresh
+        } catch (err) {
+            toast.error("Rejection Failed");
+        }
+    };
     const [showCalendar, setShowCalendar] = useState(false);
     const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
     const buttonRef = useRef(null);
@@ -534,54 +601,28 @@ const DARAdmin = () => {
                                 </h3>
 
                                 <div className="flex-1 w-full flex flex-col gap-3">
-                                    {/* Mock Requests */}
-                                    {[{
-                                        id: 101,
-                                        user: "John Civil",
-                                        date: "2024-01-19",
-                                        changes: 2,
-                                        employeeName: "John Civil",
-                                        originalTasks: [
-                                            { id: 1, title: "Site A Inspection", startTime: "09:00", endTime: "11:00", type: "SITE_VISIT" },
-                                            { id: 2, title: "Cement Unloading", startTime: "11:30", endTime: "13:00", type: "LOGISTICS" },
-                                            { id: 3, title: "Client Meeting", startTime: "14:00", endTime: "15:00", type: "MEETING" },
-                                        ],
-                                        proposedTasks: [
-                                            { id: 1, title: "Site A Inspection", startTime: "09:00", endTime: "11:30", type: "SITE_VISIT" }, // Extended
-                                            { id: 3, title: "Client Meeting", startTime: "15:00", endTime: "16:00", type: "MEETING" }, // Moved
-                                            { id: 4, title: "Material Check", startTime: "11:30", endTime: "12:30", type: "LOGISTICS" }, // New
-                                        ]
-                                    }, {
-                                        id: 102,
-                                        user: "Sarah Engineer",
-                                        date: "2024-01-18",
-                                        changes: 1,
-                                        employeeName: "Sarah Engineer",
-                                        originalTasks: [
-                                            { id: 10, title: "Safety Briefing", startTime: "08:00", endTime: "09:00", type: "MEETING" },
-                                            { id: 11, title: "Equipment Check", startTime: "09:00", endTime: "10:00", type: "LOGISTICS" }
-                                        ],
-                                        proposedTasks: [
-                                            { id: 10, title: "Safety Briefing", startTime: "08:30", endTime: "09:30", type: "MEETING" }, // Shifted
-                                            { id: 11, title: "Equipment Check", startTime: "09:30", endTime: "10:30", type: "LOGISTICS" }
-                                        ]
-                                    }].map(req => (
-                                        <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-slate-800 dark:text-white">{req.user}</span>
-                                                <span className="text-xs text-slate-500">Requested for <span className="font-mono">{req.date}</span> • {req.changes} changes</span>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    // Trigger Modal (Pass full req object)
-                                                    setSelectedRequest(req);
-                                                }}
-                                                className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition"
-                                            >
-                                                Review Changes
-                                            </button>
+                                    {loadingRequests ? (
+                                        <div className="text-center py-10 text-slate-400">Loading requests...</div>
+                                    ) : requests.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400 italic bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                                            No pending requests found.
                                         </div>
-                                    ))}
+                                    ) : (
+                                        requests.map(req => (
+                                            <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-800 dark:text-white">{req.user}</span>
+                                                    <span className="text-xs text-slate-500">Requested for <span className="font-mono">{req.date}</span> • {req.changes} items</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSelectedRequest(req)}
+                                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition"
+                                                >
+                                                    Review Changes
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
 
@@ -594,6 +635,8 @@ const DARAdmin = () => {
                         isOpen={!!selectedRequest}
                         onClose={() => setSelectedRequest(null)}
                         request={selectedRequest}
+                        onApprove={() => handleApproveRequest(selectedRequest?.id)}
+                        onReject={() => handleRejectRequest(selectedRequest?.id)}
                     />
 
                 </div >

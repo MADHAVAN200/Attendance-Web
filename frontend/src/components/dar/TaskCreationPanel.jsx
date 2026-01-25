@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import { X, Plus, Clock, AlertCircle, Trash2, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'react-toastify';
 import MiniCalendar from '../dar/MiniCalendar';
 
 const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlightTaskId, initialDate, onDateChange }) => {
@@ -46,19 +47,29 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
     };
 
     const [inputs, setInputs] = useState([]);
+    const [hasScrolled, setHasScrolled] = useState(false);
     const today = new Date().toISOString().split('T')[0];
     const isPastDate = date < today;
 
-    // Auto-scroll to highlight
+    // Reset scroll flag when highlighting a new task
     useEffect(() => {
-        if (highlightTaskId) {
+        setHasScrolled(false);
+    }, [highlightTaskId]);
+
+    // Auto-scroll to highlight (Only once per task)
+    useEffect(() => {
+        if (highlightTaskId && !hasScrolled && inputs.length > 0) {
             // Slight delay to ensure DOM is ready
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 const el = document.getElementById(`task-card-${highlightTaskId}`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setHasScrolled(true);
+                }
             }, 100);
+            return () => clearTimeout(timer);
         }
-    }, [highlightTaskId, inputs]);
+    }, [highlightTaskId, inputs, hasScrolled]);
 
     // Initialize defaults on mount or date change
     useEffect(() => {
@@ -72,6 +83,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                     startTime: a.start_time ? a.start_time.slice(0, 5) : '',
                     endTime: a.end_time ? a.end_time.slice(0, 5) : '',
                     category: a.activity_type ? (a.activity_type.charAt(0) + a.activity_type.slice(1).toLowerCase()) : 'General',
+                    status: a.status, // Capture status
                     isValid: true,
                     isSaved: true
                 }));
@@ -84,7 +96,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                     endTime: addMinutes(initialTimeIn, 60),
                     isValid: true,
                     error: null,
-                    isSaved: false
+                    isSaved: false,
+                    status: 'PENDING'
                 }]);
             } catch (err) {
                 console.error("Failed to fetch activities", err);
@@ -124,6 +137,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                 endTime: task.endTime,
                 type: 'task',
                 category: task.category || 'General',
+                status: task.status,
                 date: date
             });
         }
@@ -163,7 +177,9 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
         // If it's saved in DB (has valid ID not starting with 'new-'), delete from DB
         const isExisting = task.id && !String(task.id).startsWith('new-');
 
-        if (isExisting) {
+        // Only delete via API if NOT in 'Past Date' mode. 
+        // In Past Date mode, we just remove from UI list -> ProposedDiff will show Delete.
+        if (isExisting && !isPastDate) {
             try {
                 await api.delete(`/dar/activities/delete/${task.id}`);
                 // Notify parent to update preview
@@ -271,6 +287,13 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                 className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
                             />
 
+                            {/* PLANNED BADGE */}
+                            {task.status === 'PLANNED' && (
+                                <span className="text-[10px] font-bold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50 flex items-center gap-1">
+                                    <Clock size={10} /> Planned
+                                </span>
+                            )}
+
                             {/* Category Pill Dropdown (Top Right) */}
                             <div className="relative flex-shrink-0">
                                 <select
@@ -369,24 +392,64 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                         ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
                         : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
                     onClick={async () => {
-                        // Filter for unsaved or modified tasks
-                        const unsavedTasks = inputs.filter(t => !t.isSaved);
+                        // Filter for unsaved OR (Today + Planned) tasks
+                        // This logic forces 'PLANNED' tasks to be re-submitted for validation when execution day arrives
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const isToday = date === todayStr;
 
-                        if (unsavedTasks.length === 0) {
+                        const tasksToSave = inputs.filter(t =>
+                            !t.isSaved || (isToday && t.status === 'PLANNED')
+                        );
+
+                        if (tasksToSave.length === 0) {
                             onClose();
                             return;
                         }
 
-                        // MOCK REQUEST FLOW
+                        // MOCK REQUEST FLOW -> REAL API CALL
                         if (isPastDate) {
-                            // In real app, we would enable partials.isRequest = true
-                            alert(`Request sent to Admin for approval: ${unsavedTasks.length} changes on ${date}`);
-                            onClose();
+                            try {
+                                const response = await api.post('/dar/requests/create', {
+                                    request_date: date,
+                                    // ideally we should store original state on load, but for now we can just send empty if unknown, 
+                                    // or fetch it here. But simpler: The Admin Diff view will fetch the 'current execution' from DB as 'Original' anyway?
+                                    // Wait, if we send 'original_data' here, we capture the state BEFORE the user made these edits in the UI? 
+                                    // The `inputs` are already modified. 
+                                    // We need to fetch the DB state again to be sure what is "Original"
+
+                                    // Better approach: Let the backend fetch 'original' or we fetch it here.
+                                    // Let's fetch current DB state here to be accurate.
+                                    original_data: (await api.get(`/dar/activities/list?date=${date}`)).data.data.map(a => ({
+                                        id: a.activity_id, // Critical for diff
+                                        title: a.title,
+                                        description: a.description,
+                                        start_time: a.start_time,
+                                        end_time: a.end_time,
+                                        activity_type: a.activity_type
+                                    })),
+                                    proposed_data: inputs.map(t => ({
+                                        id: t.id && !t.id.toString().startsWith('new-') ? t.id : undefined, // Send ID if existing
+                                        title: t.title,
+                                        description: t.description,
+                                        start_time: t.startTime,
+                                        end_time: t.endTime,
+                                        activity_type: (t.category || 'General').toUpperCase()
+                                    }))
+                                });
+
+                                if (response.data.ok) {
+                                    toast.success("Request submitted to Admin!");
+                                    onClose();
+                                }
+                            } catch (err) {
+                                console.error(err);
+                                alert("Failed to submit request: " + (err.response?.data?.message || err.message));
+                            }
                             return;
                         }
 
                         // Submit sequentially
-                        for (const task of unsavedTasks) {
+                        for (const task of tasksToSave) {
                             try {
                                 const payload = {
                                     title: task.title || "Untitled Task",
@@ -395,7 +458,10 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                     end_time: task.endTime,
                                     activity_date: date, // Use selected date
                                     activity_type: (task.category || 'General').toUpperCase(),
-                                    status: 'COMPLETED'
+                                    // Status Logic:
+                                    // If Future -> Backend sets PLANNED
+                                    // If Today -> Send COMPLETED to enforce validation (convert Plan to Record)
+                                    status: date > todayStr ? 'PLANNED' : 'COMPLETED'
                                 };
 
                                 // Check if it's an existing task (numeric ID or ID string not starting with 'new-')
