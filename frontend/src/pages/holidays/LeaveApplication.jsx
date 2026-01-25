@@ -467,14 +467,12 @@ const LeaveApplication = () => {
 
     // --- USER VIEW ---
     return (
-        <div className="w-full">
+        <div className="w-full space-y-8">
+            <div className="flex flex-col gap-8 items-start">
 
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-                {/* --- LEFT COLUMN: APPLY FORM --- */}
-                <div className="lg:col-span-4">
-                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sticky top-6">
+                {/* --- TOP: APPLY FORM --- */}
+                <div className="w-full">
+                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                         <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
                             <Plus className="text-indigo-600 dark:text-indigo-400" size={20} />
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white">Apply for Leave</h3>
@@ -607,8 +605,8 @@ const LeaveApplication = () => {
                     </div>
                 </div>
 
-                {/* --- RIGHT COLUMN: HISTORY LIST --- */}
-                <div className="lg:col-span-8">
+                {/* --- BOTTOM: HISTORY LIST --- */}
+                <div className="w-full">
                     <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full min-h-[500px]">
 
                         {/* --- LIST HEADER WITH FILTERS --- */}
