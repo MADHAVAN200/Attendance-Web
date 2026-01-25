@@ -62,38 +62,304 @@ const DARAdmin = () => {
         }
     };
 
-    // --- CHART DATA ---
-    const categoryData = [
-        { name: 'Site Visit', value: 45, color: '#6366f1' },
-        { name: 'Inspection', value: 25, color: '#10b981' },
-        { name: 'Documentation', value: 20, color: '#f59e0b' },
-        { name: 'Meetings', value: 10, color: '#ef4444' },
-    ];
+    // --- CHART DATA STATE ---
+    const [categoryData, setCategoryData] = useState([]);
+    const [complianceData, setComplianceData] = useState([]);
+    const [stats, setStats] = useState({
+        submissionRate: 0,
+        submittedCount: 0,
+        totalEmployees: 0,
+        topActivity: '-',
+        topActivityPercent: 0
+    });
 
-    const complianceData = [
-        { day: 'Mon', submitted: 18, pending: 2 },
-        { day: 'Tue', submitted: 19, pending: 1 },
-        { day: 'Wed', submitted: 17, pending: 3 },
-        { day: 'Thu', submitted: 20, pending: 0 },
-        { day: 'Fri', submitted: 18, pending: 2 },
-        { day: 'Sat', submitted: 15, pending: 5 },
-        { day: 'Sun', submitted: 12, pending: 8 },
-    ];
+    // Shift State
+    const [shifts, setShifts] = useState([]);
+    const [currentShift, setCurrentShift] = useState({ start: 8, end: 18 }); // Default View Range
+    const [selectedShiftObj, setSelectedShiftObj] = useState(null);
 
-    const topContributors = [
-        { name: 'John Civil', hours: 42 },
-        { name: 'Sarah Engineer', hours: 38 },
-        { name: 'Mike Foreman', hours: 35 },
-        { name: 'Alex Field', hours: 30 },
-        { name: 'David Site', hours: 28 },
-    ];
+    // --- MASTER DATA STATE ---
+    const [timelineData, setTimelineData] = useState([]);
+    const [loadingData, setLoadingData] = useState(false);
+
+    // Fetch Total Employees Count (for calculations)
+    const [totalEmpCount, setTotalEmpCount] = useState(20); // Default fallback
+
+    useEffect(() => {
+        // Fetch total employees count once
+        const fetchEmpCount = async () => {
+            try {
+                const res = await api.get('/admin/users');
+                if (res.data.success) {
+                    setTotalEmpCount(res.data.users.length);
+                }
+            } catch (e) { console.error("Failed to fetch users", e); }
+        };
+        // Fetch Departments & Shifts
+        const fetchDeptsAndShifts = async () => {
+            // 1. Departments
+            try {
+                const res = await api.get('/admin/departments');
+                if (res.data.success) {
+                    setDepartments(res.data.departments.map(d => d.dept_name));
+                }
+            } catch (e) { console.error("Failed to fetch departments", e); }
+
+            // 2. Shifts
+            try {
+                const res = await api.get('/admin/shifts');
+                if (res.data.success) {
+                    setShifts(res.data.shifts);
+                    // Match current selected shift or default
+                    if (res.data.shifts.length > 0) {
+                        const gen = res.data.shifts.find(s => s.shift_name === 'General');
+                        if (gen) setSelectedShiftObj(gen);
+                    }
+                }
+            } catch (e) { console.error("Failed to fetch shifts", e); }
+        }
+        fetchEmpCount();
+        fetchDeptsAndShifts();
+    }, []);
+
+    const fetchInsights = async () => {
+        setLoadingData(true);
+        try {
+            // Last 7 days
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - 6);
+            const sStr = start.toISOString().split('T')[0];
+            const eStr = end.toISOString().split('T')[0];
+
+            const res = await api.get(`/dar/activities/admin/all?startDate=${sStr}&endDate=${eStr}`);
+            if (res.data.ok) {
+                processInsights(res.data.data, sStr, eStr);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load insights");
+        } finally {
+            setLoadingData(false);
+        }
+    };
+
+    const processInsights = (activities, startStr, endStr) => {
+        // 1. Category Data (Pie)
+        const catMap = {};
+        let totalHours = 0;
+        activities.forEach(a => {
+            const h = (new Date(`1970-01-01T${a.end_time}`) - new Date(`1970-01-01T${a.start_time}`)) / 3600000;
+            const hours = Math.max(0, h);
+            catMap[a.activity_type] = (catMap[a.activity_type] || 0) + hours;
+            totalHours += hours;
+        });
+
+        const catChart = Object.entries(catMap).map(([name, value], i) => ({
+            name,
+            value: Math.round(value * 10) / 10,
+            color: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]
+        })).sort((a, b) => b.value - a.value);
+        setCategoryData(catChart);
+
+        // 2. Top Activity
+        if (catChart.length > 0) {
+            setStats(prev => ({
+                ...prev,
+                topActivity: catChart[0].name,
+                topActivityPercent: totalHours > 0 ? Math.round((catChart[0].value / totalHours) * 100) : 0
+            }));
+        }
+
+        // Helper to get local YYYY-MM-DD
+        const getLocalDate = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // 3. Compliance Data (Bar - Last 7 days)
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            days.push(getLocalDate(d));
+        }
+
+        const compChart = days.map(dayStr => {
+            const submittedUsers = new Set(
+                activities.filter(a => {
+                    const localActDate = getLocalDate(new Date(a.activity_date));
+                    return localActDate === dayStr;
+                }).map(a => a.user_id)
+            );
+            const submitted = submittedUsers.size;
+            const pending = Math.max(0, totalEmpCount - submitted);
+            const dateObj = new Date(dayStr);
+            return {
+                day: dateObj.toLocaleDateString('en-US', { weekday: 'short' }),
+                fullDate: dayStr,
+                submitted,
+                pending
+            };
+        });
+        setComplianceData(compChart);
+
+        // 4. Rate (Today)
+        const todayStr = getLocalDate(new Date());
+        const todayStats = compChart.find(c => c.fullDate === todayStr);
+        if (todayStats) {
+            const rate = Math.round((todayStats.submitted / totalEmpCount) * 100);
+            setStats(prev => ({
+                ...prev,
+                submissionRate: rate,
+                submittedCount: todayStats.submitted,
+                totalEmployees: totalEmpCount
+            }));
+        }
+    };
+
+    const fetchMasterData = async () => {
+        setLoadingData(true);
+        try {
+            const res = await api.get(`/dar/activities/admin/all?startDate=${dateRange.start}&endDate=${dateRange.end}`);
+            if (res.data.ok) {
+                // Group by User AND Date
+                const grouped = {};
+                res.data.data.forEach(a => {
+                    const localDate = getLocalDate(new Date(a.activity_date));
+                    const key = `${a.user_id}-${localDate}`;
+
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            id: key,
+                            userId: a.user_id,
+                            name: a.user_name,
+                            role: a.user_role || 'Employee',
+                            date: localDate,
+                            dept: a.user_dept,
+                            shift: a.user_shift_name, // Store shift
+                            activities: []
+                        };
+                    }
+                    // Parse times
+                    const parseTime = (t) => {
+                        const [h, m] = t.split(':').map(Number);
+                        return h + (m / 60);
+                    };
+                    grouped[key].activities.push({
+                        id: a.id,
+                        start: parseTime(a.start_time),
+                        end: parseTime(a.end_time),
+                        category: a.activity_type,
+                        title: a.title || 'Task'
+                    });
+                });
+
+                // Sort by User Name then Date (Desc)
+                const sorted = Object.values(grouped).sort((a, b) => {
+                    if (a.name === b.name) return new Date(b.date) - new Date(a.date);
+                    return a.name.localeCompare(b.name);
+                });
+                setTimelineData(sorted);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load timeline data");
+        } finally {
+            setLoadingData(false);
+        }
+    };
 
     // Filters
-    const [selectedShift, setSelectedShift] = useState('General');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedShift, setSelectedShift] = useState('General'); // Name of shift
+
+    // Update Timeline Range when Shift Changes
+    useEffect(() => {
+        if (!selectedShift || shifts.length === 0) return;
+
+        let targetShift = shifts.find(s => s.shift_name === selectedShift);
+        if (!targetShift) targetShift = shifts[0]; // Fallback
+
+        if (targetShift) {
+            try {
+                // Parse policy_rules
+                const rules = typeof targetShift.policy_rules === 'string'
+                    ? JSON.parse(targetShift.policy_rules)
+                    : targetShift.policy_rules;
+
+                const startStr = rules?.shift_timing?.start_time || "09:00";
+                const endStr = rules?.shift_timing?.end_time || "18:00";
+
+                const startH = parseInt(startStr.split(':')[0]);
+                const endH = parseInt(endStr.split(':')[0]);
+
+                // Set timeline to -1hr start and +1hr end
+                setCurrentShift({
+                    start: Math.max(0, startH - 1),
+                    end: Math.min(24, endH + 1) // Allow up to 25 for overflow visual if needed, but 24 max usu
+                });
+
+            } catch (e) {
+                console.error("Error parsing shift rules", e);
+                setCurrentShift({ start: 8, end: 18 });
+            }
+        }
+    }, [selectedShift, shifts]);
+    // Helper to get local YYYY-MM-DD
+    const getLocalToday = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    // General Helper for any date
+    const getLocalDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const [dateRange, setDateRange] = useState({ start: getLocalToday(), end: getLocalToday() });
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [departments, setDepartments] = useState([]); // List of departments
+    const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
     const [requests, setRequests] = useState([]);
     const [loadingRequests, setLoadingRequests] = useState(false);
+
+    const [employeesList, setEmployeesList] = useState([]);
+    const [selectedEmployee, setSelectedEmployee] = useState("All Employees");
+
+    // Dynamic Employee List based on Selected Dept
+    useEffect(() => {
+        if (selectedDepartment === "All Departments") {
+            // Show all unique employees from the current data
+            if (timelineData.length > 0) {
+                const allEmps = [...new Set(timelineData.map(u => u.name))];
+                setEmployeesList(allEmps);
+            } else {
+                setEmployeesList([]);
+            }
+        } else {
+            // Filter employees who belong to the selected department
+            const deptEmps = [...new Set(timelineData.filter(u => u.dept === selectedDepartment).map(u => u.name))];
+            setEmployeesList(deptEmps);
+        }
+    }, [selectedDepartment, timelineData]);
+
+    const filteredTimelineData = timelineData.filter(user => {
+        // 1. Filter by Department
+        if (selectedDepartment !== "All Departments" && user.dept !== selectedDepartment) return false;
+        // 2. Filter by Shift
+        if (selectedShift && user.shift !== selectedShift) return false;
+        // 3. Filter by Employee
+        if (selectedEmployee !== "All Employees" && user.name !== selectedEmployee) return false;
+
+        return true;
+    });
 
     // Fetch Requests
     const fetchRequests = async () => {
@@ -133,10 +399,13 @@ const DARAdmin = () => {
     useEffect(() => {
         if (activeTab === 'insights') {
             fetchRequests();
+            fetchInsights();
         } else if (activeTab === 'settings') {
             fetchSettings();
+        } else if (activeTab === 'data') {
+            fetchMasterData();
         }
-    }, [activeTab]);
+    }, [activeTab, dateRange, totalEmpCount]); // Re-fetch if tab or date range changes
 
     const handleApproveRequest = async (reqId) => {
         try {
@@ -177,57 +446,52 @@ const DARAdmin = () => {
     };
 
     const [selectedCategory, setSelectedCategory] = useState("All Categories");
-    const [selectedEmployee, setSelectedEmployee] = useState("All Employees");
 
-    // Mock Users & Activities Map
-    const allTimelineData = [
-        {
-            id: 101, name: "John Civil", role: "Site Engineer", activities: [
-                { id: 1, start: 9, end: 10.5, category: "Site Visit", title: "Site A Inspection" },
-                { id: 4, start: 16.5, end: 17.5, category: "Documentation", title: "Daily Report" }
-            ]
-        },
-        {
-            id: 102, name: "Sarah Engineer", role: "Project Manager", activities: [
-                { id: 2, start: 11, end: 12, category: "Meeting", title: "Client Update" },
-                { id: 5, start: 13, end: 15, category: "Inspection", title: "Quality Check" }
-            ]
-        },
-        {
-            id: 103, name: "Mike Foreman", role: "Foreman", activities: [
-                { id: 3, start: 14, end: 16, category: "Material", title: "Cement Unloading" }
-            ]
-        },
-        {
-            id: 104, name: "Alex Field", role: "Surveyor", activities: [] // No activities
+    // Employees List
+    const employees = ["All Employees", ...employeesList];
+
+    // --- DYNAMIC SHIFT TIMING & FILTER ---
+
+    // Update Timeline Range when Shift Changes
+    useEffect(() => {
+        if (!selectedShift || shifts.length === 0) return;
+
+        let targetShift = shifts.find(s => s.shift_name === selectedShift);
+        // If not found (e.g. init), default to first or General
+        if (!targetShift) targetShift = shifts.find(s => s.shift_name === 'General') || shifts[0];
+
+        if (targetShift) {
+            try {
+                // Parse policy_rules
+                const rules = typeof targetShift.policy_rules === 'string'
+                    ? JSON.parse(targetShift.policy_rules)
+                    : targetShift.policy_rules;
+
+                const startStr = rules?.shift_timing?.start_time || "09:00";
+                const endStr = rules?.shift_timing?.end_time || "18:00";
+
+                let startH = parseInt(startStr.split(':')[0]);
+                let endH = parseInt(endStr.split(':')[0]);
+
+                // Handle Overnight Shifts (e.g. 18:00 to 02:00)
+                // If end < start, it means it crosses midnight, so we treat end as end+24
+                if (endH < startH) {
+                    endH += 24;
+                }
+
+                // Set timeline to -1hr start and +1hr end
+                setCurrentShift({
+                    start: Math.max(0, startH - 1),
+                    end: endH + 1
+                });
+
+            } catch (e) {
+                console.error("Error parsing shift rules", e);
+                setCurrentShift({ start: 8, end: 18 });
+            }
         }
-    ];
+    }, [selectedShift, shifts]);
 
-    // Filter Logic
-    const filteredTimelineData = allTimelineData.filter(user => {
-        // 1. Filter by Employee
-        if (selectedEmployee !== "All Employees" && user.name !== selectedEmployee) return false;
-        return true;
-    }).map(user => {
-        // 2. Filter Activities by Category
-        const filteredActivities = user.activities.filter(act => {
-            if (selectedCategory !== "All Categories" && act.category !== selectedCategory) return false;
-            return true;
-        });
-        return { ...user, activities: filteredActivities };
-    });
-
-    // Mock employees list based on data
-    const employees = ["All Employees", ...allTimelineData.map(u => u.name)];
-
-    // Shift Logic
-    const SHIFTS = {
-        'Morning': { start: 6, end: 14, label: "Morning (6 AM - 2 PM)" },
-        'General': { start: 9, end: 18, label: "General (9 AM - 6 PM)" },
-        'Night': { start: 18, end: 26, label: "Night (6 PM - 2 AM)" }, // 26 = 2 AM next day
-    };
-
-    const currentShift = SHIFTS[selectedShift];
     const timeSlots = [];
     for (let i = currentShift.start; i <= currentShift.end; i++) {
         timeSlots.push(i);
@@ -366,87 +630,96 @@ const DARAdmin = () => {
                             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-4 items-center justify-between bg-white dark:bg-dark-card z-20">
                                 <div className="flex items-center gap-3">
                                     {/* Shift Selector */}
-                                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                        {Object.keys(SHIFTS).map(shift => (
+                                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto max-w-[400px] custom-scrollbar">
+                                        {shifts.map(s => (
                                             <button
-                                                key={shift}
-                                                onClick={() => setSelectedShift(shift)}
-                                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${selectedShift === shift ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                                key={s.shift_id}
+                                                onClick={() => setSelectedShift(s.shift_name)}
+                                                className={`px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all ${selectedShift === s.shift_name
+                                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                                    }`}
                                             >
-                                                {shift}
+                                                {s.shift_name}
                                             </button>
                                         ))}
                                     </div>
+                                </div>
 
-                                    <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
 
-                                    {/* Date Picker using MiniCalendar (Portal) */}
-                                    <div className="relative">
-                                        <button
-                                            ref={buttonRef}
-                                            onClick={toggleCalendar}
-                                            className="flex items-center gap-2 pl-3 pr-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
-                                        >
-                                            <Calendar size={16} className="text-indigo-500" />
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                                {new Date(selectedDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                            </span>
-                                        </button>
+                                {/* Date Picker using MiniCalendar (Portal) */}
+                                <div className="relative">
+                                    <button
+                                        ref={buttonRef}
+                                        onClick={toggleCalendar}
+                                        className="flex items-center gap-2 pl-3 pr-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                        <Calendar size={16} className="text-indigo-500" />
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                            {dateRange.start === dateRange.end
+                                                ? new Date(dateRange.start).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+                                                : `${new Date(dateRange.start).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} - ${new Date(dateRange.end).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                            }
+                                        </span>
+                                    </button>
 
-                                        {showCalendar && createPortal(
-                                            <div className="fixed inset-0 z-[9999] isolate">
-                                                {/* Backdrop */}
-                                                <div
-                                                    className="fixed inset-0 bg-transparent"
-                                                    onClick={() => setShowCalendar(false)}
-                                                />
-                                                {/* Popup */}
-                                                <div
-                                                    className="fixed z-[10000] drop-shadow-2xl"
-                                                    style={{
-                                                        top: calendarPos.top,
-                                                        left: calendarPos.left,
-                                                        maxWidth: '350px'
+                                    {showCalendar && createPortal(
+                                        <div className="fixed inset-0 z-[9999] isolate">
+                                            {/* Backdrop */}
+                                            <div
+                                                className="fixed inset-0 bg-transparent"
+                                                onClick={() => setShowCalendar(false)}
+                                            />
+                                            {/* Popup */}
+                                            <div
+                                                className="fixed z-[10000] drop-shadow-2xl"
+                                                style={{
+                                                    top: calendarPos.top,
+                                                    left: calendarPos.left,
+                                                    maxWidth: '350px'
+                                                }}
+                                            >
+                                                <MiniCalendar
+                                                    selectedDate={dateRange.start}
+                                                    startDate={dateRange.start}
+                                                    endDate={dateRange.end}
+                                                    onDateSelect={(range) => {
+                                                        setDateRange({ start: range.start, end: range.end });
+                                                        setShowCalendar(false);
                                                     }}
-                                                >
-                                                    <MiniCalendar
-                                                        selectedDate={selectedDate}
-                                                        onDateSelect={(range) => {
-                                                            setSelectedDate(range.start);
-                                                            setShowCalendar(false);
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>,
-                                            document.body
-                                        )}
+                                                />
+                                            </div>
+                                        </div>,
+                                        document.body
+                                    )}
+                                </div>
+
+                                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                                {/* Filters */}
+                                <div className="flex items-center gap-2">
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <select
+                                            className="pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs font-bold border-none outline-none appearance-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors w-42"
+                                            value={selectedDepartment}
+                                            onChange={(e) => setSelectedDepartment(e.target.value)}
+                                        >
+                                            <option>All Departments</option>
+                                            {departments.map(d => <option key={d}>{d}</option>)}
+                                        </select>
                                     </div>
-
-                                    <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
-
-                                    {/* Filters */}
-                                    <div className="flex items-center gap-2">
-                                        <div className="relative">
-                                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <select
-                                                className="pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs font-bold border-none outline-none appearance-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors w-32"
-                                                value={selectedCategory}
-                                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                            >
-                                                <option>All Categories</option>
-                                                {categories.map(c => <option key={c}>{c}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="relative">
-                                            <Users size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <select
-                                                className="pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs font-bold border-none outline-none appearance-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors w-32"
-                                                value={selectedEmployee}
-                                                onChange={(e) => setSelectedEmployee(e.target.value)}
-                                            >
-                                                {employees.map(e => <option key={e}>{e}</option>)}
-                                            </select>
-                                        </div>
+                                    <div className="relative">
+                                        <Users size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <select
+                                            className="pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs font-bold border-none outline-none appearance-none cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors w-48"
+                                            value={selectedEmployee}
+                                            onChange={(e) => setSelectedEmployee(e.target.value)}
+                                        >
+                                            <option>All Employees</option>
+                                            {employeesList.map(e => <option key={e}>{e}</option>)}
+                                        </select>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -490,7 +763,11 @@ const DARAdmin = () => {
                                                 {/* User Info Column */}
                                                 <div className="w-48 p-4 flex flex-col justify-center border-r border-slate-100 dark:border-slate-700 flex-shrink-0 sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-10">
                                                     <span className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name}</span>
-                                                    <span className="text-xs text-slate-400 truncate">{user.role}</span>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400">
+                                                            {new Date(user.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                    </div>
                                                     {user.activities.length === 0 && (
                                                         <span className="text-[10px] text-red-400 font-medium mt-1 flex items-center gap-1">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div> No DAR
@@ -512,12 +789,25 @@ const DARAdmin = () => {
                                                     <div className="relative w-full h-full min-h-[50px]">
                                                         {user.activities.map(act => {
                                                             // Calculate positioning
+                                                            // Handle overnight activity display
+                                                            // If shift crosses midnight (end > 24) and activity time is small (e.g. 1 AM), 
+                                                            // treat activity time as +24 to map it correctly.
+                                                            let actStart = act.start;
+                                                            let actEnd = act.end;
+
+                                                            if (currentShift.end > 24) {
+                                                                if (actStart < currentShift.start) actStart += 24;
+                                                                if (actEnd < currentShift.start) actEnd += 24;
+                                                                // Fix: if end is smaller than start after adjustment (shouldn't happen for valid task), adjust
+                                                                if (actEnd < actStart) actEnd += 24;
+                                                            }
+
                                                             const totalHours = currentShift.end - currentShift.start + 1;
-                                                            const offset = act.start - currentShift.start;
-                                                            const duration = act.end - act.start;
+                                                            const offset = actStart - currentShift.start;
+                                                            const duration = actEnd - actStart;
 
                                                             // Only render if within view
-                                                            if (act.end <= currentShift.start || act.start >= currentShift.end + 1) return null;
+                                                            if (actEnd <= currentShift.start || actStart >= currentShift.end + 1) return null;
 
                                                             const leftPct = (offset / totalHours) * 100;
                                                             const widthPct = (duration / totalHours) * 100;
@@ -557,8 +847,8 @@ const DARAdmin = () => {
                                 <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                                     <div>
                                         <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
-                                        <div className="text-3xl font-black text-slate-800 dark:text-white">92%</div>
-                                        <div className="text-xs text-emerald-500 font-bold mt-1">18/20 Employees</div>
+                                        <div className="text-3xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
+                                        <div className="text-xs text-emerald-500 font-bold mt-1">{stats.submittedCount}/{stats.totalEmployees} Employees</div>
                                     </div>
                                     <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-full">
                                         <FileText size={24} className="text-emerald-500" />
@@ -567,8 +857,8 @@ const DARAdmin = () => {
                                 <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                                     <div>
                                         <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Top Activity</div>
-                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate">Site Visit</div>
-                                        <div className="text-xs text-slate-400 font-bold mt-1">45% of total time</div>
+                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate">{stats.topActivity}</div>
+                                        <div className="text-xs text-slate-400 font-bold mt-1">{stats.topActivityPercent}% of total time</div>
                                     </div>
                                     <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-full">
                                         <BarChart3 size={24} className="text-indigo-500" />
@@ -674,9 +964,9 @@ const DARAdmin = () => {
                         onReject={() => handleRejectRequest(selectedRequest?.id)}
                     />
 
-                </div >
-            </div >
-        </DashboardLayout >
+                </div>
+            </div>
+        </DashboardLayout>
     );
 };
 
