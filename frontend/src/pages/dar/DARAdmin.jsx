@@ -27,19 +27,47 @@ import { toast } from 'react-toastify';
 const DARAdmin = () => {
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'settings' | 'data'
 
-    // --- MOCK DATA ---
-    const [categories, setCategories] = useState([
-        "Site Visit", "Inspection", "Material Management", "Client Meeting", "Documentation", "Safety Check"
-    ]);
+    // --- SETTINGS STATE ---
+    const [categories, setCategories] = useState([]);
     const [newCat, setNewCat] = useState("");
     const [bufferTime, setBufferTime] = useState(30);
+    const [loadingSettings, setLoadingSettings] = useState(false);
+
+    // Fetch Settings
+    const fetchSettings = async () => {
+        setLoadingSettings(true);
+        try {
+            const res = await api.get('/dar/settings/list');
+            if (res.data.ok) {
+                setCategories(res.data.data.categories);
+                setBufferTime(res.data.data.buffer_minutes);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load settings");
+        } finally {
+            setLoadingSettings(false);
+        }
+    };
+
+    const handleSaveSettings = async () => {
+        try {
+            await api.post('/dar/settings/update', {
+                buffer_minutes: parseInt(bufferTime),
+                categories
+            });
+            toast.success("Settings updated successfully!");
+        } catch (err) {
+            toast.error("Failed to update settings");
+        }
+    };
 
     // --- CHART DATA ---
     const categoryData = [
-        { name: 'Site Visit', value: 45, color: '#6366f1' }, // Indigo 500
-        { name: 'Inspection', value: 25, color: '#10b981' }, // Emerald 500
-        { name: 'Documentation', value: 20, color: '#f59e0b' }, // Amber 500
-        { name: 'Meetings', value: 10, color: '#ef4444' }, // Red 500
+        { name: 'Site Visit', value: 45, color: '#6366f1' },
+        { name: 'Inspection', value: 25, color: '#10b981' },
+        { name: 'Documentation', value: 20, color: '#f59e0b' },
+        { name: 'Meetings', value: 10, color: '#ef4444' },
     ];
 
     const complianceData = [
@@ -61,10 +89,10 @@ const DARAdmin = () => {
     ];
 
     // Filters
-    const [selectedShift, setSelectedShift] = useState('General'); // General, Morning, Night
+    const [selectedShift, setSelectedShift] = useState('General');
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedRequest, setSelectedRequest] = useState(null);
-    const [requests, setRequests] = useState([]); // Real Requests State
+    const [requests, setRequests] = useState([]);
     const [loadingRequests, setLoadingRequests] = useState(false);
 
     // Fetch Requests
@@ -105,6 +133,8 @@ const DARAdmin = () => {
     useEffect(() => {
         if (activeTab === 'insights') {
             fetchRequests();
+        } else if (activeTab === 'settings') {
+            fetchSettings();
         }
     }, [activeTab]);
 
@@ -132,6 +162,8 @@ const DARAdmin = () => {
     const [showCalendar, setShowCalendar] = useState(false);
     const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
     const buttonRef = useRef(null);
+
+    const [showSettings, setShowSettings] = useState(false);
 
     const toggleCalendar = () => {
         if (!showCalendar && buttonRef.current) {
@@ -313,7 +345,10 @@ const DARAdmin = () => {
                                     </div>
 
                                     <div className="pt-6 border-t border-slate-100 dark:border-slate-700">
-                                        <button className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] transition-transform">
+                                        <button
+                                            onClick={handleSaveSettings}
+                                            className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] transition-transform"
+                                        >
                                             <Save size={18} />
                                             Save Changes
                                         </button>
