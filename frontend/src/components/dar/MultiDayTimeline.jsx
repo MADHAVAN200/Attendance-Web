@@ -204,29 +204,6 @@ const MultiDayTimeline = ({
 
                     {/* BODY ROWS */}
                     <div className="relative">
-                        {/* Vertical Grid Lines (Background) */}
-                        <div className="absolute top-0 bottom-0 left-24 right-0 pointer-events-none z-0">
-                            {hourMarkers.map((hour) => (
-                                <div
-                                    key={`grid-${hour}`}
-                                    className="absolute top-0 bottom-0 border-r border-gray-100 dark:border-slate-700/50"
-                                    style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px` }}
-                                />
-                            ))}
-                            {/* Fixed Lunch Zone (1-2 PM) */}
-                            <div
-                                className="absolute top-0 bottom-0 bg-gray-50/50 dark:bg-slate-800/30 border-x border-gray-100 dark:border-slate-700 border-dashed"
-                                style={{
-                                    left: `${(13 - START_HOUR) * PIXELS_PER_HOUR}px`,
-                                    width: `${PIXELS_PER_HOUR}px`
-                                }}
-                            >
-                                <div className="hidden h-full flex items-center justify-center">
-                                    <span className="text-[10px] text-gray-300 dark:text-slate-600 font-medium -rotate-90">LUNCH</span>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Date Rows */}
                         {dates.map((dateStr) => {
                             const dateObj = new Date(dateStr);
@@ -242,7 +219,7 @@ const MultiDayTimeline = ({
 
                             // Row Background Class
                             let rowBgClass = "bg-white dark:bg-dark-card";
-                            if (isHoliday) rowBgClass = "bg-emerald-50 dark:bg-emerald-900/20"; // Removed /50 for better visibility
+                            if (isHoliday) rowBgClass = "bg-emerald-50 dark:bg-emerald-900/20";
                             else if (isAbsent) rowBgClass = "bg-red-50 dark:bg-red-900/20";
 
                             // Prep Tasks
@@ -269,7 +246,19 @@ const MultiDayTimeline = ({
                                     <div className="relative flex-1 h-full">
 
                                         {/* Row Hover Highlight (Background) */}
-                                        <div className="absolute inset-0 bg-gray-50/0 group-hover/row:bg-gray-50/30 transition-colors pointer-events-none" />
+                                        <div className="absolute inset-0 bg-gray-50/0 group-hover/row:bg-gray-50/30 transition-colors pointer-events-none z-10" />
+
+                                        {/* BACKGROUND GRID LINES (Per Row) */}
+                                        <div className="absolute inset-0 pointer-events-none z-0">
+                                            {hourMarkers.map((hour) => (
+                                                <div
+                                                    key={`grid-${hour}`}
+                                                    className="absolute top-0 bottom-0 border-r border-gray-100 dark:border-slate-700/50"
+                                                    style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px` }}
+                                                />
+                                            ))}
+
+                                        </div>
 
                                         {/* Holiday / Absent Overlay Text */}
                                         {isHoliday && (
@@ -378,7 +367,7 @@ const MultiDayTimeline = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
