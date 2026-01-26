@@ -235,13 +235,59 @@ const DARAdmin = () => {
     const fetchMasterData = async () => {
         setLoadingData(true);
         try {
-            const res = await api.get(`/dar/activities/admin/all?startDate=${dateRange.start}&endDate=${dateRange.end}`);
+            // Parallel Fetch: Activities, Attendance, Holidays, Events
+            const [res, attRes, holRes, eventsRes] = await Promise.all([
+                api.get(`/dar/activities/admin/all?startDate=${dateRange.start}&endDate=${dateRange.end}`),
+                api.get(`/attendance/records/admin`, { params: { date_from: dateRange.start, date_to: dateRange.end, limit: 1000 } }),
+                api.get('/holiday'),
+                api.get('/dar/events/list', { params: { date_from: dateRange.start, date_to: dateRange.end } })
+            ]);
+
             if (res.data.ok) {
+                // Process Holidays
+                const holidayMap = {}; // date -> name
+                if (holRes.data?.holidays) {
+                    holRes.data.holidays.forEach(h => {
+                        holidayMap[h.holiday_date] = h.holiday_name;
+                    });
+                }
+
+                const todayStr = getLocalDate(new Date());
+
+                // Process Attendance efficiently (UserID + Date -> { hasTimedIn, timeInDecimal, timeInStr })
+                const attendanceMap = {};
+                if (attRes.data?.data) {
+                    attRes.data.data.forEach(att => {
+                        // att.time_in is formatted "YYYY-MM-DDTHH:mm:ss" or similar
+                        if (!att.time_in) return;
+
+                        // Handle "YYYY-MM-DDTHH:mm:ss" or "YYYY-MM-DD HH:mm:ss"
+                        const cleanTime = att.time_in.replace('T', ' ');
+                        const [datePart, timePart] = cleanTime.split(' ');
+                        if (!datePart || !timePart) return;
+
+                        const [h, m] = timePart.split(':').map(Number);
+                        const dec = h + (m / 60);
+
+                        attendanceMap[`${att.user_id}-${datePart}`] = {
+                            hasTimedIn: true,
+                            timeInDecimal: dec,
+                            timeInStr: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                        };
+                    });
+                }
+
                 // Group activities by User AND Date
                 const grouped = {};
                 res.data.data.forEach(a => {
                     const localDate = getLocalDate(new Date(a.activity_date));
                     const key = `${a.user_id}-${localDate}`;
+
+                    // ... (existing helper logic)
+                    const parseTime = (t) => {
+                        const [h, m] = t.split(':').map(Number);
+                        return h + (m / 60);
+                    };
 
                     if (!grouped[key]) {
                         grouped[key] = {
@@ -252,14 +298,14 @@ const DARAdmin = () => {
                             date: localDate,
                             dept: a.user_dept,
                             shift: a.user_shift_name, // Store shift
-                            activities: []
+                            activities: [],
+                            isHoliday: !!holidayMap[localDate],
+                            holidayName: holidayMap[localDate],
+                            isAbsent: false, // Will calc below
+                            attendance: attendanceMap[`${a.user_id}-${localDate}`] // Attach attendance
                         };
                     }
-                    // Parse times
-                    const parseTime = (t) => {
-                        const [h, m] = t.split(':').map(Number);
-                        return h + (m / 60);
-                    };
+
                     grouped[key].activities.push({
                         id: a.id,
                         start: parseTime(a.start_time),
@@ -268,6 +314,59 @@ const DARAdmin = () => {
                         title: a.title || 'Task'
                     });
                 });
+
+                // Process Events & Meetings
+                // Create User Map for quick lookup
+                const userMap = {};
+                allUsers.forEach(u => userMap[u.userId] = u);
+
+                // Process Events & Meetings
+                if (eventsRes.data?.data) {
+                    eventsRes.data.data.forEach(e => {
+                        // e.event_date is "YYYY-MM-DD"
+                        const key = `${e.user_id}-${e.event_date}`;
+
+                        // If no group exists (user has no tasks this day), try to create one
+                        if (!grouped[key]) {
+                            const u = userMap[e.user_id];
+                            if (u) {
+                                grouped[key] = {
+                                    id: key,
+                                    userId: u.userId,
+                                    name: u.name,
+                                    role: u.role || 'Employee',
+                                    date: e.event_date,
+                                    dept: u.dept,
+                                    shift: u.shift,
+                                    activities: [],
+                                    isHoliday: !!holidayMap[e.event_date],
+                                    holidayName: holidayMap[e.event_date],
+                                    // Initial Absent check (will be refined in backfill loop update)
+                                    isAbsent: (e.event_date < todayStr) && !holidayMap[e.event_date] && !attendanceMap[`${e.user_id}-${e.event_date}`],
+                                    attendance: attendanceMap[`${e.user_id}-${e.event_date}`]
+                                };
+                            }
+                        }
+
+                        if (grouped[key]) {
+                            const parseTime = (t) => {
+                                if (!t) return 0;
+                                const [h, m] = t.split(':').map(Number);
+                                return h + (m / 60);
+                            };
+
+                            grouped[key].activities.push({
+                                id: `evt-${e.event_id}`,
+                                start: parseTime(e.start_time),
+                                end: parseTime(e.end_time),
+                                category: (e.type || '').toUpperCase(), // 'EVENT' or 'MEETING'
+                                title: e.title,
+                                isEvent: true,
+                                location: e.location
+                            });
+                        }
+                    });
+                }
 
                 // Backfill Gaps: Ensure EVERY user has an entry for EVERY date in range
                 // 1. Generate array of dates
@@ -279,10 +378,26 @@ const DARAdmin = () => {
                     d.setDate(d.getDate() + 1);
                 }
 
+                while (d <= e) {
+                    dates.push(getLocalDate(d));
+                    d.setDate(d.getDate() + 1);
+                }
+
+                // todayStr moved up
+
+
                 // 2. Iterate (Users x Dates)
                 allUsers.forEach(u => {
                     dates.forEach(dateStr => {
                         const key = `${u.userId}-${dateStr}`;
+                        const isHol = !!holidayMap[dateStr];
+                        const attData = attendanceMap[`${u.userId}-${dateStr}`];
+                        const hasAtt = !!attData;
+
+                        // Check Absent: Not future, Not holiday, No Attendance
+                        const isPast = dateStr < todayStr;
+                        const isAbsent = isPast && !isHol && !hasAtt;
+
                         if (!grouped[key]) {
                             // Create empty entry
                             grouped[key] = {
@@ -293,8 +408,19 @@ const DARAdmin = () => {
                                 date: dateStr,
                                 dept: u.dept,
                                 shift: u.shift,
-                                activities: [] // Empty
+                                activities: [], // Empty
+                                isHoliday: isHol,
+                                holidayName: holidayMap[dateStr],
+                                isAbsent: isAbsent,
+                                attendance: attData
                             };
+                        } else {
+                            // Update existing entry
+                            grouped[key].isHoliday = isHol;
+                            grouped[key].holidayName = holidayMap[dateStr];
+                            // STRICT ABSENT: Regardless of activities, if no attendance -> Absent
+                            grouped[key].isAbsent = isAbsent;
+                            if (!grouped[key].attendance) grouped[key].attendance = attData;
                         }
                     });
                 });
@@ -800,9 +926,17 @@ const DARAdmin = () => {
                                                             {new Date(user.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                         </span>
                                                     </div>
-                                                    {user.activities.length === 0 && (
-                                                        <span className="text-[10px] text-red-400 font-medium mt-1 flex items-center gap-1">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div> No DAR
+                                                    {user.isHoliday ? (
+                                                        <span className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Holiday
+                                                        </span>
+                                                    ) : user.isAbsent ? (
+                                                        <span className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Absent
+                                                        </span>
+                                                    ) : user.activities.length === 0 && (
+                                                        <span className="text-[10px] text-slate-400 font-medium mt-1 flex items-center gap-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div> No DAR
                                                         </span>
                                                     )}
                                                 </div>
@@ -817,20 +951,45 @@ const DARAdmin = () => {
                                                         }}></div>
                                                     ))}
 
-                                                    {/* Activities Bars */}
+                                                    {/* Activities Bars or STATUS OVERLAY */}
                                                     <div className="relative w-full h-full min-h-[50px]">
-                                                        {user.activities.map(act => {
+                                                        {/* 1. Holiday Overlay (Background) */}
+                                                        {user.isHoliday && (
+                                                            <div className="absolute inset-x-0 inset-y-1 bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 rounded-lg flex items-center justify-center pointer-events-none z-0">
+                                                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase opacity-80">{user.holidayName || "HOLIDAY"}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 2. Absent Overlay (Background) - Exclusive to No Holiday */}
+                                                        {!user.isHoliday && user.isAbsent && (
+                                                            <div className="absolute inset-x-0 inset-y-1 bg-red-50/50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-lg flex items-center justify-center pointer-events-none z-0">
+                                                                <span className="text-xs font-bold text-red-500 dark:text-red-400 tracking-widest uppercase opacity-80">ABSENT</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 3. Time-In Marker (Z-Index 20) */}
+                                                        {user.attendance?.hasTimedIn && (
+                                                            <div
+                                                                className="absolute inset-y-0 border-l-2 border-emerald-500 z-20 group/marker"
+                                                                style={{
+                                                                    left: `${((user.attendance.timeInDecimal - currentShift.start) / (currentShift.end - currentShift.start + 1)) * 100}%`
+                                                                }}
+                                                            >
+                                                                <div className="absolute top-0 left-0.5 bg-emerald-500 text-white text-[9px] font-bold px-1 py-0.5 rounded shadow-sm opacity-0 group-hover/marker:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    IN {user.attendance.timeInStr}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 4. Activities (Z-Index 10) - ONLY SHOW IF NOT ABSENT */}
+                                                        {!user.isAbsent && user.activities.map(act => {
                                                             // Calculate positioning
-                                                            // Handle overnight activity display
-                                                            // If shift crosses midnight (end > 24) and activity time is small (e.g. 1 AM), 
-                                                            // treat activity time as +24 to map it correctly.
                                                             let actStart = act.start;
                                                             let actEnd = act.end;
 
                                                             if (currentShift.end > 24) {
                                                                 if (actStart < currentShift.start) actStart += 24;
                                                                 if (actEnd < currentShift.start) actEnd += 24;
-                                                                // Fix: if end is smaller than start after adjustment (shouldn't happen for valid task), adjust
                                                                 if (actEnd < actStart) actEnd += 24;
                                                             }
 
@@ -838,25 +997,44 @@ const DARAdmin = () => {
                                                             const offset = actStart - currentShift.start;
                                                             const duration = actEnd - actStart;
 
-                                                            // Only render if within view
                                                             if (actEnd <= currentShift.start || actStart >= currentShift.end + 1) return null;
 
                                                             const leftPct = (offset / totalHours) * 100;
                                                             const widthPct = (duration / totalHours) * 100;
 
+                                                            // Dynamic Styles based on Category
+                                                            let bgClass = "bg-indigo-100 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-700/50";
+                                                            let textClass = "text-indigo-700 dark:text-indigo-300";
+                                                            let subTextClass = "text-indigo-500 dark:text-indigo-400";
+
+                                                            const cat = (act.category || '').toUpperCase();
+                                                            if (cat === 'MEETING') {
+                                                                bgClass = "bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-700/50";
+                                                                textClass = "text-purple-700 dark:text-purple-300";
+                                                                subTextClass = "text-purple-500 dark:text-purple-400";
+                                                            } else if (cat === 'EVENT') {
+                                                                bgClass = "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-700/50";
+                                                                textClass = "text-blue-700 dark:text-blue-300";
+                                                                subTextClass = "text-blue-500 dark:text-blue-400";
+                                                            } else if (cat === 'BREAK') {
+                                                                bgClass = "bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-700/50";
+                                                                textClass = "text-amber-700 dark:text-amber-300";
+                                                                subTextClass = "text-amber-500 dark:text-amber-400";
+                                                            }
+
                                                             return (
                                                                 <div
                                                                     key={act.id}
-                                                                    className="absolute top-1/2 -translate-y-1/2 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700/50 flex items-center px-2 overflow-hidden hover:z-10 hover:scale-[1.02] transition-all cursor-pointer shadow-sm"
+                                                                    className={`absolute inset-y-1 rounded-lg border flex items-center px-2 overflow-hidden hover:z-10 hover:scale-[1.02] transition-all cursor-pointer shadow-sm z-10 ${bgClass}`}
                                                                     style={{ left: `${Math.max(0, leftPct)}%`, width: `${Math.min(100, widthPct)}%` }}
                                                                     title={`${act.title} (${act.category})\n${formatTime(act.start)} - ${formatTime(act.end)}`}
                                                                 >
                                                                     <div className="flex flex-col overflow-hidden">
-                                                                        <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 truncate leading-tight">{act.title}</span>
-                                                                        <span className="text-[9px] text-indigo-500 dark:text-indigo-400 truncate uppercase tracking-wider">{act.category}</span>
+                                                                        <span className={`text-[10px] font-bold truncate leading-tight ${textClass}`}>{act.title}</span>
+                                                                        <span className={`text-[9px] truncate uppercase tracking-wider ${subTextClass}`}>{act.category}</span>
                                                                     </div>
                                                                 </div>
-                                                            )
+                                                            );
                                                         })}
                                                     </div>
                                                 </div>
