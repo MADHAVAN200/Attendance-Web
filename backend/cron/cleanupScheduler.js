@@ -119,7 +119,3 @@ export function initCleanupScheduler() {
 
     console.log('📅 Cleanup scheduler initialized: Daily at 2:00 AM');
 }
-
-console.log('📅 Cleanup started');
-runCleanup();
-console.log('📅 Cleanup completed');
