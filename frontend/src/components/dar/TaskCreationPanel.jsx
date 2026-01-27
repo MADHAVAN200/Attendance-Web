@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
-import { X, Plus, Clock, AlertCircle, Trash2, Calendar } from 'lucide-react';
+import { X, Plus, Clock, AlertCircle, Trash2, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import MiniCalendar from '../dar/MiniCalendar';
 
-const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlightTaskId, initialDate, onDateChange }) => {
+const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attendanceIntervals = [], highlightTaskId, initialDate, onDateChange }) => {
 
 
     // Helper to add minutes to HH:MM time
@@ -221,69 +221,109 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
             className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col"
         >
 
-            {/* Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-start bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
-                <div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Daily Tasks</h3>
-                    <p className="text-sm text-gray-400 dark:text-gray-400 mt-1">Plan your day effectively</p>
+            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex flex-col gap-4 bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
 
-                    <div className="flex items-center gap-3 mt-3">
-                        <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full w-fit border border-emerald-100 dark:border-emerald-800">
-                            <Clock size={14} />
-                            <span>Time In: {initialTimeIn}</span>
-                        </div>
+                {/* Top Row: Title, Calendar, Close */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Daily Tasks</h3>
 
                         {/* Date Picker using MiniCalendar (Portal) */}
-                        <div className="relative">
+                        <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-800/50 p-1 rounded-lg border border-gray-100 dark:border-slate-700/50">
+                            {/* Prev Day */}
                             <button
-                                ref={buttonRef}
-                                onClick={toggleCalendar}
-                                className="flex items-center gap-2 pl-3 pr-4 py-1.5 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                                onClick={() => {
+                                    const d = new Date(date);
+                                    d.setDate(d.getDate() - 1);
+                                    const newDate = d.toISOString().split('T')[0];
+                                    setDate(newDate);
+                                    if (onDateChange) onDateChange(newDate);
+                                }}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                             >
-                                <Calendar size={14} className="text-indigo-500" />
-                                <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
-                                    {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </span>
+                                <ChevronLeft size={16} />
                             </button>
 
-                            {showCalendar && createPortal(
-                                <div className="fixed inset-0 z-[9999] isolate">
-                                    {/* Backdrop */}
-                                    <div
-                                        className="fixed inset-0 bg-transparent"
-                                        onClick={() => setShowCalendar(false)}
-                                    />
-                                    {/* Popup */}
-                                    <div
-                                        className="fixed z-[10000] drop-shadow-2xl"
-                                        style={{
-                                            top: calendarPos.top,
-                                            left: calendarPos.left,
-                                            maxWidth: '320px'
-                                        }}
-                                    >
-                                        <MiniCalendar
-                                            selectedDate={date}
-                                            disableRange={true}
-                                            onDateSelect={(range) => {
-                                                setDate(range.start);
-                                                setShowCalendar(false);
-                                                if (onDateChange) onDateChange(range.start);
-                                            }}
-                                        />
-                                    </div>
-                                </div>,
-                                document.body
-                            )}
+                            <div className="relative">
+                                <button
+                                    ref={buttonRef}
+                                    onClick={toggleCalendar}
+                                    className="flex items-center gap-2 px-2 py-1 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors group"
+                                >
+                                    <Calendar size={14} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+                                    <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
+                                        {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                    </span>
+                                </button>
+
+                                {showCalendar && createPortal(
+                                    <div className="fixed inset-0 z-[9999] isolate">
+                                        <div className="fixed inset-0 bg-transparent" onClick={() => setShowCalendar(false)} />
+                                        <div
+                                            className="fixed z-[10000] drop-shadow-2xl"
+                                            style={{ top: calendarPos.top, left: calendarPos.left, maxWidth: '320px' }}
+                                        >
+                                            <MiniCalendar
+                                                selectedDate={date}
+                                                disableRange={true}
+                                                onDateSelect={(range) => {
+                                                    setDate(range.start);
+                                                    setShowCalendar(false);
+                                                    if (onDateChange) onDateChange(range.start);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>,
+                                    document.body
+                                )}
+                            </div>
+
+                            {/* Next Day */}
+                            <button
+                                onClick={() => {
+                                    const d = new Date(date);
+                                    d.setDate(d.getDate() + 1);
+                                    const newDate = d.toISOString().split('T')[0];
+                                    setDate(newDate);
+                                    if (onDateChange) onDateChange(newDate);
+                                }}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                            >
+                                <ChevronRight size={16} />
+                            </button>
                         </div>
                     </div>
+
+                    {/* Close Button (Minimal) */}
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                    >
+                        <X size={18} />
+                    </button>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="p-2 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white transition-colors"
-                >
-                    <X size={20} />
-                </button>
+
+                {/* Subtitle & Slots */}
+                <div>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 mb-3">Plan your day effectively</p>
+
+                    {/* Active Sessions Grid (Sleek Dynamic Pills) */}
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                        {attendanceIntervals.length > 0 ? (
+                            attendanceIntervals.map((interval, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full border border-emerald-100 dark:border-emerald-800 transition-colors">
+                                    <Clock size={14} />
+                                    <span className="truncate">Slot: {interval.start} - {interval.end || 'Now'}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 col-span-2">
+                                <Clock size={14} />
+                                <span>Not Timed In</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Task List Form */}

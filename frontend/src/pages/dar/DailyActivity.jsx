@@ -21,7 +21,7 @@ const DailyActivity = () => {
     const [attendanceData, setAttendanceData] = useState({});
     const [holidays, setHolidays] = useState([]); // Store holidays
     const [loading, setLoading] = useState(true);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
+
 
     // Modal State
     const [eventModal, setEventModal] = useState({ isOpen: false, type: 'Meeting' }); // New State
@@ -123,21 +123,31 @@ const DailyActivity = () => {
 
             // Transform Attendance
             const attMap = {};
+            // Sort records by time_in to ensure chronological order for intervals
+            attendanceRecs.sort((a, b) => new Date(a.time_in) - new Date(b.time_in));
+
             attendanceRecs.forEach(a => {
-                // a.time_in is usually "2024-01-18 09:00:00" or similar
                 const dateKey = new Date(a.time_in).toISOString().split('T')[0];
                 const timeIn = new Date(a.time_in).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 const timeOut = a.time_out ? new Date(a.time_out).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : null;
 
-                // If multiple sessions, maybe concatenate or pick earliest/latest?
-                // For now, simple map (overwrites if multiple, assume latest is best or first?)
-                // Usually daily view needs summary.
-                attMap[dateKey] = {
-                    timeIn: timeIn,
-                    timeOut: timeOut,
-                    status: a.status || 'Present',
-                    hasTimedIn: true // Required by MultiDayTimeline
-                };
+                if (!attMap[dateKey]) {
+                    attMap[dateKey] = {
+                        timeIn: timeIn, // Earliest Time In
+                        timeOut: timeOut, // Latest Time Out (will update)
+                        status: a.status || 'Present',
+                        hasTimedIn: true,
+                        intervals: []
+                    };
+                }
+
+                // Add Interval
+                attMap[dateKey].intervals.push({ start: timeIn, end: timeOut });
+
+                // Update Latest Time Out if later
+                if (timeOut && (!attMap[dateKey].timeOut || timeOut > attMap[dateKey].timeOut)) {
+                    attMap[dateKey].timeOut = timeOut;
+                }
             });
             setAttendanceData(attMap);
 
@@ -150,7 +160,7 @@ const DailyActivity = () => {
     };
 
     const handleCreate = (type) => {
-        setIsCreateOpen(false);
+
         if (type === 'Task') {
             setSidebarMode('create-task');
             setPanelDate(new Date().toISOString().split('T')[0]); // Default to Today
@@ -269,6 +279,7 @@ const DailyActivity = () => {
                                 }}
                                 onUpdate={handleTaskPreviewUpdate} // Optional: keep for live preview if logic supports
                                 initialTimeIn={attendanceData[panelDate]?.timeIn || "09:00"}
+                                attendanceIntervals={attendanceData[panelDate]?.intervals || []}
                                 highlightTaskId={selectedTaskId}
                                 initialDate={panelDate}
                                 onDateChange={(d) => setPanelDate(d)}
@@ -282,35 +293,19 @@ const DailyActivity = () => {
                                 transition={{ duration: 0.2 }}
                                 className="flex flex-col gap-6 w-full"
                             >
-                                {/* Create Button Dropdown */}
+                                {/* Create Meeting Button (Direct) */}
                                 <div className="relative z-20">
                                     <button
-                                        onClick={() => setIsCreateOpen(!isCreateOpen)}
-                                        className={`w-full py-3 px-4 bg-white dark:bg-dark-card border shadow-sm rounded-full flex items-center justify-between transition-all ${isCreateOpen ? 'ring-2 ring-indigo-100 dark:ring-indigo-900 border-indigo-200 dark:border-indigo-800' : 'border-slate-200 dark:border-slate-700 hover:shadow-md'}`}
+                                        onClick={() => handleCreate('Meeting')}
+                                        className="w-full py-3 px-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 shadow-sm rounded-full flex items-center justify-between transition-all hover:shadow-md active:scale-95"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="p-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
                                                 <Plus size={24} />
                                             </div>
-                                            <span className="font-semibold text-gray-700 dark:text-gray-200">Create</span>
+                                            <span className="font-semibold text-gray-700 dark:text-gray-200">Create Meeting</span>
                                         </div>
-                                        <ChevronDown
-                                            size={18}
-                                            className={`text-gray-400 transition-transform duration-200 ${isCreateOpen ? 'rotate-180' : ''}`}
-                                        />
                                     </button>
-
-                                    {/* Dropdown */}
-                                    {isCreateOpen && (
-                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 p-2 animate-in fade-in zoom-in-95 duration-100">
-                                            <button onClick={() => handleCreate('Event')} className="flex items-center gap-3 w-full p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg text-gray-600 dark:text-gray-300 text-sm">
-                                                <Calendar size={18} className="text-indigo-500" /> Event
-                                            </button>
-                                            <button onClick={() => handleCreate('Meeting')} className="flex items-center gap-3 w-full p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg text-gray-600 dark:text-gray-300 text-sm">
-                                                <Video size={18} className="text-purple-500" /> Meeting
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
 
                                 {/* Mini Calendar */}
