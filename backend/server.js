@@ -5,6 +5,7 @@ import { Server as SocketIO } from 'socket.io';
 import express from 'express';
 import cors from 'cors';
 import AuthRoutes from './AuthAPI/LoginAPI.js';
+import PasswordResetRoutes from './AuthAPI/PasswordReset.js';
 import AppError from './utils/AppError.js';
 import errorHandler from './middleware/errorHandler.js';
 import AttendanceRoutes from './Attendance/Attendance.js';
@@ -68,13 +69,19 @@ app.use(express.json());
 import NotificationRoutes from './Notification/NotificationRoutes.js';
 import NotificationService from './services/NotificationService.js';
 import ActivityLogService from './services/ActivityLogService.js';
+import './services/SecurityService.js';
 import { initAttendanceProcessor } from './cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './cron/cleanupScheduler.js';
 
 
+import SuperAdminRoutes from './Admin/SuperAdmin.js';
+import { initSubscriptionManager } from './cron/SubscriptionManager.js';
+
 app.use('/auth', AuthRoutes);
+app.use('/auth', PasswordResetRoutes);
 app.use('/attendance', AttendanceRoutes);
 app.use('/admin', AdminRoutes);
+app.use('/super-admin', SuperAdminRoutes); // New Super Admin Routes
 app.use('/admin/reports', ReportRoutes);
 app.use('/attendance/reports', ReportRoutes);
 app.use('/locations', LocationRoutes); // Admin locations
@@ -120,6 +127,7 @@ server.listen(PORT, '0.0.0.0', () => {
   // Initialize Cron Jobs
   initAttendanceProcessor();
   initCleanupScheduler();
+  initSubscriptionManager();
 });
 
 // Handle 404 for undefined routes
