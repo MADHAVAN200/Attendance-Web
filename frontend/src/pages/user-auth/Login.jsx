@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -89,9 +89,9 @@ const Login = () => {
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Password
                 </label>
-                <a href="#" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+                <Link to="/forgot-password" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                   Forgot password?
-                </a>
+                </Link>
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = false }) => {
+const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = false, maxDate }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
 
     // Helper: Get days in month
@@ -164,32 +164,36 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = fals
                         }
                     }
 
+                    const isDisabled = maxDate && dateStr > maxDate;
+
                     return (
                         <div
                             key={dateStr}
                             className={`relative w-8 h-8 flex items-center justify-center`}
-                            onMouseDown={() => handleMouseDown(dateStr)}
-                            onMouseEnter={() => handleMouseEnter(dateStr)}
+                            onMouseDown={() => !isDisabled && handleMouseDown(dateStr)}
+                            onMouseEnter={() => !isDisabled && handleMouseEnter(dateStr)}
                         >
                             {/* Range Background Connector */}
-                            {isInRange && !isRangeStart && (
+                            {isInRange && !isRangeStart && !isDisabled && (
                                 <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-indigo-50 dark:bg-indigo-900/50 z-0" />
                             )}
-                            {isInRange && !isRangeEnd && (
+                            {isInRange && !isRangeEnd && !isDisabled && (
                                 <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-indigo-50 dark:bg-indigo-900/50 z-0" />
                             )}
-                            {isInRange && (
+                            {isInRange && !isDisabled && (
                                 <div className="absolute inset-0 bg-indigo-50 dark:bg-indigo-900/50 rounded-full z-0 opacity-50" />
                             )}
 
                             {/* Date Circle */}
                             <button
+                                disabled={isDisabled}
                                 className={`
                                     relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all
-                                    ${isSelected
-                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none scale-105'
-                                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}
-                                    ${!isSelected && isToday ? 'bg-indigo-50 dark:bg-transparent text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800' : ''}
+                                    ${isDisabled ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed' :
+                                        isSelected
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none scale-105'
+                                            : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}
+                                    ${!isSelected && isToday && !isDisabled ? 'bg-indigo-50 dark:bg-transparent text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800' : ''}
                                 `}
                             >
                                 {date.getDate()}

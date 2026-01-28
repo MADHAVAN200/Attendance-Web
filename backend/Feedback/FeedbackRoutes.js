@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateJWT } from "../AuthAPI/LoginAPI.js";
+import { authenticateJWT } from '../middleware/auth.js';
 import multer from "multer";
 import catchAsync from "../utils/catchAsync.js";
 import FeedbackService from "../services/FeedbackService.js";

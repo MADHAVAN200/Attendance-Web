@@ -1,6 +1,6 @@
 import express from "express";
 import { knexDB } from "../database.js";
-import { authenticateJWT } from "../AuthAPI/LoginAPI.js";
+import { authenticateJWT } from '../middleware/auth.js';
 import { fetchTimeStamp, coordsToAddress } from "../Google_API/Maps.js";
 import multer from "multer";
 import { uploadFile, getFileUrl, listFiles, uploadCompressedImage } from "../s3/s3Service.js";

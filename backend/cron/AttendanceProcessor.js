@@ -80,7 +80,7 @@ export async function processHourlyAttendance() {
 async function processUserAttendanceForDate(user, dateStr) {
     // 1. Check if Record Exists
     const record = await knexDB('daily_attendance')
-        .where({ user_id: user.user_id, attendance_date: dateStr })
+        .where({ user_id: user.user_id, date: dateStr })
         .first();
 
     // Parse Shift Policy
@@ -168,9 +168,8 @@ async function processUserAttendanceForDate(user, dateStr) {
         await knexDB('daily_attendance').insert({
             user_id: user.user_id,
             org_id: user.org_id,
-            attendance_date: dateStr,
+            date: dateStr,
             status: status,
-            remarks: remarks,
             created_at: knexDB.fn.now(),
             updated_at: knexDB.fn.now()
         });

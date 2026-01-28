@@ -133,5 +133,14 @@ export const attendanceService = {
         } catch (error) {
             throw new Error(error.response?.data?.error || "Failed to update correction status");
         }
-    }
+    },
+    // Get Holidays
+    async getHolidays() {
+        try {
+            const res = await api.get('/holiday');
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch holidays");
+        }
+    },
 };

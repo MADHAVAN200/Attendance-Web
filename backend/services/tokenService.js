@@ -45,7 +45,30 @@ export async function verifyRefreshToken(token) {
     }
 
     if (refreshTokenRecord.revoked) {
-        // Token revoked - Potential Reuse Attack!
+        // Check for Grace Period (Reuse within 60 seconds of replacement)
+        if (refreshTokenRecord.replaced_by_token) {
+            const replacementToken = await knexDB('refresh_tokens')
+                .where({ token: refreshTokenRecord.replaced_by_token })
+                .first();
+
+            if (replacementToken) {
+                const timeDiff = new Date() - new Date(replacementToken.created_at);
+                const GRACE_PERIOD_MS = 60 * 1000; // 60 Seconds
+
+                if (timeDiff < GRACE_PERIOD_MS) {
+                    console.log(`Grace period active for token reuse. Returning valid replacement.`);
+                    const user = await knexDB('users').where('user_id', refreshTokenRecord.user_id).first();
+                    return {
+                        user,
+                        gracePeriodActive: true,
+                        activeRefreshToken: replacementToken.token
+                    };
+                }
+            }
+        }
+
+        // Token revoked and outside grace period - Potential Reuse Attack!
+        console.warn(`Token Reuse Detected! Revoking all tokens for user ${refreshTokenRecord.user_id}`);
         await revokeAllTokensForUser(refreshTokenRecord.user_id);
         return { error: 'Reuse Detected' };
     }

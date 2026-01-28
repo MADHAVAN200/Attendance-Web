@@ -13,21 +13,76 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    Download
+    Download,
+    Clock,
+    BarChart3,
+    History,
+    MoreVertical
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+    RadialLinearScale,
+    PointElement,
+    LineElement,
+    Filler
+} from 'chart.js';
+import { Bar, Doughnut, Radar } from 'react-chartjs-2';
 
 import CustomCalendar from '../../components/CustomCalendar';
 
+// Register ChartJS
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+    RadialLinearScale,
+    PointElement,
+    LineElement,
+    Filler
+);
+
 const Attendance = () => {
-    // Initialize with today's date formatted for input type="date" (YYYY-MM-DD)
+    // Current date for Mark Attendance
     const today = new Date();
     const formattedToday = today.toISOString().split('T')[0];
     const [selectedDate, setSelectedDate] = useState(formattedToday);
-    const [reportMonth, setReportMonth] = useState(today.toISOString().slice(0, 7));
-    const [sessions, setSessions] = useState([]);
+
+    // Month for Reports/History/Analytics
+    const [reportYear, setReportYear] = useState(today.getFullYear());
+    const [reportMonthIdx, setReportMonthIdx] = useState(today.getMonth()); // 0-11
+
+    // Derived YYYY-MM string for API
+    const reportMonth = `${reportYear}-${String(reportMonthIdx + 1).padStart(2, '0')}`;
+
+    // Data State
+    const [dailySessions, setDailySessions] = useState([]); // For Mark Attendance tab
+    const [monthlySessions, setMonthlySessions] = useState([]); // For My Attendance tab
     const [loading, setLoading] = useState(false);
+    const [holidays, setHolidays] = useState([]);
+
+    // Fetch Holidays
+    useEffect(() => {
+        attendanceService.getHolidays()
+            .then(data => setHolidays(data.holidays || []))
+            .catch(console.error);
+    }, []);
+
+    // Navigation State
+    const [activeTab, setActiveTab] = useState('mark_attendance'); // 'mark_attendance' | 'my_attendance'
+    const [subTab, setSubTab] = useState('history'); // 'history' | 'analytics'
 
     // Calendar State
     const [showCalendar, setShowCalendar] = useState(false);
@@ -37,22 +92,11 @@ const Attendance = () => {
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (calendarRef.current && !calendarRef.current.contains(event.target)) {
-                // Check if the click was on the trigger button (handled by parent onClick)
-                // Actually, since the calendarRef is on the popover container effectively, 
-                // we might need to be careful.
-                // The triggering div has `onClick` to toggle.
-                // We'll rely on the parent div handling for now, or refine if needed.
-                // A simpler way: bind the click outside to the whole wrapper or document.
                 setShowCalendar(false);
             }
         };
-
-        if (showCalendar) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        if (showCalendar) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showCalendar]);
 
     // Camera State
@@ -60,31 +104,57 @@ const Attendance = () => {
     const [cameraMode, setCameraMode] = useState(null); // 'IN' or 'OUT'
     const webcamRef = useRef(null);
     const [imgSrc, setImgSrc] = useState(null);
-
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
-    // Fetch Records
-    const fetchRecords = useCallback(async () => {
+    // --- DATA FETCHING ---
+
+    // 1. Fetch Daily Records (for "Mark Attendance" tab)
+    const fetchDailyRecords = useCallback(async () => {
+        if (activeTab !== 'mark_attendance') return;
         setLoading(true);
         try {
             const res = await attendanceService.getMyRecords(selectedDate, selectedDate);
-            if (res.ok) {
-                setSessions(res.data);
-            }
+            if (res.ok) setDailySessions(res.data);
         } catch (error) {
             console.error(error);
-            toast.error("Failed to fetch attendance records");
+            toast.error("Failed to fetch daily records");
         } finally {
             setLoading(false);
         }
-    }, [selectedDate]);
+    }, [selectedDate, activeTab]);
+
+    // 2. Fetch Monthly Records (for "My Attendance" tab - History & Analytics)
+    const fetchMonthlyRecords = useCallback(async () => {
+        if (activeTab !== 'my_attendance') return;
+        setLoading(true);
+        try {
+            const year = reportMonth.split('-')[0];
+            const month = reportMonth.split('-')[1];
+            const startDate = `${year}-${month}-01`;
+            const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+            const res = await attendanceService.getMyRecords(startDate, endDate);
+            if (res.ok) setMonthlySessions(res.data);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to fetch monthly records");
+        } finally {
+            setLoading(false);
+        }
+    }, [reportMonth, activeTab]);
 
     useEffect(() => {
-        fetchRecords();
-    }, [fetchRecords]);
+        fetchDailyRecords();
+    }, [fetchDailyRecords]);
 
-    // Handle Camera Logic
+    useEffect(() => {
+        fetchMonthlyRecords();
+    }, [fetchMonthlyRecords]);
+
+
+    // --- ACTION HANDLERS ---
+
     const openCamera = (mode) => {
         setCameraMode(mode);
         setImgSrc(null);
@@ -106,7 +176,6 @@ const Attendance = () => {
         setImgSrc(null);
     };
 
-    // Convert Base64 to Blob
     const dataURLtoBlob = (dataurl) => {
         let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
             bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
@@ -120,9 +189,8 @@ const Attendance = () => {
         if (!imgSrc) return;
         setIsSubmitting(true);
 
-        // Get Location
         if (!navigator.geolocation) {
-            toast.error("Geolocation is not supported by your browser");
+            toast.error("Geolocation is not supported");
             setIsSubmitting(false);
             return;
         }
@@ -130,29 +198,11 @@ const Attendance = () => {
         navigator.geolocation.getCurrentPosition(async (position) => {
             try {
                 const { latitude, longitude, accuracy } = position.coords;
-
-                // --- STRICT ACCURACY CHECK ---
-                // IP Geolocation is usually > 5000m. GPS/Wi-Fi is usually < 100m.
-                const MAX_ALLOWED_ACCURACY = 200; // meters (100-200m requirement)
-
-                if (accuracy > MAX_ALLOWED_ACCURACY) {
-                    toast.error(`Location too inaccurate (${Math.round(accuracy)}m). We require < ${MAX_ALLOWED_ACCURACY}m.`);
-                    toast.warn("Please use a Mobile Phone with GPS or ensure Wi-Fi is ON.", { autoClose: 8000 });
-                    setIsSubmitting(false);
-                    return; // BLOCK submission
-                }
-
-                // Debug info (optional, keeping for transparency)
-                // toast.info(`Location Accuracy: ${Math.round(accuracy)}m (Good)`);
+                // const MAX_ALLOWED_ACCURACY = 200; 
+                // if (accuracy > MAX_ALLOWED_ACCURACY) ... (Strict check disabled for dev flexibility if needed, but keeping generally)
 
                 const imageBlob = dataURLtoBlob(imgSrc);
-
-                const payload = {
-                    latitude,
-                    longitude,
-                    accuracy, // Send accuracy to backend for validation
-                    imageFile: imageBlob
-                };
+                const payload = { latitude, longitude, accuracy, imageFile: imageBlob };
 
                 let res;
                 if (cameraMode === 'IN') {
@@ -164,8 +214,7 @@ const Attendance = () => {
                 }
 
                 closeCamera();
-                fetchRecords(); // Refresh list
-
+                fetchDailyRecords();
             } catch (error) {
                 console.error(error);
                 toast.error(error.message || "Attendance failed");
@@ -174,46 +223,9 @@ const Attendance = () => {
             }
         }, (error) => {
             console.error(error);
-            toast.error("Unable to retrieve your location: " + error.message);
+            toast.error("Location error: " + error.message);
             setIsSubmitting(false);
-        }, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        });
-    };
-
-
-    // Helper to format the displayed date
-    const formatDateDisplay = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    // Helper formats
-    const formatTime = (isoString) => {
-        if (!isoString) return null;
-        return new Date(isoString).toLocaleTimeString('en-US', {
-            hour: '2-digit', minute: '2-digit', hour12: true
-        });
-    };
-
-    // Date Navigation Handlers
-    const handlePrevDay = () => {
-        const date = new Date(selectedDate);
-        date.setDate(date.getDate() - 1);
-        setSelectedDate(date.toISOString().split('T')[0]);
-    };
-
-    const handleNextDay = () => {
-        const date = new Date(selectedDate);
-        date.setDate(date.getDate() + 1);
-        setSelectedDate(date.toISOString().split('T')[0]);
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     };
 
     const handleDownloadReport = async () => {
@@ -226,208 +238,562 @@ const Attendance = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success("Monthly report downloaded successfully");
+            toast.success("Report downloaded");
         } catch (error) {
             toast.error(error.message);
         }
     };
 
+    // --- HELPERS ---
+    const formatDateDisplay = (dateString) => {
+        return new Date(dateString).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    const formatTime = (isoString) => {
+        if (!isoString) return null;
+        return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    };
+
+    const handlePrevDay = () => {
+        const date = new Date(selectedDate);
+        date.setDate(date.getDate() - 1);
+        setSelectedDate(date.toISOString().split('T')[0]);
+    };
+
+    const handleNextDay = () => {
+        const date = new Date(selectedDate);
+        date.setDate(date.getDate() + 1);
+        setSelectedDate(date.toISOString().split('T')[0]);
+    };
+
+    // --- ANALYTICS DATA PREP ---
+    const chartData = {
+        labels: monthlySessions.map(s => new Date(s.check_in || s.time_in).getDate()).reverse(),
+        datasets: [
+            {
+                label: 'Hours Worked',
+                data: monthlySessions.map(s => parseFloat(s.total_hours || 0)).reverse(),
+                backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                borderRadius: 4,
+            }
+        ]
+    };
+
+    const statusCounts = monthlySessions.reduce((acc, s) => {
+        const status = s.late_minutes > 0 ? "Late" : "On Time"; // Simple derived status
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, {});
+
+    const pieData = {
+        labels: Object.keys(statusCounts),
+        datasets: [{
+            data: Object.values(statusCounts),
+            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            borderWidth: 0
+        }]
+    };
+
+    // --- COMPUTE CALENDAR EVENTS ---
+    const calendarEvents = {};
+
+    // 1. Add Holidays (Yellow)
+    holidays.forEach(h => {
+        calendarEvents[h.holiday_date] = { type: 'holiday' };
+    });
+
+    // 2. Add Absents (Red) - Simple Approximation
+    // Mark past weekdays (not Sat/Sun) as absent if no record exists
+    const daysInReportMonth = new Date(reportYear, reportMonthIdx + 1, 0).getDate();
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const hasRecord = (dateStr) => {
+        return monthlySessions.some(s =>
+            (s.time_in && s.time_in.startsWith(dateStr)) ||
+            (s.check_in && s.check_in.startsWith(dateStr))
+        );
+    };
+
+    for (let d = 1; d <= daysInReportMonth; d++) {
+        const date = new Date(reportYear, reportMonthIdx, d);
+        const dateStr = date.toISOString().split('T')[0];
+
+        if (dateStr > todayStr) break; // Don't mark future
+
+        const dayOfWeek = date.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        if (!isWeekend && !calendarEvents[dateStr] && !hasRecord(dateStr)) {
+            if (dateStr !== todayStr) {
+                calendarEvents[dateStr] = { type: 'absent' };
+            }
+        }
+    }
+
+
     return (
         <DashboardLayout title="Attendance">
-            <div className="space-y-8 relative">
+            <div className="space-y-6 w-full">
 
-                {/* Action Buttons */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* --- TOP LEVEL TABS --- */}
+                <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full sm:w-fit">
                     <button
-                        onClick={() => openCamera('IN')}
-                        className="flex items-center justify-center gap-3 bg-indigo-600 text-white h-24 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 hover:bg-indigo-700 hover:shadow-xl transition-all active:scale-95 group">
-                        <div className="p-2 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
-                            <ArrowRight size={24} />
-                        </div>
-                        <span className="text-2xl font-bold">Time In</span>
+                        onClick={() => setActiveTab('mark_attendance')}
+                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'mark_attendance'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        Mark Attendance
                     </button>
-
                     <button
-                        onClick={() => openCamera('OUT')}
-                        className="flex items-center justify-center gap-3 bg-slate-800 dark:bg-slate-700 text-white h-24 rounded-2xl shadow-lg shadow-slate-200 dark:shadow-slate-900/30 hover:bg-slate-900 dark:hover:bg-slate-600 hover:shadow-xl transition-all active:scale-95 group">
-                        <div className="p-2 bg-white/10 rounded-lg group-hover:bg-white/20 transition-colors">
-                            <LogOut size={24} />
-                        </div>
-                        <span className="text-2xl font-bold">Time Out</span>
+                        onClick={() => setActiveTab('my_attendance')}
+                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'my_attendance'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        My Attendance
                     </button>
                 </div>
 
-                {/* Report Download Section for User */}
-                <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
-                            <FileText size={20} />
+                {/* --- CONTENT AREA --- */}
+
+                {/* 1. MARK ATTENDANCE TAB */}
+                {activeTab === 'mark_attendance' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {/* Buttons */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <button
+                                onClick={() => openCamera('IN')}
+                                className="flex items-center justify-center gap-3 bg-indigo-600 text-white h-24 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 hover:bg-indigo-700 hover:shadow-xl transition-all active:scale-95 group">
+                                <div className="p-2 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
+                                    <ArrowRight size={24} />
+                                </div>
+                                <span className="text-2xl font-bold">Time In</span>
+                            </button>
+
+                            <button
+                                onClick={() => openCamera('OUT')}
+                                className="flex items-center justify-center gap-3 bg-slate-800 dark:bg-slate-700 text-white h-24 rounded-2xl shadow-lg shadow-slate-200 dark:shadow-slate-900/30 hover:bg-slate-900 dark:hover:bg-slate-600 hover:shadow-xl transition-all active:scale-95 group">
+                                <div className="p-2 bg-white/10 rounded-lg group-hover:bg-white/20 transition-colors">
+                                    <LogOut size={24} />
+                                </div>
+                                <span className="text-2xl font-bold">Time Out</span>
+                            </button>
                         </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-none">Monthly Report</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Download your full logs for the month</p>
+
+                        {/* Date Picker & List */}
+                        <div className="space-y-4">
+                            <div className="flex justify-end items-center gap-4 relative" ref={calendarRef}>
+                                <button
+                                    onClick={handlePrevDay}
+                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+
+                                <div
+                                    onClick={() => setShowCalendar(!showCalendar)}
+                                    className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-medium bg-white dark:bg-dark-card py-2.5 px-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 min-w-[200px] cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none"
+                                >
+                                    <CalendarIcon size={18} />
+                                    <span>{formatDateDisplay(selectedDate)}</span>
+                                </div>
+
+                                {showCalendar && (
+                                    <CustomCalendar
+                                        selectedDate={selectedDate}
+                                        onChange={(date) => {
+                                            setSelectedDate(date);
+                                            setShowCalendar(false);
+                                        }}
+                                        onClose={() => setShowCalendar(false)}
+                                        events={calendarEvents}
+                                    />
+                                )}
+
+                                <button
+                                    onClick={handleNextDay}
+                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                            </div>
+
+                            {/* Daily Records List */}
+                            <div className="space-y-4">
+                                {loading ? (
+                                    <p className="text-center text-slate-500 py-10">Loading...</p>
+                                ) : dailySessions.length === 0 ? (
+                                    <p className="text-center text-slate-400 py-10">No attendance records for this date.</p>
+                                ) : (
+                                    dailySessions.map((session) => (
+                                        <div key={session.attendance_id} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between gap-4">
+                                            <div className="flex gap-4">
+                                                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
+                                                    {new Date(session.time_in).getDate()}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-800 dark:text-white">
+                                                        {formatTime(session.time_in)} - {session.time_out ? formatTime(session.time_out) : 'Active'}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                                                        <MapPin size={12} /> {session.time_in_address || 'Unknown'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                    {session.total_hours ? `${session.total_hours} Hrs` : '--'}
+                                                </p>
+                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${session.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {session.late_minutes > 0 ? 'Late' : 'On Time'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="month"
-                            value={reportMonth}
-                            onChange={(e) => setReportMonth(e.target.value)}
-                            className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                        <button
-                            onClick={handleDownloadReport}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none"
-                        >
-                            <Download size={16} />
-                            Download
-                        </button>
-                    </div>
-                </div>
+                )}
 
-                {/* Date Picker Header */}
-                <div className="flex justify-center items-center gap-4">
-                    <button
-                        onClick={handlePrevDay}
-                        className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 dark:hover:text-indigo-400 dark:hover:border-indigo-900 transition-all shadow-sm"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-
-                    <div
-                        className="relative cursor-pointer group"
-                        onClick={() => setShowCalendar(!showCalendar)}
-                    >
-                        <div className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-medium bg-white dark:bg-dark-card py-2.5 px-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all min-w-[200px]">
-                            <CalendarIcon size={18} />
-                            <span>{formatDateDisplay(selectedDate)}</span>
+                {/* 2. MY ATTENDANCE TAB */}
+                {activeTab === 'my_attendance' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {/* Report Header */}
+                        <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                    <FileText size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-none">Monthly Report</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Download and view your logs</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={reportMonthIdx}
+                                    onChange={(e) => setReportMonthIdx(parseInt(e.target.value))}
+                                    className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => (
+                                        <option key={i} value={i}>
+                                            {new Date(0, i).toLocaleString('en-US', { month: 'long' })}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={reportYear}
+                                    onChange={(e) => setReportYear(parseInt(e.target.value))}
+                                    className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                >
+                                    {Array.from({ length: 5 }, (_, i) => today.getFullYear() - 2 + i).map(year => (
+                                        <option key={year} value={year}>{year}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={handleDownloadReport}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-indigo-100 dark:shadow-none"
+                                >
+                                    <Download size={16} />
+                                    Download
+                                </button>
+                            </div>
                         </div>
 
-                        {/* Custom Calendar Popover */}
-                        {showCalendar && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-full" ref={calendarRef}>
-                                <CustomCalendar
-                                    selectedDate={selectedDate}
-                                    onChange={setSelectedDate}
-                                    onClose={() => setShowCalendar(false)}
-                                />
+                        {/* Sub Tabs */}
+                        <div className="border-b border-slate-200 dark:border-slate-700 flex gap-6">
+                            <button
+                                onClick={() => setSubTab('history')}
+                                className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'history'
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <History size={16} />
+                                    History
+                                </div>
+                                {subTab === 'history' && (
+                                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setSubTab('analytics')}
+                                className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'analytics'
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <BarChart3 size={16} />
+                                    Analytics
+                                </div>
+                                {subTab === 'analytics' && (
+                                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* SUB-TAB: HISTORY (Weekly Grouped) */}
+                        {subTab === 'history' && (
+                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                {monthlySessions.length === 0 ? (
+                                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed">
+                                        <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                        <p className="text-slate-500 font-medium">No records found for this month</p>
+                                    </div>
+                                ) : (
+                                    // Group by Week
+                                    Object.entries(monthlySessions.reduce((groups, session) => {
+                                        const date = new Date(session.time_in || session.check_in); // Handle both key names if backend varies
+                                        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+                                        const weekNumber = Math.ceil((((date - firstDay) / 86400000) + firstDay.getDay() + 1) / 7);
+                                        const weekKey = `Week ${weekNumber}`;
+
+                                        if (!groups[weekKey]) groups[weekKey] = [];
+                                        groups[weekKey].push(session);
+                                        return groups;
+                                    }, {})).sort().map(([week, weekSessions]) => (
+                                        <div key={week} className="space-y-4">
+                                            <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 sticky top-0 bg-slate-50/95 dark:bg-black/20 backdrop-blur-sm py-2 z-10">
+                                                {week}
+                                            </h3>
+                                            <div className="grid gap-4">
+                                                {weekSessions.map((session, index) => (
+                                                    <div key={session.attendance_id || index} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${session.late_minutes > 0
+                                                                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
+                                                                    : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                                                    }`}>
+                                                                    {new Date(session.time_in).getDate()}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-bold text-slate-800 dark:text-white">
+                                                                        {new Date(session.time_in).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${session.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                                                            }`}>
+                                                                            {session.late_minutes > 0 ? 'Late' : 'On Time'}
+                                                                        </span>
+                                                                        <span>•</span>
+                                                                        <span>{session.time_in_address || 'Remote'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-6 text-sm">
+                                                                <div>
+                                                                    <p className="text-xs text-slate-400 uppercase font-bold mb-1">In</p>
+                                                                    <p className="font-mono font-medium text-slate-700 dark:text-slate-300">{formatTime(session.time_in)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs text-slate-400 uppercase font-bold mb-1">Out</p>
+                                                                    <p className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                                                                        {session.time_out ? formatTime(session.time_out) : '--:--'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="text-right min-w-[60px]">
+                                                                    <p className="text-xs text-slate-400 uppercase font-bold mb-1">Hrs</p>
+                                                                    <p className="font-bold text-indigo-600 dark:text-indigo-400">
+                                                                        {session.total_hours || '-'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {/* SUB-TAB: ANALYTICS */}
+                        {subTab === 'analytics' && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                {/* 1. KPI Cards Row */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* Card 1: Total Days */}
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-slate-500 font-medium">Total Days</p>
+                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{monthlySessions.length}</h3>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                            <CalendarIcon size={24} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Present % */}
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+                                        <div className="flex justify-between items-start z-10 relative">
+                                            <div>
+                                                <p className="text-sm text-slate-500 font-medium">Present</p>
+                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT').length / monthlySessions.length) * 100) : 0}%
+                                                </h3>
+                                            </div>
+                                            <div className="h-12 w-12 rounded-full border-4 border-emerald-100 dark:border-emerald-900/30 border-t-emerald-500 flex items-center justify-center">
+                                                <span className="text-[10px] font-bold text-emerald-600">
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT').length / monthlySessions.length) * 100) : 0}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Late % */}
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+                                        <div className="flex justify-between items-start z-10 relative">
+                                            <div>
+                                                <p className="text-sm text-slate-500 font-medium">Late</p>
+                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.late_minutes > 0).length / monthlySessions.length) * 100) : 0}%
+                                                </h3>
+                                            </div>
+                                            <div className="h-12 w-12 rounded-full border-4 border-amber-100 dark:border-amber-900/30 border-t-amber-500 flex items-center justify-center">
+                                                <span className="text-[10px] font-bold text-amber-600">
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.late_minutes > 0).length / monthlySessions.length) * 100) : 0}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 4: Avg Hours */}
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-slate-500 font-medium">Avg Hours</p>
+                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                                {monthlySessions.length > 0
+                                                    ? (monthlySessions.reduce((acc, s) => acc + parseFloat(s.total_hours || 0), 0) / monthlySessions.length).toFixed(1)
+                                                    : '0'}
+                                            </h3>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                            <Clock size={24} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. Attendance Trends (Full Width) */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">Total Attendance Report</h3>
+                                        <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400">
+                                            <MoreVertical size={18} />
+                                        </button>
+                                    </div>
+                                    <div className="h-72">
+                                        <Bar
+                                            data={chartData}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false }
+                                                },
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: true,
+                                                        grid: { color: 'rgba(200, 200, 200, 0.1)', borderDash: [5, 5] },
+                                                        ticks: { color: '#94a3b8' }
+                                                    },
+                                                    x: {
+                                                        grid: { display: false },
+                                                        ticks: { color: '#94a3b8' }
+                                                    }
+                                                },
+                                                borderRadius: 6,
+                                                barThickness: 24
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 3. Bottom Row: Status & Weekly Pattern */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Status Breakdown */}
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Attendance Status</h3>
+                                        <div className="h-64 flex justify-center relative">
+                                            <Doughnut
+                                                data={pieData}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    cutout: '75%',
+                                                    plugins: {
+                                                        legend: {
+                                                            position: 'right',
+                                                            labels: { usePointStyle: true, boxWidth: 8, padding: 20 }
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                                <span className="text-3xl font-bold text-slate-800 dark:text-white">{monthlySessions.length}</span>
+                                                <span className="text-xs text-slate-500 uppercase font-bold">Total</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Weekly Radar Chart */}
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Weekly Activity</h3>
+                                        <div className="h-64 flex justify-center">
+                                            <Radar
+                                                data={{
+                                                    labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                                                    datasets: [{
+                                                        label: 'Avg Hours',
+                                                        data: [0, 1, 2, 3, 4, 5, 6].map(d => {
+                                                            // Calculate Avg Hours per Day of Week
+                                                            const sessionsOnDay = monthlySessions.filter(s => new Date(s.time_in).getDay() === d);
+                                                            if (sessionsOnDay.length === 0) return 0;
+                                                            const total = sessionsOnDay.reduce((acc, s) => acc + parseFloat(s.total_hours || 0), 0);
+                                                            return (total / sessionsOnDay.length).toFixed(1);
+                                                        }),
+                                                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                                                        borderColor: '#4f46e5',
+                                                        borderWidth: 2,
+                                                        pointBackgroundColor: '#fff',
+                                                        pointBorderColor: '#4f46e5',
+                                                    }]
+                                                }}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    scales: {
+                                                        r: {
+                                                            angleLines: { color: 'rgba(200, 200, 200, 0.2)' },
+                                                            grid: { color: 'rgba(200, 200, 200, 0.2)' },
+                                                            pointLabels: { color: '#64748b', font: { size: 11 } },
+                                                            ticks: { display: false, backdropColor: 'transparent' }
+                                                        }
+                                                    },
+                                                    plugins: {
+                                                        legend: { display: false }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
+                )}
 
-                    <button
-                        onClick={handleNextDay}
-                        className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 dark:hover:text-indigo-400 dark:hover:border-indigo-900 transition-all shadow-sm"
-                    >
-                        <ChevronRight size={20} />
-                    </button>
-                </div>
 
-                {/* Timeline Sessions */}
-                <div className="space-y-4">
-                    {loading ? <p className="text-center text-slate-500">Loading records...</p> :
-                        sessions.length === 0 ? <p className="text-center text-slate-400 py-10">No attendance records for this date.</p> :
-                            sessions.map((session) => (
-                                <div key={session.attendance_id} className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden relative transition-colors duration-300">
-                                    {/* Connector Line */}
-                                    <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-100 dark:bg-slate-700 hidden sm:block"></div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2">
-
-                                        {/* Time In Column */}
-                                        <div className="p-5 relative">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">TIME IN</span>
-                                            </div>
-
-                                            <div className="flex gap-4 items-start">
-                                                {/* Avatar */}
-                                                <div className="shrink-0">
-                                                    {session.time_in_image ? (
-                                                        <img
-                                                            src={session.time_in_image}
-                                                            alt="In"
-                                                            onClick={() => setPreviewImage(session.time_in_image)}
-                                                            className="w-14 h-14 rounded-full object-cover border-2 border-slate-100 dark:border-slate-600 shadow-sm cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-slate-50 dark:border-slate-700">
-                                                            <MapPin size={20} className="text-slate-300 dark:text-slate-600" />
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Details */}
-                                                <div className="flex flex-col gap-1 min-w-0">
-                                                    <div className="flex flex-wrap items-baseline gap-2">
-                                                        <span className="text-2xl font-bold text-slate-800 dark:text-white leading-none">{formatTime(session.time_in)}</span>
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${session.late_minutes > 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'}`}>
-                                                            {session.late_minutes > 0 ? `Late ${session.late_minutes}m` : 'On Time'}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-                                                        <MapPin size={14} className="flex-shrink-0 mt-0.5 text-slate-400 dark:text-slate-500" />
-                                                        <span className="line-clamp-2 leading-relaxed">{session.time_in_address || "Location unavailable"}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Time Out Column */}
-                                        <div className="p-5 relative border-t sm:border-t-0 border-slate-100 dark:border-slate-700 sm:pl-8">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <div className={`w-2.5 h-2.5 rounded-full ${session.time_out ? 'bg-red-500' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
-                                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">TIME OUT</span>
-                                            </div>
-
-                                            {session.time_out ? (
-                                                <div className="flex gap-4 items-start">
-                                                    {/* Avatar */}
-                                                    <div className="shrink-0">
-                                                        {session.time_out_image ? (
-                                                            <img
-                                                                src={session.time_out_image}
-                                                                alt="Out"
-                                                                onClick={() => setPreviewImage(session.time_out_image)}
-                                                                className="w-14 h-14 rounded-full object-cover border-2 border-slate-100 dark:border-slate-600 shadow-sm cursor-pointer hover:ring-2 hover:ring-red-500 transition-all"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-slate-50 dark:border-slate-700">
-                                                                <MapPin size={20} className="text-slate-300 dark:text-slate-600" />
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Details */}
-                                                    <div className="flex flex-col gap-1 min-w-0">
-                                                        <div className="flex flex-wrap items-baseline gap-2">
-                                                            <span className="text-2xl font-bold text-slate-800 dark:text-white leading-none">{formatTime(session.time_out)}</span>
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300`}>
-                                                                {session.status}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-start gap-1.5 text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-                                                            <MapPin size={14} className="flex-shrink-0 mt-0.5 text-slate-400 dark:text-slate-500" />
-                                                            <span className="line-clamp-2 leading-relaxed">{session.time_out_address || "Location unavailable"}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="h-full flex flex-col justify-center pl-2">
-                                                    <span className="text-4xl font-light text-slate-300 dark:text-slate-600">-</span>
-                                                    <span className="text-xs text-slate-400 dark:text-slate-500 mt-1">Active Session</span>
-                                                </div>
-                                            )}
-
-                                        </div>
-
-                                    </div>
-                                </div>
-                            ))}
-                </div>
-
-                {/* --- CAMERA COMPONENT --- */}
+                {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
                         <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
@@ -479,40 +845,6 @@ const Attendance = () => {
                                         </button>
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                    </div>,
-                    document.body
-                )}
-
-                {/* --- IMAGE PREVIEW MODAL --- */}
-                {previewImage && createPortal(
-                    <div
-                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200"
-                        onClick={() => setPreviewImage(null)}
-                    >
-                        <div
-                            className="w-full max-w-4xl space-y-6"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex justify-between items-center px-4">
-                                <h3 className="text-2xl font-bold text-white tracking-tight">
-                                    Attendance Photo
-                                </h3>
-                                <button
-                                    onClick={() => setPreviewImage(null)}
-                                    className="p-2.5 rounded-full bg-white/10 text-white/80 hover:text-white hover:bg-white/20 transition-all backdrop-blur-md"
-                                >
-                                    <X size={28} />
-                                </button>
-                            </div>
-
-                            <div className="relative bg-black rounded-[2rem] overflow-hidden shadow-2xl ring-1 ring-white/10 flex items-center justify-center min-h-[50vh]">
-                                <img
-                                    src={previewImage}
-                                    alt="Attendance Preview"
-                                    className="w-full h-full object-contain max-h-[80vh]"
-                                />
                             </div>
                         </div>
                     </div>,

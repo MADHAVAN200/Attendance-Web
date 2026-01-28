@@ -1,34 +1,37 @@
 import express from 'express';
 import { knexDB } from '../database.js';
-import { authenticateJWT } from '../AuthAPI/LoginAPI.js';
+import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
 const router = express.Router();
 
 // Helper: Get Org Buffer Settings
-async function getOrgBuffer(org_id) {
+export async function getOrgBuffer(org_id) {
     const settings = await knexDB("dar_settings").where({ org_id }).first();
     return settings ? settings.buffer_minutes : 30; // Default 30 mins
 }
 
 // Helper: Validation Logic
-async function validateActivityTime(user_id, date, start_time, end_time, buffer_minutes) {
-    // 1. Check Future Constraint (with Buffer)
+export async function validateActivityTime(user_id, date, start_time, end_time, buffer_minutes) {
     const now = new Date();
-    // Assuming 'date' + 'end_time' vs 'now'
-    // This is complex due to JS dates. Simplified approach:
+    const todayStr = now.toISOString().split('T')[0];
 
+    // 1. Check Future Constraint (Planning Mode vs Execution Mode)
+    if (date > todayStr) {
+        // FUTURE: Planning Mode
+        // We do NOT check attendance or buffer. Just allow it.
+        return { valid: true, mode: 'PLANNING' };
+    }
+
+    // TODAY/PAST: Execution Mode (Strict Checks)
     const activityEndDateTime = new Date(`${date}T${end_time}`);
     const allowedEndDateTime = new Date(now.getTime() + buffer_minutes * 60000);
 
-    // If activity date is today, check time
-    const todayStr = now.toISOString().split('T')[0];
+    // If activity date is today, check strict future buffer
     if (date === todayStr) {
         if (activityEndDateTime > allowedEndDateTime) {
             return { valid: false, message: `Cannot log future tasks (Buffer: ${buffer_minutes}m). Allowed until: ${allowedEndDateTime.toLocaleTimeString()}` };
         }
-    } else if (date > todayStr) {
-        return { valid: false, message: "Cannot log tasks for future dates." };
     }
 
     // 2. Check Attendance Window (Time In / Time Out)
@@ -38,8 +41,6 @@ async function validateActivityTime(user_id, date, start_time, end_time, buffer_
         .orderBy("time_in", "asc");
 
     if (!attendance || attendance.length === 0) {
-        // Strict Mode: No attendance = No work log? 
-        // Or allow but flag? "System should not allow him to store data" -> Strict.
         return { valid: false, message: "No attendance record found for this date." };
     }
 
@@ -72,7 +73,6 @@ async function validateActivityTime(user_id, date, start_time, end_time, buffer_
             sessEndMins = sessionEnd.getHours() * 60 + sessionEnd.getMinutes();
         } else {
             // Currently checked in: Valid up to NOW + Buffer
-            // We already checked strict future constraint above, so here we treat "Open Session" as valid until infinity (bound by NOW check)
             sessEndMins = 24 * 60;
         }
 
@@ -87,19 +87,32 @@ async function validateActivityTime(user_id, date, start_time, end_time, buffer_
         return { valid: false, message: `Task time (${start_time}-${end_time}) must be within a valid 'Time In' session.` };
     }
 
-    return { valid: true };
+    return { valid: true, mode: 'EXECUTION' };
+}
+
+// Helper: Shared Validation & Status Determination
+async function processActivityValidation(org_id, user_id, body) {
+    const { activity_date, start_time, end_time } = body;
+    const buffer = await getOrgBuffer(org_id);
+    const check = await validateActivityTime(user_id, activity_date, start_time, end_time, buffer);
+
+    if (!check.valid) {
+        throw new Error(check.message); // Will be caught by catchAsync
+    }
+
+    return check.mode === 'PLANNING' ? 'PLANNED' : 'COMPLETED';
 }
 
 // POST /dar/activities/create
 router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
-    const { activity_date, start_time, end_time, title, description, activity_type, status } = req.body;
+    const { activity_date, start_time, end_time, title, description, activity_type } = req.body;
     const { user_id, org_id } = req.user;
 
-    // Validate
-    const buffer = await getOrgBuffer(org_id);
-    const check = await validateActivityTime(user_id, activity_date, start_time, end_time, buffer);
-    if (!check.valid) {
-        return res.status(400).json({ ok: false, message: check.message });
+    let status;
+    try {
+        status = await processActivityValidation(org_id, user_id, req.body);
+    } catch (err) {
+        return res.status(400).json({ ok: false, message: err.message });
     }
 
     const [activity_id] = await knexDB("daily_activities").insert({
@@ -111,24 +124,24 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
         title,
         description,
         activity_type,
-        status: status || 'COMPLETED', // Default to completed if logging past work
+        status,
         created_at: knexDB.fn.now(),
     });
 
-    res.json({ ok: true, message: "Activity logged successfully", activity_id });
-
+    res.json({ ok: true, message: "Activity logged successfully", activity_id, status });
 }));
+
 // PUT /dar/activities/update/:id
 router.put('/update/:activity_id', authenticateJWT, catchAsync(async (req, res) => {
     const { activity_id } = req.params;
-    const { activity_date, start_time, end_time, title, description, activity_type, status } = req.body;
+    const { activity_date, start_time, end_time, title, description, activity_type } = req.body;
     const { user_id, org_id } = req.user;
 
-    // Validate
-    const buffer = await getOrgBuffer(org_id);
-    const check = await validateActivityTime(user_id, activity_date, start_time, end_time, buffer);
-    if (!check.valid) {
-        return res.status(400).json({ ok: false, message: check.message });
+    let status;
+    try {
+        status = await processActivityValidation(org_id, user_id, req.body);
+    } catch (err) {
+        return res.status(400).json({ ok: false, message: err.message });
     }
 
     await knexDB("daily_activities")
@@ -144,7 +157,7 @@ router.put('/update/:activity_id', authenticateJWT, catchAsync(async (req, res) 
             updated_at: knexDB.fn.now()
         });
 
-    res.json({ ok: true, message: "Activity updated successfully" });
+    res.json({ ok: true, message: "Activity updated successfully", status });
 }));
 
 // DELETE /dar/activities/delete/:id
@@ -189,6 +202,47 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
 router.get('/settings', authenticateJWT, catchAsync(async (req, res) => {
     const buffer = await getOrgBuffer(req.user.org_id);
     res.json({ ok: true, buffer_minutes: buffer });
+}));
+
+// ADMIN: Get all activities for the organization (for Analytics & Master Data)
+router.get('/admin/all', authenticateJWT, catchAsync(async (req, res) => {
+    const { org_id, user_type } = req.user;
+
+    if (user_type !== 'admin') {
+        return res.status(403).json({ ok: false, message: 'Access denied. Admins only.' });
+    }
+
+    const { date, startDate, endDate } = req.query;
+
+    let query = knexDB('daily_activities as da')
+        .join('users as u', 'da.user_id', 'u.user_id')
+        .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
+        .leftJoin('shifts as s', 'u.shift_id', 's.shift_id')
+        .select(
+            'da.*',
+            'u.user_name',
+            'u.user_type as user_role',
+            'u.email as user_email',
+            'dep.dept_name as user_dept',
+            's.shift_name as user_shift_name'
+        )
+        .where('da.org_id', org_id)
+        .where('da.status', 'COMPLETED');
+
+    // Filter by date or range
+    if (date) {
+        query = query.where('da.activity_date', date);
+    } else if (startDate && endDate) {
+        query = query.whereBetween('da.activity_date', [startDate, endDate]);
+    }
+
+    // Default sort
+    const activities = await query.orderBy('da.activity_date', 'desc').orderBy('u.user_name', 'asc');
+
+    res.json({
+        ok: true,
+        data: activities
+    });
 }));
 
 export default router;

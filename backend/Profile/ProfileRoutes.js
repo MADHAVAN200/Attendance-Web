@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { knexDB } from '../database.js';
-import { authenticateJWT } from '../AuthAPI/LoginAPI.js';
+import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from '../utils/catchAsync.js';
 import { uploadCompressedImage, getFileUrl } from '../s3/s3Service.js';
 

@@ -5,10 +5,18 @@ const MultiDayTimeline = ({
     startDate, // The starting date for the view
     daysToShow = 7, // Number of rows to show
     attendanceData = {}, // Map of date -> attendance status
-    onEditTask
+    holidays = {}, // Map of date -> holiday_name
+    onEditTask,
+    startHour: propStartHour, // Optional: Override start hour
+    endHour: propEndHour // Optional: Override end hour
 }) => {
     // Dynamic Range Calculation
     const { startHour, endHour } = useMemo(() => {
+        // If props are provided, use them directly (e.g. from Shift settings)
+        if (propStartHour !== undefined && propEndHour !== undefined) {
+            return { startHour: propStartHour, endHour: propEndHour };
+        }
+
         let min = 8; // Default start 8 AM
         let max = 19; // Default end 7 PM
 
@@ -24,7 +32,7 @@ const MultiDayTimeline = ({
         }
         // Add padding
         return { startHour: Math.max(0, min - 1), endHour: Math.min(24, max + 1) };
-    }, [tasks]);
+    }, [tasks, propStartHour, propEndHour]);
 
     // Config
     const START_HOUR = startHour;
@@ -196,34 +204,23 @@ const MultiDayTimeline = ({
 
                     {/* BODY ROWS */}
                     <div className="relative">
-                        {/* Vertical Grid Lines (Background) */}
-                        <div className="absolute top-0 bottom-0 left-24 right-0 pointer-events-none z-0">
-                            {hourMarkers.map((hour) => (
-                                <div
-                                    key={`grid-${hour}`}
-                                    className="absolute top-0 bottom-0 border-r border-gray-100 dark:border-slate-700/50"
-                                    style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px` }}
-                                />
-                            ))}
-                            {/* Fixed Lunch Zone (1-2 PM) */}
-                            <div
-                                className="absolute top-0 bottom-0 bg-gray-50/50 dark:bg-slate-800/30 border-x border-gray-100 dark:border-slate-700 border-dashed"
-                                style={{
-                                    left: `${(13 - START_HOUR) * PIXELS_PER_HOUR}px`,
-                                    width: `${PIXELS_PER_HOUR}px`
-                                }}
-                            >
-                                <div className="hidden h-full flex items-center justify-center">
-                                    <span className="text-[10px] text-gray-300 dark:text-slate-600 font-medium -rotate-90">LUNCH</span>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Date Rows */}
                         {dates.map((dateStr) => {
                             const dateObj = new Date(dateStr);
                             const isToday = nowIndicator?.date === dateStr;
                             const att = attendanceData[dateStr];
+
+                            // Holiday & Absent Logic
+                            const holidayName = holidays[dateStr];
+                            const isHoliday = !!holidayName;
+                            // Check absent: Not today, Not future, Not holiday, No Time In
+                            const isPast = dateStr < nowIndicator?.date;
+                            const isAbsent = isPast && !isHoliday && (!att || !att.hasTimedIn);
+
+                            // Row Background Class
+                            let rowBgClass = "bg-white dark:bg-dark-card";
+                            if (isHoliday) rowBgClass = "bg-emerald-50 dark:bg-emerald-900/20";
+                            else if (isAbsent) rowBgClass = "bg-red-50 dark:bg-red-900/20";
 
                             // Prep Tasks
                             const rawTasks = tasks.filter(t => t.date === dateStr);
@@ -231,12 +228,12 @@ const MultiDayTimeline = ({
 
                             return (
                                 <div key={dateStr}
-                                    className="flex relative border-b border-gray-100 dark:border-slate-700/50 transition-colors group/row"
+                                    className={`flex relative border-b border-gray-100 dark:border-slate-700/50 transition-colors group/row ${rowBgClass}`}
                                     style={{ height: `${ROW_MIN_HEIGHT}px` }}
                                 >
 
                                     {/* Sticky Date Label */}
-                                    <div className="w-24 shrink-0 bg-white dark:bg-dark-card border-r border-gray-200 dark:border-slate-700 sticky left-0 z-20 flex flex-col justify-center items-center p-2 group shadow-[1px_0_5px_rgba(0,0,0,0.05)]">
+                                    <div className={`w-24 shrink-0 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-20 flex flex-col justify-center items-center p-2 group shadow-[1px_0_5px_rgba(0,0,0,0.05)] ${isHoliday ? 'bg-emerald-50 dark:bg-emerald-900/20' : isAbsent ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-dark-card'}`}>
                                         <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-slate-500'}`}>
                                             {dateObj.toLocaleDateString('en-US', { weekday: 'short' })}
                                         </span>
@@ -249,7 +246,35 @@ const MultiDayTimeline = ({
                                     <div className="relative flex-1 h-full">
 
                                         {/* Row Hover Highlight (Background) */}
-                                        <div className="absolute inset-0 bg-gray-50/0 group-hover/row:bg-gray-50/30 transition-colors pointer-events-none" />
+                                        <div className="absolute inset-0 bg-gray-50/0 group-hover/row:bg-gray-50/30 transition-colors pointer-events-none z-10" />
+
+                                        {/* BACKGROUND GRID LINES (Per Row) */}
+                                        <div className="absolute inset-0 pointer-events-none z-0">
+                                            {hourMarkers.map((hour) => (
+                                                <div
+                                                    key={`grid-${hour}`}
+                                                    className="absolute top-0 bottom-0 border-r border-gray-100 dark:border-slate-700/50"
+                                                    style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px` }}
+                                                />
+                                            ))}
+
+                                        </div>
+
+                                        {/* Holiday / Absent Overlay Text */}
+                                        {isHoliday && (
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                                                <span className="text-emerald-300 dark:text-emerald-700/40 text-4xl font-black uppercase tracking-widest opacity-60 select-none">
+                                                    {holidayName}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {isAbsent && (
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                                                <span className="text-red-200 dark:text-red-800/40 text-5xl font-black uppercase tracking-widest opacity-60 select-none">
+                                                    ABSENT
+                                                </span>
+                                            </div>
+                                        )}
 
                                         {/* Time-In Marker */}
                                         {att?.hasTimedIn && att.timeIn && (
@@ -289,6 +314,16 @@ const MultiDayTimeline = ({
                                             if (task.type === 'event') bgClass = "bg-blue-100/90 border-blue-200 text-blue-700 hover:bg-blue-100";
                                             if (task.type === 'break') bgClass = "bg-amber-100/90 border-amber-200 text-amber-700 hover:bg-amber-100";
 
+                                            // Planned Status Overlay (Stripes)
+                                            let extraStyle = {};
+                                            if (task.status === 'PLANNED') {
+                                                // Option B: Emerald Green with Gray Stripes
+                                                bgClass = "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400";
+                                                extraStyle = {
+                                                    backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(148, 163, 184, 0.3) 10px, rgba(148, 163, 184, 0.3) 20px)"
+                                                };
+                                            }
+
                                             return (
                                                 <div
                                                     key={task.id}
@@ -298,9 +333,10 @@ const MultiDayTimeline = ({
                                                         left: `${left}px`,
                                                         width: `${width}px`,
                                                         top: `${topPos}px`,
-                                                        height: `${itemHeight - 2}px` // -2 for slight gap between stacked items
+                                                        height: `${itemHeight - 2}px`, // -2 for slight gap between stacked items
+                                                        ...extraStyle
                                                     }}
-                                                    title={`${task.title} (${task.startTime} - ${task.endTime})`}
+                                                    title={`${task.title} (${task.startTime} - ${task.endTime}) ${task.status === 'PLANNED' ? '[PLANNED]' : ''}`}
                                                 >
                                                     {/* Title (Dynamic Size) */}
                                                     <div className={`font-bold leading-tight truncate ${maxLanes > 1 || width < 60 ? 'text-[10px]' : 'text-sm'}`}>
@@ -331,7 +367,7 @@ const MultiDayTimeline = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

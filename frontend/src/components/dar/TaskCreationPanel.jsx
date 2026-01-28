@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
-import { X, Plus, Clock, AlertCircle, Trash2, Calendar } from 'lucide-react';
+import { X, Plus, Clock, AlertCircle, Trash2, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'react-toastify';
 import MiniCalendar from '../dar/MiniCalendar';
 
-const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlightTaskId, initialDate, onDateChange }) => {
+const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attendanceIntervals = [], highlightTaskId, initialDate, onDateChange }) => {
 
 
     // Helper to add minutes to HH:MM time
@@ -46,52 +47,82 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
     };
 
     const [inputs, setInputs] = useState([]);
+    const [hasScrolled, setHasScrolled] = useState(false);
     const today = new Date().toISOString().split('T')[0];
     const isPastDate = date < today;
 
-    // Auto-scroll to highlight
+    // Reset scroll flag when highlighting a new task
     useEffect(() => {
-        if (highlightTaskId) {
+        setHasScrolled(false);
+    }, [highlightTaskId]);
+
+    // Auto-scroll to highlight (Only once per task)
+    useEffect(() => {
+        if (highlightTaskId && !hasScrolled && inputs.length > 0) {
             // Slight delay to ensure DOM is ready
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 const el = document.getElementById(`task-card-${highlightTaskId}`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setHasScrolled(true);
+                }
             }, 100);
+            return () => clearTimeout(timer);
         }
-    }, [highlightTaskId, inputs]);
+    }, [highlightTaskId, inputs, hasScrolled]);
 
     // Initialize defaults on mount or date change
+    const [availableCategories, setAvailableCategories] = useState(['General']);
+
     useEffect(() => {
-        const fetchActivities = async () => {
+        const fetchActivitiesAndSettings = async () => {
             try {
-                const res = await api.get(`/dar/activities/list?date=${date}`);
-                const activities = res.data.data.map(a => ({
+                // Parallel fetch
+                const [actRes, setRes] = await Promise.all([
+                    api.get(`/dar/activities/list?date=${date}`),
+                    api.get('/dar/settings/list')
+                ]);
+
+                // 1. Process Settings
+                if (setRes.data.ok) {
+                    const cats = setRes.data.data.categories;
+                    if (Array.isArray(cats) && cats.length > 0) {
+                        setAvailableCategories(cats);
+                    }
+                }
+
+                // 2. Process Activities
+                const activities = actRes.data.data.map(a => ({
                     id: a.activity_id,
                     title: a.title,
                     description: a.description,
                     startTime: a.start_time ? a.start_time.slice(0, 5) : '',
                     endTime: a.end_time ? a.end_time.slice(0, 5) : '',
-                    category: a.activity_type ? (a.activity_type.charAt(0) + a.activity_type.slice(1).toLowerCase()) : 'General',
+                    // Category normalization
+                    category: a.activity_type ? a.activity_type : 'General',
+                    status: a.status, // Capture status
                     isValid: true,
                     isSaved: true
                 }));
-                // If no activities, maybe add one empty slot?
+
                 setInputs(activities.length > 0 ? activities : [{
                     id: `new-${Date.now()}`,
                     title: '',
                     description: '',
-                    startTime: initialTimeIn, // Start at Time In
+                    startTime: initialTimeIn,
                     endTime: addMinutes(initialTimeIn, 60),
                     isValid: true,
                     error: null,
-                    isSaved: false
+                    isSaved: false,
+                    status: 'PENDING'
                 }]);
+
             } catch (err) {
-                console.error("Failed to fetch activities", err);
+                console.error("Failed to fetch data", err);
             }
         };
 
-        fetchActivities();
+        fetchActivitiesAndSettings();
     }, [initialTimeIn, date]);
 
 
@@ -124,6 +155,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                 endTime: task.endTime,
                 type: 'task',
                 category: task.category || 'General',
+                status: task.status,
                 date: date
             });
         }
@@ -163,7 +195,9 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
         // If it's saved in DB (has valid ID not starting with 'new-'), delete from DB
         const isExisting = task.id && !String(task.id).startsWith('new-');
 
-        if (isExisting) {
+        // Only delete via API if NOT in 'Past Date' mode. 
+        // In Past Date mode, we just remove from UI list -> ProposedDiff will show Delete.
+        if (isExisting && !isPastDate) {
             try {
                 await api.delete(`/dar/activities/delete/${task.id}`);
                 // Notify parent to update preview
@@ -187,69 +221,109 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
             className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col"
         >
 
-            {/* Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-start bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
-                <div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Daily Tasks</h3>
-                    <p className="text-sm text-gray-400 dark:text-gray-400 mt-1">Plan your day effectively</p>
+            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex flex-col gap-4 bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
 
-                    <div className="flex items-center gap-3 mt-3">
-                        <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full w-fit border border-emerald-100 dark:border-emerald-800">
-                            <Clock size={14} />
-                            <span>Time In: {initialTimeIn}</span>
-                        </div>
+                {/* Top Row: Title, Calendar, Close */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Daily Tasks</h3>
 
                         {/* Date Picker using MiniCalendar (Portal) */}
-                        <div className="relative">
+                        <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-800/50 p-1 rounded-lg border border-gray-100 dark:border-slate-700/50">
+                            {/* Prev Day */}
                             <button
-                                ref={buttonRef}
-                                onClick={toggleCalendar}
-                                className="flex items-center gap-2 pl-3 pr-4 py-1.5 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                                onClick={() => {
+                                    const d = new Date(date);
+                                    d.setDate(d.getDate() - 1);
+                                    const newDate = d.toISOString().split('T')[0];
+                                    setDate(newDate);
+                                    if (onDateChange) onDateChange(newDate);
+                                }}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                             >
-                                <Calendar size={14} className="text-indigo-500" />
-                                <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
-                                    {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </span>
+                                <ChevronLeft size={16} />
                             </button>
 
-                            {showCalendar && createPortal(
-                                <div className="fixed inset-0 z-[9999] isolate">
-                                    {/* Backdrop */}
-                                    <div
-                                        className="fixed inset-0 bg-transparent"
-                                        onClick={() => setShowCalendar(false)}
-                                    />
-                                    {/* Popup */}
-                                    <div
-                                        className="fixed z-[10000] drop-shadow-2xl"
-                                        style={{
-                                            top: calendarPos.top,
-                                            left: calendarPos.left,
-                                            maxWidth: '320px'
-                                        }}
-                                    >
-                                        <MiniCalendar
-                                            selectedDate={date}
-                                            disableRange={true}
-                                            onDateSelect={(range) => {
-                                                setDate(range.start);
-                                                setShowCalendar(false);
-                                                if (onDateChange) onDateChange(range.start);
-                                            }}
-                                        />
-                                    </div>
-                                </div>,
-                                document.body
-                            )}
+                            <div className="relative">
+                                <button
+                                    ref={buttonRef}
+                                    onClick={toggleCalendar}
+                                    className="flex items-center gap-2 px-2 py-1 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors group"
+                                >
+                                    <Calendar size={14} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+                                    <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
+                                        {new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                    </span>
+                                </button>
+
+                                {showCalendar && createPortal(
+                                    <div className="fixed inset-0 z-[9999] isolate">
+                                        <div className="fixed inset-0 bg-transparent" onClick={() => setShowCalendar(false)} />
+                                        <div
+                                            className="fixed z-[10000] drop-shadow-2xl"
+                                            style={{ top: calendarPos.top, left: calendarPos.left, maxWidth: '320px' }}
+                                        >
+                                            <MiniCalendar
+                                                selectedDate={date}
+                                                disableRange={true}
+                                                onDateSelect={(range) => {
+                                                    setDate(range.start);
+                                                    setShowCalendar(false);
+                                                    if (onDateChange) onDateChange(range.start);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>,
+                                    document.body
+                                )}
+                            </div>
+
+                            {/* Next Day */}
+                            <button
+                                onClick={() => {
+                                    const d = new Date(date);
+                                    d.setDate(d.getDate() + 1);
+                                    const newDate = d.toISOString().split('T')[0];
+                                    setDate(newDate);
+                                    if (onDateChange) onDateChange(newDate);
+                                }}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                            >
+                                <ChevronRight size={16} />
+                            </button>
                         </div>
                     </div>
+
+                    {/* Close Button (Minimal) */}
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                    >
+                        <X size={18} />
+                    </button>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="p-2 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-full text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white transition-colors"
-                >
-                    <X size={20} />
-                </button>
+
+                {/* Subtitle & Slots */}
+                <div>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 mb-3">Plan your day effectively</p>
+
+                    {/* Active Sessions Grid (Sleek Dynamic Pills) */}
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                        {attendanceIntervals.length > 0 ? (
+                            attendanceIntervals.map((interval, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-full border border-emerald-100 dark:border-emerald-800 transition-colors">
+                                    <Clock size={14} />
+                                    <span className="truncate">Slot: {interval.start} - {interval.end || 'Now'}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 col-span-2">
+                                <Clock size={14} />
+                                <span>Not Timed In</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Task List Form */}
@@ -271,20 +345,37 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                 className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
                             />
 
-                            {/* Category Pill Dropdown (Top Right) */}
+                            {/* PLANNED BADGE */}
+                            {task.status === 'PLANNED' && (
+                                <span className="text-[10px] font-bold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50 flex items-center gap-1">
+                                    <Clock size={10} /> Planned
+                                </span>
+                            )}
+
+                            {/* Category Pill Dropdown (Dynamic Width) */}
                             <div className="relative flex-shrink-0">
+                                {/* Visual Layer (Dictates Layout) */}
+                                <div className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 transition-colors">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                                        {task.category || 'General'}
+                                    </span>
+                                    <div className="text-indigo-500">
+                                        <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Input Layer (Invisible Overlay) */}
                                 <select
                                     value={task.category || 'General'}
                                     onChange={(e) => handleInputChange(i, 'category', e.target.value)}
-                                    className="appearance-none pl-3 pr-6 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 rounded-full border border-indigo-100 dark:border-indigo-800 focus:ring-0 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-right"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
                                 >
-                                    {['General', 'Site Visit', 'Inspection', 'Material', 'Meeting', 'Safety', 'Doc'].map(cat => (
+                                    {availableCategories.map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
                                     ))}
                                 </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-500">
-                                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                                </div>
                             </div>
                         </div>
 
@@ -369,24 +460,64 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                         ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
                         : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
                     onClick={async () => {
-                        // Filter for unsaved or modified tasks
-                        const unsavedTasks = inputs.filter(t => !t.isSaved);
+                        // Filter for unsaved OR (Today + Planned) tasks
+                        // This logic forces 'PLANNED' tasks to be re-submitted for validation when execution day arrives
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const isToday = date === todayStr;
 
-                        if (unsavedTasks.length === 0) {
+                        const tasksToSave = inputs.filter(t =>
+                            !t.isSaved || (isToday && t.status === 'PLANNED')
+                        );
+
+                        if (tasksToSave.length === 0) {
                             onClose();
                             return;
                         }
 
-                        // MOCK REQUEST FLOW
+                        // MOCK REQUEST FLOW -> REAL API CALL
                         if (isPastDate) {
-                            // In real app, we would enable partials.isRequest = true
-                            alert(`Request sent to Admin for approval: ${unsavedTasks.length} changes on ${date}`);
-                            onClose();
+                            try {
+                                const response = await api.post('/dar/requests/create', {
+                                    request_date: date,
+                                    // ideally we should store original state on load, but for now we can just send empty if unknown, 
+                                    // or fetch it here. But simpler: The Admin Diff view will fetch the 'current execution' from DB as 'Original' anyway?
+                                    // Wait, if we send 'original_data' here, we capture the state BEFORE the user made these edits in the UI? 
+                                    // The `inputs` are already modified. 
+                                    // We need to fetch the DB state again to be sure what is "Original"
+
+                                    // Better approach: Let the backend fetch 'original' or we fetch it here.
+                                    // Let's fetch current DB state here to be accurate.
+                                    original_data: (await api.get(`/dar/activities/list?date=${date}`)).data.data.map(a => ({
+                                        id: a.activity_id, // Critical for diff
+                                        title: a.title,
+                                        description: a.description,
+                                        start_time: a.start_time,
+                                        end_time: a.end_time,
+                                        activity_type: a.activity_type
+                                    })),
+                                    proposed_data: inputs.map(t => ({
+                                        id: t.id && !t.id.toString().startsWith('new-') ? t.id : undefined, // Send ID if existing
+                                        title: t.title,
+                                        description: t.description,
+                                        start_time: t.startTime,
+                                        end_time: t.endTime,
+                                        activity_type: (t.category || 'General').toUpperCase()
+                                    }))
+                                });
+
+                                if (response.data.ok) {
+                                    toast.success("Request submitted to Admin!");
+                                    onClose();
+                                }
+                            } catch (err) {
+                                console.error(err);
+                                alert("Failed to submit request: " + (err.response?.data?.message || err.message));
+                            }
                             return;
                         }
 
                         // Submit sequentially
-                        for (const task of unsavedTasks) {
+                        for (const task of tasksToSave) {
                             try {
                                 const payload = {
                                     title: task.title || "Untitled Task",
@@ -395,7 +526,10 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", highlig
                                     end_time: task.endTime,
                                     activity_date: date, // Use selected date
                                     activity_type: (task.category || 'General').toUpperCase(),
-                                    status: 'COMPLETED'
+                                    // Status Logic:
+                                    // If Future -> Backend sets PLANNED
+                                    // If Today -> Send COMPLETED to enforce validation (convert Plan to Record)
+                                    status: date > todayStr ? 'PLANNED' : 'COMPLETED'
                                 };
 
                                 // Check if it's an existing task (numeric ID or ID string not starting with 'new-')

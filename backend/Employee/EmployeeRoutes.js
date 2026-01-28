@@ -1,6 +1,6 @@
 import express from 'express';
 import { knexDB } from '../database.js';
-import { authenticateJWT } from '../AuthAPI/LoginAPI.js';
+import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
 const router = express.Router();

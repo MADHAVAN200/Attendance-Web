@@ -14,13 +14,16 @@ export const sendEmail = async ({ to, subject, text, html, attachments }) => {
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
+                type: 'OAuth2',
+                user: process.env.GMAIL_USER,
+                clientId: process.env.GMAIL_CLIENT_ID,
+                clientSecret: process.env.GMAIL_CLIENT_SECRET,
+                refreshToken: process.env.GMAIL_REFRESH_TOKEN,
             },
         });
 
         const mailOptions = {
-            from: `"Mano Attendance System" <${process.env.EMAIL_USER}>`,
+            from: `"Mano Attendance System" <${process.env.GMAIL_USER}>`,
             to,
             subject,
             text,

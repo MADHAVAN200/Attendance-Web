@@ -13,6 +13,7 @@ import {
     CreditCard,
     FileText,
     ClipboardList,
+    ClipboardCheck,
     Bug
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -57,13 +58,14 @@ const getNavItems = (userType) => {
     const allItems = [
         { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/", roles: ['admin', 'hr', 'employee'] },
         { icon: <Users size={20} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={20} />, text: "My Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
+        { icon: <Calendar size={20} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
         { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
         { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
+        { icon: <ClipboardCheck size={20} />, text: "DAR Admin Panel", to: "/dar-admin", roles: ['admin'] },
         { icon: <ClipboardList size={20} />, text: "Daily Activity Report", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
-        { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
         { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
+        { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
         { icon: <CreditCard size={20} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
     ];
 
@@ -87,7 +89,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
             )}
 
             <aside className={`
-                fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-dark-bg border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex md:flex-col shadow-xl md:shadow-sm
+                fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-dark-bg border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:sticky md:top-0 md:h-screen md:flex md:flex-col shadow-xl md:shadow-sm shrink-0
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
             `}>
                 <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800">
