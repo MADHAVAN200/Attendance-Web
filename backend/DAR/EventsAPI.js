@@ -43,7 +43,8 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
             "*",
             knexDB.raw("DATE_FORMAT(event_date, '%Y-%m-%d') as event_date")
         )
-        .where("org_id", org_id);
+        .where("org_id", org_id)
+        .where("user_id", req.user.user_id);
 
     if (date_from) {
         query.where("event_date", ">=", date_from);
