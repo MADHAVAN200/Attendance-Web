@@ -24,9 +24,11 @@ import {
 import { useMapEvents, useMap } from "react-leaflet";
 import DashboardLayout from '../../components/DashboardLayout';
 import { Map, MapPin, Plus, Search, Navigation, Users, Settings, ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const GeoFencing = () => {
   // --- STATE ---
+  const { avatarTimestamp } = useAuth();
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -611,7 +613,7 @@ const GeoFencing = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-400 overflow-hidden">
                       {user.profile_image_url ? (
-                        <img src={user.profile_image_url} alt={user.user_name} className="w-full h-full object-cover" />
+                        <img src={`${user.profile_image_url}?t=${avatarTimestamp}`} alt={user.user_name} className="w-full h-full object-cover" />
                       ) : (
                         user.user_name.charAt(0)
                       )}

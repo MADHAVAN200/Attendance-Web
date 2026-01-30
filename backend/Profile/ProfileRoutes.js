@@ -41,7 +41,7 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     res.json({
         ok: true,
         message: 'Profile picture updated successfully',
-        avatar_url: uploadResult.url
+        profile_image_url: uploadResult.url
     });
 }));
 
@@ -73,7 +73,7 @@ router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
         ok: true,
         user: {
             ...user,
-            avatar_url: user.profile_image_url
+            profile_image_url: user.profile_image_url
         }
     });
 }));

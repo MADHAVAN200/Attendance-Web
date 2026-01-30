@@ -28,6 +28,7 @@ import {
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 import {
     PieChart, Pie, Cell,
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -35,6 +36,7 @@ import {
 } from 'recharts';
 
 const AttendanceMonitoring = () => {
+    const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
     const [selectedRequest, setSelectedRequest] = useState(1); // For Detail View
@@ -547,7 +549,7 @@ const AttendanceMonitoring = () => {
                                                                     <div className="flex items-center gap-3">
                                                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
                                                                             {item.avatar.startsWith('http') ? (
-                                                                                <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                                <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
                                                                             ) : (
                                                                                 item.avatar
                                                                             )}
@@ -632,7 +634,7 @@ const AttendanceMonitoring = () => {
                                                                 <div className="flex gap-4">
                                                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
                                                                         {item.avatar.startsWith('http') ? (
-                                                                            <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                            <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
                                                                         ) : (
                                                                             item.avatar
                                                                         )}

@@ -106,7 +106,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
       designation: user.desg_name,
       department: user.dept_name,
       org_id: user.org_id,
-      avatar_url: user.profile_image_url
+      profile_image_url: user.profile_image_url
     }
   });
 
@@ -201,7 +201,6 @@ router.get("/me", authenticateJWT, catchAsync(async (req, res) => {
     email: user.email,
     user_type: user.user_type,
     org_id: user.org_id,
-    avatar_url: user.profile_image_url,
     profile_image_url: user.profile_image_url
   });
 }));

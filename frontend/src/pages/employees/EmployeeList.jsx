@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 const EmployeeList = () => {
     const navigate = useNavigate();
+    const { avatarTimestamp } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -180,7 +182,7 @@ const EmployeeList = () => {
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors overflow-hidden">
                                                         {employee.profile_image_url ? (
-                                                            <img src={employee.profile_image_url} alt={employee.name} className="w-full h-full object-cover" />
+                                                            <img src={`${employee.profile_image_url}?t=${avatarTimestamp}`} alt={employee.name} className="w-full h-full object-cover" />
                                                         ) : (
                                                             employee.name.charAt(0)
                                                         )}

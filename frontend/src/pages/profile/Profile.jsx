@@ -13,6 +13,7 @@ const Profile = () => {
     const fileInputRef = useRef(null);
     const [uploading, setUploading] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const [imageTimestamp, setImageTimestamp] = useState(Date.now());
 
     // Fetch full profile data on mount
     useEffect(() => {
@@ -31,6 +32,14 @@ const Profile = () => {
         getProfile();
     }, []);
 
+    // Add cache-busting timestamp to avatar URL to force reload on update
+    const getAvatarUrl = () => {
+        const baseUrl = profileData?.profile_image_url || authUser?.profile_image_url;
+        if (!baseUrl) return null;
+        // Add timestamp to prevent browser caching (only updates when image changes)
+        return `${baseUrl}?t=${imageTimestamp}`;
+    };
+
     const user = {
         name: profileData?.user_name || authUser?.user_name || 'User',
         role: profileData?.user_type || authUser?.user_type || 'Staff',
@@ -38,7 +47,7 @@ const Profile = () => {
         phone: profileData?.phone_no || authUser?.phone_no || 'Not provided',
         department: profileData?.dept_name || 'Not assigned',
         employeeCode: profileData?.user_code || authUser?.user_code || '...',
-        avatar: profileData?.avatar_url || authUser?.avatar_url || authUser?.profile_image_url
+        avatar: getAvatarUrl()
     };
 
     const handleAvatarClick = () => {
@@ -83,12 +92,15 @@ const Profile = () => {
 
             if (res.data.ok) {
                 toast.success('Profile picture updated!');
+
+                // Update timestamp to force image reload (cache-busting)
+                setImageTimestamp(Date.now());
+
                 await fetchUser(); // Refresh global user state
                 // Also update local profile data
                 setProfileData(prev => ({
                     ...prev,
-                    avatar_url: res.data.avatar_url,
-                    profile_image_url: res.data.avatar_url
+                    profile_image_url: res.data.profile_image_url
                 }));
             }
         } catch (error) {
