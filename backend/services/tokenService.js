@@ -53,7 +53,7 @@ export async function verifyRefreshToken(token) {
 
             if (replacementToken) {
                 const timeDiff = new Date() - new Date(replacementToken.created_at);
-                const GRACE_PERIOD_MS = 60 * 1000; // 60 Seconds
+                const GRACE_PERIOD_MS = 300 * 1000; // 5 Minutes (Increased for stability)
 
                 if (timeDiff < GRACE_PERIOD_MS) {
                     console.log(`Grace period active for token reuse. Returning valid replacement.`);

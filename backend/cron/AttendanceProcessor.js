@@ -54,6 +54,14 @@ export async function processHourlyAttendance() {
                 }
             }
 
+            // Validate timezone before usage
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone });
+            } catch (e) {
+                // If invalid (e.g. "Simulated Timezone"), fallback to UTC to prevent crash
+                timeZone = 'UTC';
+            }
+
             // Get Current Time in Target Timezone
             // We use 'en-US' locale hack to get params
             const nowInUserTZ = new Date(new Date().toLocaleString('en-US', { timeZone }));

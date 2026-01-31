@@ -44,13 +44,16 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         req.user = {
             ...decoded,
             id: user.user_id || user.id, // standardized ID accessor
-            user_type: user.user_type,
+            user_type: user.user_type ? user.user_type.toLowerCase() : 'employee',
             org_id: user.org_id || null
         };
 
         next();
 
     } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(403).json({ message: "Forbidden: Token expired" });
+        }
         console.error("Auth Middleware Error:", err);
         return res.status(403).json({ message: "Forbidden: Invalid or expired token" });
     }
