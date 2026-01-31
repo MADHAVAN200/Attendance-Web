@@ -229,6 +229,7 @@ const Attendance = () => {
     };
 
     const handleDownloadReport = async () => {
+        const toastId = toast.loading("Generating report...");
         try {
             const data = await attendanceService.downloadMyReport(reportMonth);
             const url = window.URL.createObjectURL(new Blob([data]));
@@ -238,9 +239,9 @@ const Attendance = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success("Report downloaded");
+            toast.update(toastId, { render: "Report downloaded", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
-            toast.error(error.message);
+            toast.update(toastId, { render: error.message, type: "error", isLoading: false, autoClose: 3000 });
         }
     };
 

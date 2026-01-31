@@ -348,17 +348,17 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
         let pdfCols, pdfRows;
 
         if (type === "matrix_daily" || type === "attendance_detailed") {
-            pdfCols = ["Date", "Name", "Dept", "Shift", "Time In", "Time Out", "Work Hrs", "Status"];
             if (type === "attendance_detailed") {
                 const detailedRecords = await knexDB("attendance_records as ar")
                     .join("users as u", "ar.user_id", "u.user_id")
                     .leftJoin("departments as d", "u.dept_id", "d.dept_id")
                     .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
-                    .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
+                    .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address")
                     .where("ar.org_id", org_id)
                     .whereRaw("DATE(ar.time_in) >= ?", [startDate])
                     .whereRaw("DATE(ar.time_in) <= ?", [endDate])
                     .orderBy("ar.time_in", "asc");
+                pdfCols = ["Date", "Name", "Dept", "Shift", "In Time", "Out Time", "Work Hrs", "Status", "In Location", "Out Location"];
                 pdfRows = detailedRecords.map(r => [
                     new Date(r.time_in).toLocaleDateString(),
                     r.user_name,
@@ -367,9 +367,12 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                     r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                     r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                     calculateWorkHours(r.time_in, r.time_out),
-                    r.status
+                    r.status,
+                    r.time_in_address || "-",
+                    r.time_out_address || "-"
                 ]);
             } else {
+                pdfCols = ["Name", "Dept", "In Time", "Out Time", "Work Hrs", "Status", "In Location", "Out Location"];
                 pdfRows = users.map(u => {
                     const rec = records.find(r => r.user_id === u.user_id);
                     return [
@@ -378,7 +381,9 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                         rec?.time_in ? new Date(rec.time_in).toLocaleTimeString() : "-",
                         rec?.time_out ? new Date(rec.time_out).toLocaleTimeString() : "-",
                         calculateWorkHours(rec?.time_in, rec?.time_out),
-                        rec?.status || "Absent"
+                        rec?.status || "Absent",
+                        rec?.time_in_address || "-",
+                        rec?.time_out_address || "-"
                     ];
                 });
             }
@@ -468,7 +473,9 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
             { header: "Time In", key: "time_in", width: 15 },
             { header: "Time Out", key: "time_out", width: 15 },
             { header: "Work Hours", key: "work_hrs", width: 12 },
-            { header: "Status", key: "status", width: 15 }
+            { header: "Status", key: "status", width: 15 },
+            { header: "In Location", key: "time_in_address", width: 40 },
+            { header: "Out Location", key: "time_out_address", width: 40 }
         ];
         users.forEach(u => {
             const rec = records.find(r => r.user_id === u.user_id);
@@ -478,7 +485,9 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                 time_in: rec?.time_in ? new Date(rec.time_in).toLocaleTimeString() : "-",
                 time_out: rec?.time_out ? new Date(rec.time_out).toLocaleTimeString() : "-",
                 work_hrs: calculateWorkHours(rec?.time_in, rec?.time_out),
-                status: rec?.status || "Absent"
+                status: rec?.status || "Absent",
+                time_in_address: rec?.time_in_address || "-",
+                time_out_address: rec?.time_out_address || "-"
             });
         });
     } else if (type === "attendance_detailed") {
@@ -490,13 +499,15 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
             { header: "Time In", key: "time_in", width: 15 },
             { header: "Time Out", key: "time_out", width: 15 },
             { header: "Work Hrs", key: "work_hrs", width: 12 },
-            { header: "Status", key: "status", width: 15 }
+            { header: "Status", key: "status", width: 15 },
+            { header: "In Location", key: "time_in_address", width: 40 },
+            { header: "Out Location", key: "time_out_address", width: 40 }
         ];
         const detailedRecords = await knexDB("attendance_records as ar")
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
             .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
-            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
+            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
@@ -512,7 +523,9 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                 time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                 time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                 work_hrs: calculateWorkHours(r.time_in, r.time_out),
-                status: r.status
+                status: r.status,
+                time_in_address: r.time_in_address || "-",
+                time_out_address: r.time_out_address || "-"
             });
         });
     } else if (type === "attendance_summary") {

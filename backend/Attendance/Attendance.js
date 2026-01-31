@@ -9,6 +9,7 @@ import { getEventSource } from "../utils/clientInfo.js";
 import catchAsync from "../utils/catchAsync.js";
 import { PolicyService } from "./PolicyEngine.js";
 import { verifyUserGeofence } from "./Geofencing.js";
+import ExcelJS from "exceljs";
 
 const router = express.Router();
 const upload = multer(); // store files in memory
@@ -657,5 +658,77 @@ router.patch(
     }
   }
 );
+
+
+router.get("/records/export", authenticateJWT, catchAsync(async (req, res) => {
+  const { month } = req.query;
+  const user_id = req.user.user_id;
+  const org_id = req.user.org_id;
+
+  if (!month) {
+    return res.status(400).json({ ok: false, message: "Month (YYYY-MM) is required" });
+  }
+
+  const [yearStr, monthStr] = month.split("-");
+  const year = parseInt(yearStr);
+  const monthNum = parseInt(monthStr);
+
+  if (isNaN(year) || isNaN(monthNum)) {
+    return res.status(400).json({ ok: false, message: "Invalid month format. Use YYYY-MM." });
+  }
+
+  const startDate = `${month}-01`;
+  const lastDay = new Date(year, monthNum, 0).getDate();
+  const endDate = `${year}-${String(monthNum).padStart(2, '0')}-${lastDay}`;
+
+  const records = await knexDB("attendance_records")
+    .where({ user_id, org_id })
+    .whereRaw("DATE(time_in) >= ?", [startDate])
+    .whereRaw("DATE(time_in) <= ?", [endDate])
+    .orderBy("time_in", "asc");
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("My Attendance");
+
+  worksheet.columns = [
+
+    { header: "Date", key: "date", width: 12 },
+    { header: "Time In", key: "time_in", width: 15 },
+    { header: "Time Out", key: "time_out", width: 15 },
+    { header: "Total Hours", key: "total_hours", width: 12 },
+    { header: "Status", key: "status", width: 15 },
+    { header: "Late (Mins)", key: "late_minutes", width: 12 },
+    { header: "Location (In)", key: "location", width: 40 },
+    { header: "Location (Out)", key: "location_out", width: 40 }
+  ];
+
+  records.forEach(r => {
+    let duration = "0.00";
+    if (r.time_in && r.time_out) {
+      const diffMs = new Date(r.time_out) - new Date(r.time_in);
+      if (diffMs > 0) duration = (diffMs / (1000 * 60 * 60)).toFixed(2);
+    }
+
+    worksheet.addRow({
+      date: new Date(r.time_in).toLocaleDateString(),
+      time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
+      time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
+      total_hours: duration,
+      status: r.late_minutes > 0 ? "Late" : "On Time",
+      late_minutes: r.late_minutes || 0,
+      location: r.time_in_address || "-",
+      location_out: r.time_out_address || "-"
+    });
+  });
+
+  // Style Header
+  worksheet.getRow(1).font = { bold: true };
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename=Attendance_${month}_${req.user.user_name.replace(/\s+/g, '_')}.xlsx`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+}));
 
 export default router;

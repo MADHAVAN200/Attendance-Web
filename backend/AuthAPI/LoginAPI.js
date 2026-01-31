@@ -21,7 +21,7 @@ import { authenticateJWT } from "../middleware/auth.js";
 
 
 // Login route
-router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) => {
+router.post("/login", authLimiter, catchAsync(async (req, res) => {
   const { user_input, user_password } = req.body;
 
   if (!user_input || !user_password) {
