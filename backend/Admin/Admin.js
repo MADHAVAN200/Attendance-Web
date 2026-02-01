@@ -173,8 +173,8 @@ router.get("/shifts", authenticateJWT, catchAsync(async (req, res) => {
 
 // CREATE new department
 router.post("/departments", authenticateJWT, catchAsync(async (req, res) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can create departments", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can create departments", 403);
   }
   const { dept_name } = req.body;
   if (!dept_name) throw new AppError("Department name is required", 400);
@@ -196,8 +196,8 @@ router.post("/departments", authenticateJWT, catchAsync(async (req, res) => {
 
 // CREATE new designation
 router.post("/designations", authenticateJWT, catchAsync(async (req, res) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can create designations", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can create designations", 403);
   }
   const { desg_name } = req.body;
   if (!desg_name) throw new AppError("Designation name is required", 400);

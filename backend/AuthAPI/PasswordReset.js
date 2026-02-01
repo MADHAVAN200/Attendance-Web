@@ -26,10 +26,11 @@ router.post("/forgot-password", authLimiter, catchAsync(async (req, res) => {
     console.log(`[DEBUG] User found in DB: ${!!user}`);
 
     // Enumeration safe
+    // Enumeration safe - DISABLED by user request
     if (!user) {
-        console.log(`[DEBUG] User not found, returning generic success message.`);
-        return res.status(200).json({
-            message: "If your email is registered, you will receive an OTP shortly."
+        console.log(`[DEBUG] User not found, returning 404.`);
+        return res.status(404).json({
+            message: "User does not exist"
         });
     }
 

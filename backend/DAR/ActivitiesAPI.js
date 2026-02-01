@@ -208,7 +208,7 @@ router.get('/settings', authenticateJWT, catchAsync(async (req, res) => {
 router.get('/admin/all', authenticateJWT, catchAsync(async (req, res) => {
     const { org_id, user_type } = req.user;
 
-    if (user_type !== 'admin') {
+    if (user_type !== 'admin' && user_type !== 'hr') {
         return res.status(403).json({ ok: false, message: 'Access denied. Admins only.' });
     }
 

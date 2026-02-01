@@ -230,7 +230,7 @@ router.post("/simulate/timeout", authenticateJWT, upload.single("image"),
 // Admin attendance records and images with admin role check
 router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
   // try removed
-  if (req.user.user_type !== "admin" && req.user.user_type !== "HR") {
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
     return res.status(403).json({ ok: false, message: "Access denied" });
   }
 
