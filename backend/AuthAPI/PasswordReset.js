@@ -37,19 +37,208 @@ router.post("/forgot-password", authLimiter, catchAsync(async (req, res) => {
     const otp = OtpService.generateOtp(email, req);
     console.log(`[DEBUG] Generated OTP for ${email}: ${otp}`);
 
+    const userName = user?.user_name || 'there';
+
+    const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+    background-color: #F2F2F2;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.wrapper {
+    width: 100%;
+    background-color: #F2F2F2;
+}
+
+.container {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: #FFFFFF;
+}
+
+.header {
+    background-color: #2F3A45;
+    padding: 26px 20px;
+    text-align: center;
+}
+.header h1 {
+    color: #FFFFFF;
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+}
+.header p {
+    color: #D1D5DB;
+    margin-top: 6px;
+    font-size: 14px;
+}
+
+.content {
+    padding: 26px 20px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    background-color: #ede9fe;
+    color: #7c3aed;
+    text-transform: uppercase;
+}
+
+.date {
+    font-size: 14px;
+    color: #6B7280;
+    margin-left: 12px;
+}
+
+h2 {
+    color: #1A1A1A;
+    font-size: 20px;
+    margin-bottom: 16px;
+}
+
+.description-box,
+.info-card {
+    background-color: #FFFFFF;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4B5563;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.value {
+    font-size: 15px;
+    color: #1A1A1A;
+    line-height: 1.6;
+}
+
+.divider {
+    height: 1px;
+    background-color: #D1D5DB;
+    margin: 24px 0;
+}
+
+.info-row {
+    margin-bottom: 12px;
+}
+
+.footer {
+    background-color: #F2F2F2;
+    padding: 16px;
+    text-align: center;
+    border-top: 1px solid #D1D5DB;
+}
+.footer p {
+    font-size: 13px;
+    color: #6B7280;
+    margin: 4px 0;
+}
+
+/* MOBILE */
+@media only screen and (max-width: 480px) {
+    .content {
+        padding: 18px 14px;
+    }
+    h2 {
+        font-size: 18px;
+    }
+    .header h1 {
+        font-size: 20px;
+    }
+    .date {
+        display: block;
+        margin-left: 0;
+        margin-top: 6px;
+    }
+}
+</style>
+</head>
+
+<body>
+<div class="wrapper">
+<div class="container">
+
+    <div class="header">
+        <h1>Secure Your Account</h1>
+        <p>Mano Attendance System</p>
+    </div>
+
+    <div class="content">
+        <div style="margin-bottom: 18px;">
+            <span class="badge">Verification Code</span>
+            <span class="date">Valid for 5 minutes</span>
+        </div>
+
+        <h2>Hi ${userName},</h2>
+        
+        <p style="color: #374151; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+            We received a request to reset your password. No worries, it happens! Please use the following code to continue:
+        </p>
+
+        <div class="description-box" style="padding: 30px 16px;">
+            <div class="value" style="font-size: 42px; font-weight: 900; color: #4F46E5; letter-spacing: 12px; margin: 0; text-align: center;">
+                ${otp}
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="info-card">
+            <div class="info-row">
+                <div class="label">Sent To:</div>
+                <div class="value">${email}</div>
+            </div>
+            <div class="info-row">
+                <div class="label" style="color: #6366f1;">Safety Check:</div>
+                <div class="value" style="font-size: 13px; color: #4B5563;">
+                    If you didn't ask for this reset, you can safely ignore this email. Your password won't change unless you use the code above.
+                </div>
+            </div>
+            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #E5E7EB; text-align: right;">
+                <span style="font-size: 10px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">Request ID: ${Date.now().toString().slice(-6)}-${otp}</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p><strong>Mano Attendance System</strong></p>
+        <p>This is an automated mail sent to protect your account. Please do not reply.</p>
+    </div>
+
+    </div>
+</div>
+</div>
+</body>
+</html>
+    `;
+
     const emailResult = await sendEmail({
         to: email,
-        subject: "Password Reset OTP - Mano Attendance System",
-        text: `Your OTP for password reset is: ${otp}. It expires in 5 minutes.`,
-        html: `
-      <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2>Password Reset Request</h2>
-        <p>You requested a password reset. Please use the following OTP:</p>
-        <h1 style="color: #4F46E5; letter-spacing: 5px;">${otp}</h1>
-        <p>This code will expire in 5 minutes.</p>
-        <p>If you did not request this, please ignore this email.</p>
-      </div>
-    `
+        subject: "Secure your account - Mano Attendance System",
+        text: `Hi ${userName}, your verification code is ${otp}. It remains valid for 5 minutes.`,
+        html: emailHtml
     });
 
 
