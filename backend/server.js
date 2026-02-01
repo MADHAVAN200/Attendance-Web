@@ -36,6 +36,8 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'https://localhost:5173',
   'https://127.0.0.1:5173',
+  'http://localhost:5174', // Vite fallback port
+  'https://localhost:5174', // Vite fallback port
   process.env.FRONTEND_URL,
 ];
 
@@ -96,6 +98,11 @@ app.use('/dar/activities', ActivitiesAPI);
 app.use('/dar/requests', RequestsAPI);
 app.use('/dar/settings', SettingsAPI);
 app.use('/profile', ProfileRoutes);
+
+// Payment Routes
+import PaymentRoutes from './Payment/paymentRoutes.js';
+app.use('/api/payment', PaymentRoutes);
+
 app.get('/', (req, res) => {
   res.send('Backend is running 🚀');
 });
