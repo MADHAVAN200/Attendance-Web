@@ -114,8 +114,15 @@ const Attendance = () => {
     const [corrDate, setCorrDate] = useState('');
     const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
     const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
+    const [corrMethod, setCorrMethod] = useState('fix'); // 'fix' | 'add_session' | 'reset'
+    
+    // Inputs for 'fix' and 'reset'
     const [corrIn, setCorrIn] = useState('');
     const [corrOut, setCorrOut] = useState('');
+    
+    // Inputs for 'add_session'
+    const [corrSessions, setCorrSessions] = useState([{ time_in: '', time_out: '' }]);
+
     const [corrReason, setCorrReason] = useState('');
     const [existingRecord, setExistingRecord] = useState(null); // Data for selected date
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
@@ -312,34 +319,50 @@ const Attendance = () => {
 
         setIsSubmittingCorrection(true);
         try {
-            // For Missed Punch, backend might require location_id or logic to handle it.
-            // Impl Plan noted potential issue with attendance_id.
-            // We will send what we have. If backend needs attendance_id, it might fail for missed punch if not handled.
-            // Assuming backend (Attendance.js:375) allows insert if correction_type is provided?
-            // Actually backend check: if (!attendance_id && !location_id) ... for missed punch.
-            // We don't have location_id easily here unless we pick one.
-            // Let's try sending without attendance_id first.
-
-            await attendanceService.submitCorrectionRequest({
-                // specific attendance_id if available to link directly?
-                attendance_id: existingRecord?.attendance_id || null,
+            const payload = {
                 correction_type: corrType === 'Other' ? corrOtherType : corrType,
                 request_date: corrDate,
-                requested_time_in: corrIn || null,
-                requested_time_out: corrOut || null,
                 reason: corrReason,
-                // Passing a dummy location_id if needed, or hope backend logic allows null if typ is correction?
-                // Backend: if (!attendance_id && !location_id) return error.
-                location_id: 1 // Default/Main Office fallback if allowed, or we need to fetch locations.
-            });
+                correction_method: corrMethod
+            };
+
+            // 1. FIX MODE
+            if (corrMethod === 'fix') {
+                payload.requested_time_in = corrIn || null;
+                payload.requested_time_out = corrOut || null;
+            }
+            // 2. ADD SESSION MODE
+            else if (corrMethod === 'add_session') {
+                 // Filter out empty sessions
+                const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
+                if (validSessions.length === 0) {
+                    throw new Error("Please add at least one valid session (Time In & Time Out)");
+                }
+                payload.sessions = validSessions;
+            }
+            // 3. RESET MODE
+            else if (corrMethod === 'reset') {
+                 if (!corrIn || !corrOut) {
+                    throw new Error("New Time In and Time Out are required for Reset.");
+                 }
+                 payload.requested_time_in = corrIn;
+                 payload.requested_time_out = corrOut;
+            }
+
+            await attendanceService.submitCorrectionRequest(payload);
+            
             toast.success("Correction request submitted!");
+            // Reset Form
             setCorrDate('');
             setCorrIn('');
             setCorrOut('');
             setCorrReason('');
             setCorrType('Correction');
             setCorrOtherType('');
+            setCorrMethod('fix');
+            setCorrSessions([{ time_in: '', time_out: '' }]);
             setExistingRecord(null);
+            
             fetchCorrectionHistory();
         } catch (error) {
             console.error(error);
@@ -996,26 +1019,112 @@ const Attendance = () => {
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Time In</label>
-                                                <input
-                                                    type="time"
-                                                    value={corrIn}
-                                                    onChange={(e) => setCorrIn(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Time Out</label>
-                                                <input
-                                                    type="time"
-                                                    value={corrOut}
-                                                    onChange={(e) => setCorrOut(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                                                />
+                                        {/* Correction Method Selector */}
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Method</label>
+                                            <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                {['fix', 'add_session', 'reset'].map(m => (
+                                                    <button
+                                                        key={m}
+                                                        type="button"
+                                                        onClick={() => setCorrMethod(m)}
+                                                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${corrMethod === m
+                                                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                                            }`}
+                                                    >
+                                                        {m === 'fix' ? 'Fix' : m === 'add_session' ? 'Add Session' : 'Reset Day'}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
+
+                                        {/* --- DYNAMIC FIELDS BASED ON METHOD --- */}
+
+                                        {/* 1. FIX or RESET MODE */}
+                                        {(corrMethod === 'fix' || corrMethod === 'reset') && (
+                                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                                <div>
+                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                                                        {corrMethod === 'reset' ? 'New Time In' : 'Time In'}
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        value={corrIn}
+                                                        onChange={(e) => setCorrIn(e.target.value)}
+                                                        required={corrMethod === 'reset'}
+                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                                                        {corrMethod === 'reset' ? 'New Time Out' : 'Time Out'}
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        value={corrOut}
+                                                        onChange={(e) => setCorrOut(e.target.value)}
+                                                        required={corrMethod === 'reset'}
+                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 2. ADD SESSION MODE */}
+                                        {corrMethod === 'add_session' && (
+                                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Sessions</label>
+                                                {corrSessions.map((session, idx) => (
+                                                    <div key={idx} className="flex gap-2 items-center">
+                                                        <div className="grid grid-cols-2 gap-2 flex-1">
+                                                            <input
+                                                                type="time"
+                                                                placeholder="In"
+                                                                value={session.time_in}
+                                                                onChange={(e) => {
+                                                                    const newSessions = [...corrSessions];
+                                                                    newSessions[idx].time_in = e.target.value;
+                                                                    setCorrSessions(newSessions);
+                                                                }}
+                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                            />
+                                                            <input
+                                                                type="time"
+                                                                placeholder="Out"
+                                                                value={session.time_out}
+                                                                onChange={(e) => {
+                                                                    const newSessions = [...corrSessions];
+                                                                    newSessions[idx].time_out = e.target.value;
+                                                                    setCorrSessions(newSessions);
+                                                                }}
+                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                            />
+                                                        </div>
+                                                        {corrSessions.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCorrSessions(corrSessions.filter((_, i) => i !== idx));
+                                                                }}
+                                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                            >
+                                                                <X size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
+                                                    className="w-full py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                                >
+                                                    + Add Another Session
+                                                </button>
+                                            </div>
+                                        )}
+
+
 
                                         <div>
                                             <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Reason</label>

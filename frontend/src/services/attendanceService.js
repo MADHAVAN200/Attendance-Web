@@ -123,11 +123,12 @@ export const attendanceService = {
     },
 
     // Update correction status (Admin only)
-    async updateCorrectionStatus(acr_id, status, review_comments) {
+    async updateCorrectionStatus(acr_id, status, review_comments, overrides = {}) {
         try {
             const res = await api.patch(`${API_BASE_URL}/correct-request/${acr_id}`, {
                 status,
-                review_comments
+                review_comments,
+                ...overrides
             });
             return res.data;
         } catch (error) {

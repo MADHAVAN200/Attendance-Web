@@ -373,5 +373,71 @@ export const AttendanceService = {
             total_hours_today: sessionContext.total_hours_today,
             message: "Timed out successfully",
         };
+    },
+
+    /**
+     * Sync Daily Attendance
+     * Re-calculates and updates daily_attendance based on current records
+     */
+    syncDailyAttendance: async (user_id, dateStr, overrides = {}) => {
+        try {
+            // 1. Fetch all records for the day
+            const records = await knexDB("attendance_records")
+                .where({ user_id })
+                .whereRaw("DATE(time_in) = ?", [dateStr])
+                .orderBy("time_in", "asc");
+
+            if (!records.length) return;
+
+            const firstRec = records[0];
+            const lastRec = records[records.length - 1];
+
+            // 2. Calculate Hours
+            let totalMs = 0;
+            records.forEach(r => {
+                if (r.time_in && r.time_out) {
+                    totalMs += (new Date(r.time_out) - new Date(r.time_in));
+                }
+            });
+            const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
+
+            // 3. Get Rules for Overtime 
+            let overtimeHours = 0;
+            try {
+                const shift = await getUserShift(user_id);
+                // PolicyService is imported
+                const rules = PolicyService.getRulesFromShift(shift);
+                const threshold = rules.overtime?.threshold || 8;
+                if (totalHours > threshold) {
+                    overtimeHours = totalHours - threshold;
+                }
+            } catch (e) {
+                // Ignore missing shift/policy errors during sync
+            }
+
+            const getTimeStr = (d) => {
+                if (!d) return null;
+                try {
+                    return new Date(d).toISOString().split('T')[1].split('.')[0];
+                } catch (e) { return null; }
+            };
+
+            const updateData = {
+                first_in: getTimeStr(firstRec.time_in),
+                last_out: getTimeStr(lastRec.time_out),
+                total_hours: totalHours,
+                overtime_hours: overtimeHours,
+                updated_at: knexDB.fn.now(),
+                ...overrides
+            };
+
+            await knexDB("daily_attendance")
+                .where({ user_id, date: dateStr })
+                .update(updateData);
+
+        } catch (err) {
+            console.error("Sync Daily Attendance Error:", err);
+            throw err;
+        }
     }
 };
