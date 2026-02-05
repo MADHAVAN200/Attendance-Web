@@ -173,25 +173,26 @@ const LeaveApplication = () => {
         }
     };
 
-    const handleAdminAction = async () => {
+    const handleAdminAction = async (status) => {
         if (!selectedLeave) return;
+        const actionStatus = status || adminAction.status;
         try {
             const payload = {
-                status: adminAction.status.charAt(0).toUpperCase() + adminAction.status.slice(1), // Capitalize for backend
+                status: actionStatus.charAt(0).toUpperCase() + actionStatus.slice(1), // Capitalize for backend
                 admin_comment: adminAction.remarks
             };
 
             const res = await api.put(`/leaves/admin/status/${selectedLeave.lr_id}`, payload);
             if (res.data.ok) {
-                toast.success(`Leave request ${adminAction.status.toLowerCase()}`);
+                toast.success(`Leave request ${actionStatus.toLowerCase()}`);
                 // Update local state
                 const updatedLeaves = leaves.map(l =>
                     l.lr_id === selectedLeave.lr_id
-                        ? { ...l, status: adminAction.status.toLowerCase(), admin_comment: adminAction.remarks }
+                        ? { ...l, status: actionStatus.toLowerCase(), admin_comment: adminAction.remarks }
                         : l
                 );
                 setLeaves(updatedLeaves);
-                setSelectedLeave({ ...selectedLeave, status: adminAction.status.toLowerCase(), admin_comment: adminAction.remarks });
+                setSelectedLeave({ ...selectedLeave, status: actionStatus.toLowerCase(), admin_comment: adminAction.remarks });
                 setAdminAction({ status: '', remarks: '', payType: 'Paid', payPercentage: 100 });
             }
         } catch (error) {
@@ -405,36 +406,17 @@ const LeaveApplication = () => {
 
                                                     <div className="flex gap-2">
                                                         <button
-                                                            onClick={() => {
-                                                                if (adminAction.status === 'approved') {
-                                                                    handleAdminAction();
-                                                                } else {
-                                                                    setAdminAction({ ...adminAction, status: 'approved' });
-                                                                }
-                                                            }}
-                                                            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${adminAction.status === 'approved'
-                                                                ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700'
-                                                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                                                }`}
+                                                            onClick={() => handleAdminAction('approved')}
+                                                            className="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-md hover:bg-emerald-700"
                                                         >
-                                                            <CheckCircle size={16} /> {adminAction.status === 'approved' ? 'Confirm Approve' : 'Approve'}
+                                                            <CheckCircle size={16} /> Approve
                                                         </button>
                                                         <button
-                                                            onClick={() => {
-                                                                if (adminAction.status === 'rejected') {
-                                                                    handleAdminAction();
-                                                                } else {
-                                                                    setAdminAction({ ...adminAction, status: 'rejected' });
-                                                                }
-                                                            }}
-                                                            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${adminAction.status === 'rejected'
-                                                                ? 'bg-red-600 text-white shadow-md hover:bg-red-700'
-                                                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                                                }`}
+                                                            onClick={() => handleAdminAction('rejected')}
+                                                            className="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-red-600 text-white shadow-md hover:bg-red-700"
                                                         >
-                                                            <XCircle size={16} /> {adminAction.status === 'rejected' ? 'Confirm Reject' : 'Reject'}
+                                                            <XCircle size={16} /> Reject
                                                         </button>
-
                                                     </div>
                                                 </div>
                                             ) : (

@@ -14,7 +14,8 @@ import {
     Users,
     X,
     Building, // Import building icon
-    Clock // Import Clock icon for Shifts
+    Clock, // Import Clock icon for Shifts
+    Edit // Import Edit icon
 } from 'lucide-react';
 import MinimalSelect from '../../components/MinimalSelect';
 import {
@@ -556,7 +557,59 @@ const DARAdmin = ({ embedded = false }) => {
                 })),
                 status: r.status
             }));
-            setRequests(mapped);
+            // Mock Data for demonstration
+            const mockRequests = [
+                {
+                    id: 'mock-1',
+                    user: 'Rohan Sharma',
+                    date: '2024-02-02',
+                    changes: 3,
+                    employeeName: 'Rohan Sharma',
+                    originalTasks: [
+                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '11:00', category: 'SITE_VISIT' },
+                        { id: 't2', title: 'Material Handover', startTime: '11:30', endTime: '12:30', category: 'LOGISTICS' },
+                        { id: 't3', title: 'Client Call', startTime: '14:00', endTime: '15:00', category: 'MEETING' }
+                    ],
+                    proposedTasks: [
+                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '12:00', category: 'SITE_VISIT' }, // Extended
+                        { id: 't3', title: 'Client Call', startTime: '15:00', endTime: '16:00', category: 'MEETING' }, // Moved
+                        { id: 't4', title: 'Safety Briefing', startTime: '12:00', endTime: '12:30', category: 'MISC' } // New
+                    ],
+                    status: 'pending'
+                },
+                {
+                    id: 'mock-2',
+                    user: 'Priya Patel',
+                    date: '2024-02-01',
+                    changes: 1,
+                    employeeName: 'Priya Patel',
+                    originalTasks: [
+                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '13:00', category: 'OFFICE' }
+                    ],
+                    proposedTasks: [
+                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '14:00', category: 'OFFICE' } // Extended
+                    ],
+                    status: 'pending'
+                },
+                {
+                    id: 'mock-3', // The one "just rejected" - restored
+                    user: 'Amit Singh',
+                    date: '2024-02-03',
+                    changes: 2,
+                    employeeName: 'Amit Singh',
+                    originalTasks: [
+                        { id: 'a1', title: 'Morning Standup', startTime: '09:00', endTime: '09:30', category: 'MEETING' },
+                        { id: 'a2', title: 'Inventory Check', startTime: '10:00', endTime: '12:00', category: 'INVENTORY' }
+                    ],
+                    proposedTasks: [
+                        { id: 'a1', title: 'Morning Standup', startTime: '09:30', endTime: '10:00', category: 'MEETING' },
+                        // Inventory Check Deleted
+                    ],
+                    status: 'pending'
+                }
+            ];
+
+            setRequests([...mockRequests, ...mapped]);
         } catch (err) {
             console.error(err);
             toast.error("Failed to load requests");
@@ -567,8 +620,9 @@ const DARAdmin = ({ embedded = false }) => {
 
     useEffect(() => {
         if (activeTab === 'insights') {
-            fetchRequests();
             fetchInsights();
+        } else if (activeTab === 'requests') {
+            fetchRequests();
         } else if (activeTab === 'settings') {
             fetchSettings();
         } else if (activeTab === 'data') {
@@ -697,9 +751,9 @@ const DARAdmin = ({ embedded = false }) => {
                 {/* Tabs Header - Styled like Attendance.jsx */}
                 <div className="border-b border-slate-200 dark:border-slate-700 flex gap-12 px-2">
                     {[
-                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Insights', type: 'tab' },
+                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Live Dashboard', type: 'tab' },
+                        { id: 'requests', icon: <Edit size={16} />, label: 'Edit Requests', type: 'tab' },
                         { id: 'data', icon: <FileText size={16} />, label: 'Master Data', type: 'tab' },
-                        { id: 'settings', icon: <Settings size={16} />, label: 'Configuration', type: 'modal' },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -708,6 +762,7 @@ const DARAdmin = ({ embedded = false }) => {
                                     setShowSettings(true);
                                 } else {
                                     setActiveTab(tab.id);
+                                    setSelectedRequest(null);
                                 }
                             }}
                             className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tab.id
@@ -1072,10 +1127,135 @@ const DARAdmin = ({ embedded = false }) => {
                     )}
 
 
-                    {/* --- INSIGHTS TAB --- */}
+                    {/* --- REQUESTS TAB --- */}
+                    {activeTab === 'requests' && (
+                        <div className="flex h-full gap-6 pb-6">
+                            {/* Left: List */}
+                            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 dark:border-slate-700 space-y-3 bg-white dark:bg-dark-card z-10">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-bold text-slate-800 dark:text-white">Requests</h3>
+                                        <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-bold">{requests.length} Total</span>
+                                    </div>
+                                    <div className="relative">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by employee name..."
+                                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                                    {loadingRequests ? (
+                                        <div className="text-center py-10 text-slate-400">Loading requests...</div>
+                                    ) : requests.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400 italic">No requests found.</div>
+                                    ) : (
+                                        requests.map(req => (
+                                            <div
+                                                key={req.id}
+                                                onClick={() => setSelectedRequest(req)}
+                                                className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${selectedRequest?.id === req.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200'}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>{req.user}</span>
+                                                    <span className="text-[10px] text-slate-400 font-mono">{req.date}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mb-2">{req.changes} changes proposed</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{req.status}</span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right: Details */}
+                            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col relative">
+                                {selectedRequest ? (
+                                    <RequestReviewModal
+                                        isOpen={true}
+                                        onClose={() => setSelectedRequest(null)}
+                                        request={selectedRequest}
+                                        onApprove={() => handleApproveRequest(selectedRequest.id)}
+                                        onReject={() => handleRejectRequest(selectedRequest.id)}
+                                        inline={true}
+                                    />
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
+                                        <FileText size={48} className="mb-4 opacity-50" />
+                                        <span className="text-lg font-medium">Select a request to view details</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* --- INSIGHTS TAB --- */}
                     {activeTab === 'insights' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto pb-10 custom-scrollbar">
+
+                            {/* Chart 3: Pending DAR Edit Requests */}
+                            {/* Configurations Card */}
+                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col lg:col-span-2">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <Settings size={20} className="text-indigo-600" /> Configurations
+                                    </h3>
+                                    <button
+                                        onClick={handleSaveSettings}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors"
+                                    >
+                                        <Save size={14} /> Save
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 flex flex-col">
+                                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Activity Categories</h4>
+                                    <p className="text-xs text-slate-500 mb-4">Manage standard activities available for employees.</p>
+
+                                    <div className="flex gap-2 mb-4">
+                                        <input
+                                            type="text"
+                                            value={newCat}
+                                            onChange={(e) => setNewCat(e.target.value)}
+                                            placeholder="Enter new category..."
+                                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddCategory}
+                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
+                                        >
+                                            <Plus size={18} />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[300px]">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {categories.map((cat, i) => (
+                                                <div key={i} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors">
+                                                    <span className="font-medium text-xs text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
+                                                    <button
+                                                        onClick={() => handleRemoveCategory(cat)}
+                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {categories.length === 0 && (
+                                                <div className="col-span-full flex flex-col items-center justify-center p-6 text-slate-400 italic text-sm">
+                                                    No categories defined.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Row 1: Key Metrics (Condensed) */}
                             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1154,50 +1334,21 @@ const DARAdmin = ({ embedded = false }) => {
                                 </div>
                             </div>
 
-                            {/* Chart 3: Pending DAR Edit Requests */}
-                            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <FileText size={20} className="text-amber-500" /> Pending Edit Requests
-                                </h3>
-
-                                <div className="flex-1 w-full flex flex-col gap-3">
-                                    {loadingRequests ? (
-                                        <div className="text-center py-10 text-slate-400">Loading requests...</div>
-                                    ) : requests.length === 0 ? (
-                                        <div className="text-center py-10 text-slate-400 italic bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                                            No pending requests found.
-                                        </div>
-                                    ) : (
-                                        requests.map(req => (
-                                            <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-800 dark:text-white">{req.user}</span>
-                                                    <span className="text-xs text-slate-500">Requested for <span className="font-mono">{req.date}</span> • {req.changes} items</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => setSelectedRequest(req)}
-                                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition"
-                                                >
-                                                    Review Changes
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
                         </div>
                     )}
 
                     {/* Diff Modal */}
                     {/* Premium Diff Review Modal */}
-                    <RequestReviewModal
-                        isOpen={!!selectedRequest}
-                        onClose={() => setSelectedRequest(null)}
-                        request={selectedRequest}
-                        onApprove={() => handleApproveRequest(selectedRequest?.id)}
-                        onReject={() => handleRejectRequest(selectedRequest?.id)}
-                    />
+                    {/* Diff Modal - Only show as modal if NOT in requests tab (where it is inline) */}
+                    {activeTab !== 'requests' && (
+                        <RequestReviewModal
+                            isOpen={!!selectedRequest}
+                            onClose={() => setSelectedRequest(null)}
+                            request={selectedRequest}
+                            onApprove={() => handleApproveRequest(selectedRequest?.id)}
+                            onReject={() => handleRejectRequest(selectedRequest?.id)}
+                        />
+                    )}
 
                 </div>
             </div>
