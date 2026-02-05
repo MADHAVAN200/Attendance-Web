@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download } from 'lucide-react';
+import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -108,6 +108,35 @@ const Profile = () => {
             toast.error(error.response?.data?.message || 'Failed to upload image');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleDeleteAvatar = async () => {
+        if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+
+        try {
+            const res = await api.delete('/profile');
+            if (res.data.ok) {
+                toast.success('Profile picture removed!');
+
+                // Update local state
+                setProfileData(prev => ({
+                    ...prev,
+                    profile_image_url: null
+                }));
+
+                // Refresh global user state
+                await fetchUser();
+
+                // Close preview modal
+                setShowPreview(false);
+
+                // Update timestamp for future uploads
+                setImageTimestamp(Date.now());
+            }
+        } catch (error) {
+            console.error('Delete Error:', error);
+            toast.error(error.response?.data?.message || 'Failed to remove image');
         }
     };
 
@@ -253,6 +282,13 @@ const Profile = () => {
                                 >
                                     <Edit size={20} />
                                     <span className="text-sm font-bold">Edit</span>
+                                </button>
+                                <button
+                                    onClick={handleDeleteAvatar}
+                                    className="p-2.5 rounded-full bg-red-500/10 text-red-500 hover:text-white hover:bg-red-500 transition-all backdrop-blur-md flex items-center gap-2 px-4"
+                                >
+                                    <Trash2 size={20} />
+                                    <span className="text-sm font-bold">Remove</span>
                                 </button>
                                 <button
                                     onClick={() => setShowPreview(false)}

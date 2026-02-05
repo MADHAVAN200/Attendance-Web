@@ -19,6 +19,7 @@
     "dotenv": "^16.5.0",
     "node-cron": "^4.2.1",
     "pdfkit": "^0.17.2",
+    "razorpay": "^2.9.6",
     "react-icons": "^5.5.0"
   }
 }
