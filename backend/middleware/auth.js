@@ -23,18 +23,9 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         let user;
 
         // Check based on token contents
-        // Super Admin tokens (issued by SuperAdmin.js) have user_type='super_admin'
         // User tokens (issued by LoginAPI.js) have user_type='employee'/'admin'/etc.
 
-        if (decoded.user_type === 'super_admin' || decoded.role === 'super_admin') {
-            user = await knexDB('super_admins').where({ id: decoded.id }).first();
-            if (user) {
-                user.user_type = 'super_admin';
-                req.superAdmin = user; // Legacy support
-            }
-        } else {
-            user = await knexDB('users').where({ user_id: decoded.user_id }).first();
-        }
+        user = await knexDB('users').where({ user_id: decoded.user_id }).first();
 
         if (!user) {
             return res.status(403).json({ message: "Forbidden: Invalid token user" });
