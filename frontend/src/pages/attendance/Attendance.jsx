@@ -114,7 +114,7 @@ const Attendance = () => {
     const [corrDate, setCorrDate] = useState('');
     const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
     const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
-    const [corrMethod, setCorrMethod] = useState('fix'); // 'fix' | 'add_session' | 'reset'
+    const [corrMethod, setCorrMethod] = useState('add_session'); // 'add_session' | 'reset'
     
     // Inputs for 'fix' and 'reset'
     const [corrIn, setCorrIn] = useState('');
@@ -326,13 +326,8 @@ const Attendance = () => {
                 correction_method: corrMethod
             };
 
-            // 1. FIX MODE
-            if (corrMethod === 'fix') {
-                payload.requested_time_in = corrIn || null;
-                payload.requested_time_out = corrOut || null;
-            }
-            // 2. ADD SESSION MODE
-            else if (corrMethod === 'add_session') {
+            // 2. ADD SESSION MODE (Manual Correction)
+            if (corrMethod === 'add_session') {
                  // Filter out empty sessions
                 const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
                 if (validSessions.length === 0) {
@@ -359,7 +354,7 @@ const Attendance = () => {
             setCorrReason('');
             setCorrType('Correction');
             setCorrOtherType('');
-            setCorrMethod('fix');
+            setCorrMethod('add_session');
             setCorrSessions([{ time_in: '', time_out: '' }]);
             setExistingRecord(null);
             
@@ -1023,7 +1018,7 @@ const Attendance = () => {
                                         <div>
                                             <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Method</label>
                                             <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                                                {['fix', 'add_session', 'reset'].map(m => (
+                                                {['add_session', 'reset'].map(m => (
                                                     <button
                                                         key={m}
                                                         type="button"
@@ -1033,7 +1028,7 @@ const Attendance = () => {
                                                             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                                                             }`}
                                                     >
-                                                        {m === 'fix' ? 'Fix' : m === 'add_session' ? 'Add Session' : 'Reset Day'}
+                                                        {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
                                                     </button>
                                                 ))}
                                             </div>
@@ -1041,12 +1036,12 @@ const Attendance = () => {
 
                                         {/* --- DYNAMIC FIELDS BASED ON METHOD --- */}
 
-                                        {/* 1. FIX or RESET MODE */}
-                                        {(corrMethod === 'fix' || corrMethod === 'reset') && (
+                                        {/* 1. RESET MODE (Single Session) */}
+                                        {corrMethod === 'reset' && (
                                             <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                                                 <div>
                                                     <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                                                        {corrMethod === 'reset' ? 'New Time In' : 'Time In'}
+                                                        New Time In
                                                     </label>
                                                     <input
                                                         type="time"
@@ -1058,7 +1053,7 @@ const Attendance = () => {
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                                                        {corrMethod === 'reset' ? 'New Time Out' : 'Time Out'}
+                                                        New Time Out
                                                     </label>
                                                     <input
                                                         type="time"

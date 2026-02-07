@@ -230,15 +230,39 @@ const AttendanceMonitoring = () => {
             
             // Reset Override State
             setOverrideMode(false);
-            setOverrideMethod(data.correction_method || 'fix');
-            setOverrideIn(data.requested_time_in || '');
-            setOverrideOut(data.requested_time_out || '');
+            setOverrideMethod(data.correction_method || 'add_session'); // default to add_session (Manual Correction)
+            
+            let correctionData = {};
+            try {
+                correctionData = typeof data.correction_data === 'string' 
+                    ? JSON.parse(data.correction_data) 
+                    : data.correction_data || {};
+            } catch (error) {
+                console.error("Error parsing correction data", error);
+            }
+
+            setOverrideIn(correctionData.time_in || '');
+            setOverrideOut(correctionData.time_out || '');
             
             // Parse sessions if available
             try {
-                 const sessions = typeof data.requested_sessions === 'string' 
-                    ? JSON.parse(data.requested_sessions) 
-                    : data.requested_sessions;
+                 let sessions = correctionData.sessions;
+
+                 // Fallback for fallback/legacy if sessions is empty but we have time_in/out
+                 if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
+                     // Helper to extract HH:MM
+                     const getTime = (t) => {
+                         if (!t) return '';
+                         if (t.includes('T')) return t.split('T')[1].substring(0, 5);
+                         if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
+                         return t.substring(0, 5);
+                     };
+                     sessions = [{
+                         time_in: getTime(correctionData.time_in),
+                         time_out: getTime(correctionData.time_out)
+                     }];
+                 }
+
                  setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
             } catch (e) {
                  setOverrideSessions([{ time_in: '', time_out: '' }]);
@@ -317,23 +341,23 @@ const AttendanceMonitoring = () => {
             if (status === 'approved' && overrideMode) {
                 overrides.correction_method = overrideMethod;
                 
-                if (overrideMethod === 'fix') {
-                    overrides.requested_time_in = overrideIn || null;
-                    overrides.requested_time_out = overrideOut || null;
-                } else if (overrideMethod === 'reset') {
+                if (overrideMethod === 'reset') {
                      if (!overrideIn || !overrideOut) {
                          toast.error("Both Start and End times are required for Reset override");
                          return;
                      }
                      overrides.reset_time_in = overrideIn;
                      overrides.reset_time_out = overrideOut;
-                } else if (overrideMethod === 'add_session') {
+                } else if (overrideMethod === 'add_session' || overrideMethod === 'fix') {
                      const valid = overrideSessions.filter(s => s.time_in && s.time_out);
                      if (valid.length === 0) {
-                         toast.error("At least one valid session required");
+                         toast.error("At least one valid session required for manual correction");
                          return;
                      }
                      overrides.sessions = valid;
+                     // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
+                     // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
+                     // Backend handles both.
                 }
             }
 
@@ -982,7 +1006,7 @@ const AttendanceMonitoring = () => {
                                                     </div>
                                                 </div>
                                                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${getRequestTypeStyle(request.correction_type)}`}>
-                                                    {request.correction_type.replace('_', ' ')}
+                                                    {(request.correction_type || '').replace('_', ' ')}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 mt-3">
@@ -996,7 +1020,7 @@ const AttendanceMonitoring = () => {
                                                     }`}>
                                                     {request.status === 'pending' && (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000)
                                                         ? 'Expired'
-                                                        : request.status.charAt(0).toUpperCase() + request.status.slice(1)
+                                                        : (request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)
                                                     }
                                                 </div>
                                             </div>
@@ -1070,22 +1094,22 @@ const AttendanceMonitoring = () => {
                                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                                      {/* Method Selector */}
                                                     <div className="flex gap-2">
-                                                        {['fix', 'add_session', 'reset'].map(m => (
+                                                        {['add_session', 'reset'].map(m => (
                                                             <button
                                                                 key={m}
                                                                 onClick={() => setOverrideMethod(m)}
-                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${overrideMethod === m
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
                                                                     ? 'bg-indigo-600 text-white border-indigo-600'
                                                                     : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
                                                                     }`}
                                                             >
-                                                                {m === 'fix' ? 'FIX TIME' : m === 'add_session' ? 'ADD SESSIONS' : 'RESET DAY'}
+                                                                {m === 'add_session' ? 'MANUAL CORRECTION' : 'RESET DAY'}
                                                             </button>
                                                         ))}
                                                     </div>
 
                                                     {/* Dynamic Inputs */}
-                                                    {overrideMethod === 'add_session' ? (
+                                                    {overrideMethod === 'add_session' || overrideMethod === 'fix' ? (
                                                         <div className="space-y-2">
                                                             {overrideSessions.map((s, idx) => (
                                                                 <div key={idx} className="flex gap-2 items-center">
@@ -1145,9 +1169,12 @@ const AttendanceMonitoring = () => {
                                                             <div className="space-y-2">
                                                                 {(() => {
                                                                     try {
-                                                                        const sessions = typeof selectedRequestData.requested_sessions === 'string'
-                                                                            ? JSON.parse(selectedRequestData.requested_sessions)
-                                                                            : selectedRequestData.requested_sessions;
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        
+                                                                        const sessions = correctionData.sessions || [];
+
                                                                         const formatSessionTime = (t) => {
                                                                             if (!t) return '--:--';
                                                                             // Handle HH:MM or HH:MM:SS
@@ -1156,7 +1183,7 @@ const AttendanceMonitoring = () => {
                                                                             date.setHours(parseInt(h), parseInt(m));
                                                                             return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
                                                                         };
-                                                                        return (sessions || []).map((s, i) => (
+                                                                        return (sessions).map((s, i) => (
                                                                             <div key={i} className="flex justify-between text-sm font-mono border-b border-slate-200 dark:border-slate-700 pb-1 last:border-0 last:pb-0">
                                                                                 <span>{formatSessionTime(s.time_in)}</span>
                                                                                 <span className="text-slate-400">to</span>
@@ -1173,7 +1200,10 @@ const AttendanceMonitoring = () => {
                                                                 <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New In' : 'Time In'}</span>
                                                                 <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">
                                                                     {(() => {
-                                                                        const val = selectedRequestData.requested_time_in;
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        const val = correctionData.time_in;
                                                                         if (!val) return '-';
                                                                         let d = new Date(val.replace(' ', 'T'));
                                                                         if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
@@ -1185,7 +1215,10 @@ const AttendanceMonitoring = () => {
                                                                 <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New Out' : 'Time Out'}</span>
                                                                 <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                                                                     {(() => {
-                                                                        const val = selectedRequestData.requested_time_out;
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        const val = correctionData.time_out;
                                                                         if (!val) return '-';
                                                                         let d = new Date(val.replace(' ', 'T'));
                                                                         if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);

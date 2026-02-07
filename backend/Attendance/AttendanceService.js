@@ -117,26 +117,10 @@ export const AttendanceService = {
         // Daily Sync
         try {
             const dateStr = localTime.split('T')[0];
-            const timeStr = localTime.split('T')[1].split('.')[0];
 
-            const existingDaily = await knexDB("daily_attendance")
-                .where({ user_id, date: dateStr })
-                .first();
+            // Sync Daily Attendance (will create daily record if missing)
+            await AttendanceService.syncDailyAttendance(user_id, dateStr);
 
-            if (!existingDaily) {
-                await knexDB("daily_attendance").insert({
-                    user_id,
-                    org_id,
-                    date: dateStr,
-                    shift_id: shift ? shift.shift_id : null,
-                    first_in: timeStr,
-                    status: lateCheck.isLate ? 'LATE_NOT_PUNCHED_OUT' : 'NOT_PUNCHED_OUT',
-                    late_minutes: lateCheck.isLate ? minutesLate : 0,
-                    total_hours: 0,
-                    created_at: knexDB.fn.now(),
-                    updated_at: knexDB.fn.now()
-                });
-            }
         } catch (dailyErr) {
             console.error("Daily Sync Error:", dailyErr);
         }
@@ -321,18 +305,14 @@ export const AttendanceService = {
         // Daily Sync
         try {
             const dateStrSync = localTime.split('T')[0];
-            const timeStrSync = localTime.split('T')[1].split('.')[0];
-            const grandTotalHours = parseFloat((sessionContext.total_hours_today + totalHours).toFixed(2));
 
-            await knexDB("daily_attendance")
-                .where({ user_id, date: dateStrSync })
-                .update({
-                    last_out: timeStrSync,
-                    total_hours: grandTotalHours,
-                    overtime_hours: grandTotalHours > (rules.overtime?.threshold || 8) ? (grandTotalHours - (rules.overtime?.threshold || 8)) : 0,
-                    status: status,
-                    updated_at: knexDB.fn.now()
-                });
+            // Call sync to update last_out, total_hours, overtime, and status
+            await AttendanceService.syncDailyAttendance(user_id, dateStrSync, {
+                status: status // Pass evaluated status (PRESENT/LATE) to override computed status if needed, or let sync handle it if logic is moved there. 
+                // Currently sync doesn't calculate status (PRESENT/LATE), it just updates times.
+                // So we pass the status we evaluated above.
+            });
+
         } catch (dailyErr) {
             console.error("Daily Sync Error (Timeout):", dailyErr);
         }
@@ -392,7 +372,28 @@ export const AttendanceService = {
             const firstRec = records[0];
             const lastRec = records[records.length - 1];
 
-            // 2. Calculate Hours
+            // 2. Ensure Daily Record Exists (Upsert-like behavior)
+            const existingDaily = await knexDB("daily_attendance")
+                .where({ user_id, date: dateStr })
+                .first();
+
+            if (!existingDaily) {
+                // Fetch shift for initial creation if missing
+                const shift = await getUserShift(user_id);
+
+                await knexDB("daily_attendance").insert({
+                    user_id,
+                    org_id: records[0].org_id,
+                    date: dateStr,
+                    shift_id: shift ? shift.shift_id : null,
+                    status: 'PRESENT', // Will be updated by overrides or logic below
+                    created_at: knexDB.fn.now(),
+                    updated_at: knexDB.fn.now(),
+                    total_hours: 0
+                });
+            }
+
+            // 3. Calculate Hours
             let totalMs = 0;
             records.forEach(r => {
                 if (r.time_in && r.time_out) {
@@ -401,7 +402,7 @@ export const AttendanceService = {
             });
             const totalHours = parseFloat((totalMs / (1000 * 60 * 60)).toFixed(2));
 
-            // 3. Get Rules for Overtime 
+            // 4. Get Rules for Overtime 
             let overtimeHours = 0;
             try {
                 const shift = await getUserShift(user_id);
@@ -418,7 +419,11 @@ export const AttendanceService = {
             const getTimeStr = (d) => {
                 if (!d) return null;
                 try {
-                    return new Date(d).toISOString().split('T')[1].split('.')[0];
+                    const dateObj = new Date(d);
+                    if (isNaN(dateObj.getTime())) return null;
+                    // Use local time instead of ISO (UTC) to preserve the stored wall-clock time
+                    const pad = (n) => String(n).padStart(2, '0');
+                    return `${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
                 } catch (e) { return null; }
             };
 

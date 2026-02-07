@@ -79,6 +79,19 @@ export const attendanceService = {
         }
     },
 
+    // Get Specific User's Daily Records (Admin Correction Context)
+    async getUserDailyRecords(userId, date) {
+        if (!userId || !date) return [];
+        let url = `${API_BASE_URL}/records/admin?user_id=${userId}&date_from=${date}&date_to=${date}`;
+        try {
+            const res = await api.get(url);
+            return res.data; // Helper to return just data array
+        } catch (error) {
+            console.error("Failed to fetch user records", error);
+            return [];
+        }
+    },
+
     // Download My Monthly Report
     async downloadMyReport(month, format = "xlsx") {
         try {
@@ -145,3 +158,4 @@ export const attendanceService = {
         }
     },
 };
+    

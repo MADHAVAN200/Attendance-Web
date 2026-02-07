@@ -377,11 +377,15 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
   const validMethods = ['fix', 'add_session', 'reset'];
   const method = validMethods.includes(correction_method) ? correction_method : 'fix';
 
-  let sessionsJson = null;
-  if (method === 'add_session') {
+  const correctionData = {};
+
+  if (method === 'add_session' || method === 'fix') {
     if (sessions && Array.isArray(sessions)) {
-      sessionsJson = JSON.stringify(sessions);
+      correctionData.sessions = sessions;
     }
+  } else if (method === 'reset') {
+    correctionData.time_in = requested_time_in;
+    correctionData.time_out = requested_time_out;
   }
 
   const [id] = await knexDB("attendance_correction_requests").insert({
@@ -389,13 +393,10 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
     user_id,
     correction_type,
     request_date,
-    // Combine date component with time component for DATETIME columns
-    requested_time_in: requested_time_in ? `${request_date} ${(requested_time_in.length === 5 ? requested_time_in + ':00' : requested_time_in)}` : null,
-    requested_time_out: requested_time_out ? `${request_date} ${(requested_time_out.length === 5 ? requested_time_out + ':00' : requested_time_out)}` : null,
+    correction_data: JSON.stringify(correctionData),
     reason,
     status: "pending",
     correction_method: method,
-    requested_sessions: sessionsJson,
     audit_trail: JSON.stringify([
       { action: "submitted", by: user_id, at: new Date() }
     ])
@@ -431,8 +432,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
       "acr.acr_id",
       "acr.correction_type",
       "acr.request_date",
-      knexDB.raw("DATE_FORMAT(acr.requested_time_in, '%H:%i:%s') as requested_time_in"),
-      knexDB.raw("DATE_FORMAT(acr.requested_time_out, '%H:%i:%s') as requested_time_out"),
+      "acr.correction_data",
       "acr.status",
       "acr.submitted_at",
       "u.user_id",
@@ -476,9 +476,7 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
       "acr.acr_id",
       "acr.correction_type",
       "acr.request_date",
-      // Force return time only string to avoid timezone shifts
-      knexDB.raw("DATE_FORMAT(acr.requested_time_in, '%H:%i:%s') as requested_time_in"),
-      knexDB.raw("DATE_FORMAT(acr.requested_time_out, '%H:%i:%s') as requested_time_out"),
+      "acr.correction_data",
       "acr.reason",
       "acr.status",
       "acr.reviewed_by",
@@ -489,8 +487,7 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
       "u.user_id",
       "u.user_name",
       "d.desg_name as designation",
-      "acr.correction_method",
-      "acr.requested_sessions"
+      "acr.correction_method"
     )
     .where("acr.acr_id", acr_id)
     .andWhere("acr.org_id", org_id);
@@ -582,29 +579,36 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
   // --- APPLY CORRECTION IF APPROVED ---
   if (status === 'approved') {
     // Allow Date Override from Body
+    // Allow Date Override from Body
     const targetDate = req.body.request_date || correction.request_date;
-    const dateStr = new Date(targetDate).toISOString().split('T')[0];
+    // Fix for timezone issue: Create date from string or date object but reset to local YYYY-MM-DD
+    const d = new Date(targetDate);
+    const dateStr = d.toLocaleDateString('en-CA'); // fast way to get YYYY-MM-DD in local time if system locale is standard, or just build it manually to be safe
+    // Actually, to be safer and avoid server locale dependency:
+    // We can use the offset method.
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+    const finalDateStr = localDate.toISOString().split('T')[0];
 
     // Use params from Body (Admin Override) OR DB (User Request)
     const correction_method = req.body.correction_method || correction.correction_method || 'fix';
     console.log("DEBUG: Correction Method:", correction_method);
 
-    let sessions = req.body.sessions;
-    if (!sessions && correction.requested_sessions) {
-      try {
-        console.log("DEBUG: Raw requested_sessions:", correction.requested_sessions);
-        sessions = (typeof correction.requested_sessions === 'string')
-          ? JSON.parse(correction.requested_sessions)
-          : correction.requested_sessions;
-      } catch (e) {
-        console.error("DEBUG: JSON Parse Error", e);
-        sessions = [];
-      }
+    // Parse Correction Data
+    let correctionData = {};
+    try {
+      correctionData = typeof correction.correction_data === 'string'
+        ? JSON.parse(correction.correction_data)
+        : correction.correction_data || {};
+    } catch (e) {
+      console.error("DEBUG: JSON Parse Error for correction_data", e);
     }
-    console.log("DEBUG: Final Sessions to Process:", sessions);
 
-    const reset_time_in = req.body.reset_time_in || correction.requested_time_in;
-    const reset_time_out = req.body.reset_time_out || correction.requested_time_out;
+    // Override logic (Frontend can send overrides in body)
+    // If overrides exist in body, use them. Else use DB data.
+    let sessions = req.body.sessions || correctionData.sessions || [];
+    const reset_time_in = req.body.reset_time_in || correctionData.time_in;
+    const reset_time_out = req.body.reset_time_out || correctionData.time_out;
 
     const manualUpdateBase = {
       status: 'PRESENT',
@@ -613,67 +617,30 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
       updated_at: knexDB.fn.now()
     };
 
-    // 1. FIX (Standard Correction)
-    if (correction_method === 'fix') {
-      const updateData = {
-        ...manualUpdateBase,
-        adjustment_reason: `Correction Request #${acr_id} Approved`
-      };
-
-      // Use Override OR Original Request
-      const finalIn = req.body.requested_time_in || correction.requested_time_in;
-      const finalOut = req.body.requested_time_out || correction.requested_time_out;
-
-      if (finalIn) updateData.first_in = finalIn;
-      if (finalOut) updateData.last_out = finalOut;
-
-      // Recalculate hours if we have both times
-      if (finalIn && finalOut) {
-        const start = new Date(`1970-01-01T${finalIn}`);
-        const end = new Date(`1970-01-01T${finalOut}`);
-        const diff = (end - start) / (1000 * 60 * 60);
-        if (diff > 0) updateData.total_hours = diff.toFixed(2);
-      }
-
-      // Apply to Daily Attendance
-      const existing = await knexDB("daily_attendance")
-        .where({ user_id: correction.user_id, date: dateStr })
-        .first();
-
-      if (existing) {
-        await knexDB("daily_attendance").where({ daily_id: existing.daily_id }).update(updateData);
-      } else {
-        await knexDB("daily_attendance").insert({
-          user_id: correction.user_id,
-          org_id,
-          date: dateStr,
-          ...updateData,
-          created_at: knexDB.fn.now()
-        });
-      }
-    }
-
-    // 2. ADD SESSION (Add records + Sync)
-    else if (correction_method === 'add_session') {
+    // 1. ADD REQUESTED SESSIONS (Replaces 'Fix' and 'Add Session')
+    if (correction_method === 'fix' || correction_method === 'add_session') {
       if (sessions && Array.isArray(sessions) && sessions.length > 0) {
         const newRecords = sessions.map(s => ({
           user_id: correction.user_id,
           org_id,
-          time_in: `${dateStr} ${(s.time_in.length === 5 ? s.time_in + ':00' : s.time_in)}`,
-          time_out: `${dateStr} ${(s.time_out.length === 5 ? s.time_out + ':00' : s.time_out)}`,
+          time_in: `${finalDateStr} ${(s.time_in.length === 5 ? s.time_in + ':00' : s.time_in)}`,
+          time_out: `${finalDateStr} ${(s.time_out.length === 5 ? s.time_out + ':00' : s.time_out)}`,
           status: 'CLOSED',
           created_at: knexDB.fn.now(),
           updated_at: knexDB.fn.now(),
-          time_in_address: 'Manual Addition',
-          time_out_address: 'Manual Addition'
+          time_in_address: 'Manual Correction',
+          time_out_address: 'Manual Correction',
+          is_manual: true,
+          altered_by: reviewer_id
         }));
 
         await knexDB("attendance_records").insert(newRecords);
 
         // Sync Daily Attendance
-        await AttendanceService.syncDailyAttendance(correction.user_id, dateStr, {
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
           ...manualUpdateBase,
-          adjustment_reason: `Correction Request #${acr_id} (Sessions Added)`
+          is_altered: true,
+          adjustment_reason: `Correction Request #${acr_id} (Manual Correction)`
         });
       }
     }
@@ -683,7 +650,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
       // Delete all records for the day
       await knexDB("attendance_records")
         .where({ user_id: correction.user_id })
-        .whereRaw("DATE(time_in) = ?", [dateStr])
+        .whereRaw("DATE(time_in) = ?", [finalDateStr])
         .del();
 
       // Insert Single Session
@@ -694,8 +661,8 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
         await knexDB("attendance_records").insert({
           user_id: correction.user_id,
           org_id,
-          time_in: `${dateStr}T${tIn}`,
-          time_out: `${dateStr}T${tOut}`,
+          time_in: `${finalDateStr}T${tIn}`,
+          time_out: `${finalDateStr}T${tOut}`,
           status: 'CLOSED',
           created_at: knexDB.fn.now(),
           updated_at: knexDB.fn.now(),
@@ -703,7 +670,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
           time_out_address: 'Manual Reset'
         });
 
-        await AttendanceService.syncDailyAttendance(correction.user_id, dateStr, {
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
           ...manualUpdateBase,
           adjustment_reason: `Correction Request #${acr_id} (Day Reset)`
         });
@@ -792,3 +759,4 @@ router.get("/records/export", authenticateJWT, catchAsync(async (req, res) => {
 }));
 
 export default router;
+

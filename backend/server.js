@@ -76,14 +76,13 @@ import { initAttendanceProcessor } from './cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './cron/cleanupScheduler.js';
 
 
-// import SuperAdminRoutes from './Admin/SuperAdmin.js';
+
 // import { initSubscriptionManager } from './cron/SubscriptionManager.js';
 
 app.use('/auth', AuthRoutes);
 app.use('/auth', PasswordResetRoutes);
 app.use('/attendance', AttendanceRoutes);
 app.use('/admin', AdminRoutes);
-// app.use('/super-admin', SuperAdminRoutes); // New Super Admin Routes
 app.use('/admin/reports', ReportRoutes);
 app.use('/attendance/reports', ReportRoutes);
 app.use('/locations', LocationRoutes); // Admin locations
