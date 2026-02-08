@@ -1,6 +1,6 @@
 
 import jwt from 'jsonwebtoken';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -25,7 +25,7 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         // Check based on token contents
         // User tokens (issued by LoginAPI.js) have user_type='employee'/'admin'/etc.
 
-        user = await knexDB('users').where({ user_id: decoded.user_id }).first();
+        user = await attendanceDB('users').where({ user_id: decoded.user_id }).first();
 
         if (!user) {
             return res.status(403).json({ message: "Forbidden: Invalid token user" });
