@@ -1,12 +1,12 @@
 
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import { uploadCompressedImage } from "../s3/s3Service.js";
 import EventBus from "../utils/EventBus.js";
 import { PolicyService } from "./PolicyEngine.js";
 
 // Helper: Fetch User Shift
 async function getUserShift(user_id) {
-    const user = await knexDB("users")
+    const user = await attendanceDB("users")
         .join("shifts", "users.shift_id", "shifts.shift_id")
         .where("users.user_id", user_id)
         .select("shifts.*")
@@ -35,7 +35,7 @@ export const AttendanceService = {
         } = context;
 
         // 1. Check Existing Session
-        const openSession = await knexDB("attendance_records")
+        const openSession = await attendanceDB("attendance_records")
             .where({ user_id })
             .whereNull("time_out")
             .whereRaw("DATE(time_in) = DATE(?)", [localTime])
@@ -99,7 +99,7 @@ export const AttendanceService = {
 
 
         // DB Insert
-        const [attendance_id] = await knexDB("attendance_records").insert({
+        const [attendance_id] = await attendanceDB("attendance_records").insert({
             user_id,
             org_id,
             late_reason: sessionContext.is_first_session ? (late_reason || (lateCheck.isLate ? "Late Entry" : null)) : null,
@@ -110,8 +110,8 @@ export const AttendanceService = {
             time_in_address: address,
             status: "OPEN", // Session is now open
             metadata: JSON.stringify(metadata),
-            created_at: knexDB.fn.now(),
-            updated_at: knexDB.fn.now(),
+            created_at: attendanceDB.fn.now(),
+            updated_at: attendanceDB.fn.now(),
         });
 
         // Daily Sync
@@ -134,11 +134,11 @@ export const AttendanceService = {
                 directory: "attendance_images"
             });
             imageKey = uploadResult.key;
-            await knexDB("attendance_records")
+            await attendanceDB("attendance_records")
                 .where({ attendance_id })
                 .update({
                     time_in_image_key: imageKey,
-                    updated_at: knexDB.fn.now(),
+                    updated_at: attendanceDB.fn.now(),
                 });
         }
 
@@ -198,7 +198,7 @@ export const AttendanceService = {
         } = context;
 
         // 1. Check Existing Session (Fail Fast)
-        const openSession = await knexDB("attendance_records")
+        const openSession = await attendanceDB("attendance_records")
             .where({ user_id })
             .whereNull("time_out")
             .whereRaw("DATE(time_in) = DATE(?)", [localTime])
@@ -236,11 +236,11 @@ export const AttendanceService = {
                 directory: "attendance_images"
             });
             imageKey = uploadResult.key;
-            await knexDB("attendance_records")
+            await attendanceDB("attendance_records")
                 .where({ attendance_id: openSession.attendance_id })
                 .update({
                     time_out_image_key: imageKey,
-                    updated_at: knexDB.fn.now(),
+                    updated_at: attendanceDB.fn.now(),
                 });
         }
 
@@ -289,7 +289,7 @@ export const AttendanceService = {
         metadata.session_context_at_checkout = sessionContext;
 
         // DB Update
-        await knexDB("attendance_records")
+        await attendanceDB("attendance_records")
             .where({ attendance_id: openSession.attendance_id })
             .update({
                 time_out: localTime,
@@ -299,7 +299,7 @@ export const AttendanceService = {
                 overtime_hours: totalHours > (rules.overtime?.threshold || 8) ? (totalHours - (rules.overtime?.threshold || 8)) : 0,
                 status: "CLOSED",
                 metadata: JSON.stringify(metadata),
-                updated_at: knexDB.fn.now(),
+                updated_at: attendanceDB.fn.now(),
             });
 
         // Daily Sync
@@ -362,7 +362,7 @@ export const AttendanceService = {
     syncDailyAttendance: async (user_id, dateStr, overrides = {}) => {
         try {
             // 1. Fetch all records for the day
-            const records = await knexDB("attendance_records")
+            const records = await attendanceDB("attendance_records")
                 .where({ user_id })
                 .whereRaw("DATE(time_in) = ?", [dateStr])
                 .orderBy("time_in", "asc");
@@ -373,7 +373,7 @@ export const AttendanceService = {
             const lastRec = records[records.length - 1];
 
             // 2. Ensure Daily Record Exists (Upsert-like behavior)
-            const existingDaily = await knexDB("daily_attendance")
+            const existingDaily = await attendanceDB("daily_attendance")
                 .where({ user_id, date: dateStr })
                 .first();
 
@@ -381,14 +381,14 @@ export const AttendanceService = {
                 // Fetch shift for initial creation if missing
                 const shift = await getUserShift(user_id);
 
-                await knexDB("daily_attendance").insert({
+                await attendanceDB("daily_attendance").insert({
                     user_id,
                     org_id: records[0].org_id,
                     date: dateStr,
                     shift_id: shift ? shift.shift_id : null,
                     status: 'PRESENT', // Will be updated by overrides or logic below
-                    created_at: knexDB.fn.now(),
-                    updated_at: knexDB.fn.now(),
+                    created_at: attendanceDB.fn.now(),
+                    updated_at: attendanceDB.fn.now(),
                     total_hours: 0
                 });
             }
@@ -432,11 +432,11 @@ export const AttendanceService = {
                 last_out: getTimeStr(lastRec.time_out),
                 total_hours: totalHours,
                 overtime_hours: overtimeHours,
-                updated_at: knexDB.fn.now(),
+                updated_at: attendanceDB.fn.now(),
                 ...overrides
             };
 
-            await knexDB("daily_attendance")
+            await attendanceDB("daily_attendance")
                 .where({ user_id, date: dateStr })
                 .update(updateData);
 

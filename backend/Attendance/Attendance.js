@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import ExcelJS from "exceljs";
 import catchAsync from "../utils/catchAsync.js";
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import { authenticateJWT } from '../middleware/auth.js';
 import { fetchTimeStamp, coordsToAddress } from "../Google_API/Maps.js";
 import { getFileUrl } from "../s3/s3Service.js";
@@ -235,15 +235,15 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
 
   const { user_id, date_from, date_to, limit = 50 } = req.query;
 
-  let query = knexDB("attendance_records")
+  let query = attendanceDB("attendance_records")
     .join("users", "attendance_records.user_id", "users.user_id")
     .leftJoin("designations", "users.desg_id", "designations.desg_id")
     .select(
       "attendance_records.*",
-      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts"),
       "users.user_name",
       "users.email",
       "designations.desg_name as designation"
@@ -299,14 +299,14 @@ router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
   const userId = req.user.user_id;
   const { date_from, date_to, limit = 50 } = req.query;
 
-  let query = knexDB("attendance_records")
+  let query = attendanceDB("attendance_records")
     .where("user_id", userId)
     .select(
       "attendance_records.*",
-      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
     )
     .orderBy("time_in", "desc")
     .limit(Math.min(parseInt(limit), 100)); // max limit 100
@@ -388,7 +388,7 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
     correctionData.time_out = requested_time_out;
   }
 
-  const [id] = await knexDB("attendance_correction_requests").insert({
+  const [id] = await attendanceDB("attendance_correction_requests").insert({
     org_id,
     user_id,
     correction_type,
@@ -418,7 +418,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
 
   const offset = (page - 1) * limit;
 
-  const data = await knexDB("attendance_correction_requests as acr")
+  const data = await attendanceDB("attendance_correction_requests as acr")
     .join("users as u", "u.user_id", "acr.user_id")
     .where("acr.org_id", org_id)
     .modify(qb => {
@@ -443,7 +443,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
     .limit(limit)
     .offset(offset);
 
-  const countResult = await knexDB("attendance_correction_requests")
+  const countResult = await attendanceDB("attendance_correction_requests")
     .where("org_id", org_id)
     .modify(qb => {
       if (user_type !== "admin") qb.where("user_id", user_id);
@@ -469,7 +469,7 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
   const user_id = req.user.user_id;
   const role = req.user.user_type;
 
-  let query = knexDB("attendance_correction_requests as acr")
+  let query = attendanceDB("attendance_correction_requests as acr")
     .join("users as u", "u.user_id", "acr.user_id")
     .leftJoin("designations as d", "d.desg_id", "u.desg_id")
     .select(
@@ -537,7 +537,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const correction = await knexDB("attendance_correction_requests")
+  const correction = await attendanceDB("attendance_correction_requests")
     .where({ acr_id, org_id })
     .first();
 
@@ -566,7 +566,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
     comments: review_comments || null
   });
 
-  await knexDB("attendance_correction_requests")
+  await attendanceDB("attendance_correction_requests")
     .where({ acr_id, org_id })
     .update({
       status,
@@ -614,7 +614,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
       status: 'PRESENT',
       is_manual_adjustment: true,
       adjusted_by: reviewer_id,
-      updated_at: knexDB.fn.now()
+      updated_at: attendanceDB.fn.now()
     };
 
     // 1. ADD REQUESTED SESSIONS (Replaces 'Fix' and 'Add Session')
@@ -626,15 +626,15 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
           time_in: `${finalDateStr} ${(s.time_in.length === 5 ? s.time_in + ':00' : s.time_in)}`,
           time_out: `${finalDateStr} ${(s.time_out.length === 5 ? s.time_out + ':00' : s.time_out)}`,
           status: 'CLOSED',
-          created_at: knexDB.fn.now(),
-          updated_at: knexDB.fn.now(),
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
           time_in_address: 'Manual Correction',
           time_out_address: 'Manual Correction',
           is_manual: true,
           altered_by: reviewer_id
         }));
 
-        await knexDB("attendance_records").insert(newRecords);
+        await attendanceDB("attendance_records").insert(newRecords);
 
         // Sync Daily Attendance
         await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
@@ -648,7 +648,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
     // 3. RESET DAY (Delete + Single Session + Sync)
     else if (correction_method === 'reset') {
       // Delete all records for the day
-      await knexDB("attendance_records")
+      await attendanceDB("attendance_records")
         .where({ user_id: correction.user_id })
         .whereRaw("DATE(time_in) = ?", [finalDateStr])
         .del();
@@ -658,14 +658,14 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
       const tOut = reset_time_out || correction.requested_time_out;
 
       if (tIn && tOut) {
-        await knexDB("attendance_records").insert({
+        await attendanceDB("attendance_records").insert({
           user_id: correction.user_id,
           org_id,
           time_in: `${finalDateStr}T${tIn}`,
           time_out: `${finalDateStr}T${tOut}`,
           status: 'CLOSED',
-          created_at: knexDB.fn.now(),
-          updated_at: knexDB.fn.now(),
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
           time_in_address: 'Manual Reset',
           time_out_address: 'Manual Reset'
         });
@@ -708,7 +708,7 @@ router.get("/records/export", authenticateJWT, catchAsync(async (req, res) => {
   const lastDay = new Date(year, monthNum, 0).getDate();
   const endDate = `${year}-${String(monthNum).padStart(2, '0')}-${lastDay}`;
 
-  const records = await knexDB("attendance_records")
+  const records = await attendanceDB("attendance_records")
     .where({ user_id, org_id })
     .whereRaw("DATE(time_in) >= ?", [startDate])
     .whereRaw("DATE(time_in) <= ?", [endDate])
