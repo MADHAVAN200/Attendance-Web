@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from '../utils/catchAsync.js';
 import { uploadCompressedImage, getFileUrl, deleteFile } from '../s3/s3Service.js';
@@ -17,7 +17,7 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     }
 
     // 1. Fetch user_code for naming
-    const user = await knexDB('users').where({ user_id }).select('user_code').first();
+    const user = await attendanceDB('users').where({ user_id }).select('user_code').first();
     const userCode = user?.user_code || `user_${user_id}`;
 
     // 2. Upload to S3 with compression
@@ -31,11 +31,11 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     console.log(uploadResult);
 
     // 3. Update database
-    await knexDB('users')
+    await attendanceDB('users')
         .where({ user_id })
         .update({
             profile_image_url: uploadResult.url, // Storing full URL instead of key
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     res.json({
@@ -49,7 +49,7 @@ router.delete('/', authenticateJWT, catchAsync(async (req, res) => {
     const { user_id } = req.user;
 
     // 1. Fetch user data to get user_code and current profile_image_url
-    const user = await knexDB('users').where({ user_id }).select('user_code', 'profile_image_url').first();
+    const user = await attendanceDB('users').where({ user_id }).select('user_code', 'profile_image_url').first();
 
     if (!user) {
         return res.status(404).json({ ok: false, message: 'User not found' });
@@ -74,11 +74,11 @@ router.delete('/', authenticateJWT, catchAsync(async (req, res) => {
     }
 
     // 3. Update database to remove profile_image_url
-    await knexDB('users')
+    await attendanceDB('users')
         .where({ user_id })
         .update({
             profile_image_url: null,
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     res.json({
@@ -91,7 +91,7 @@ router.delete('/', authenticateJWT, catchAsync(async (req, res) => {
 router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
     const { user_id } = req.user;
 
-    const user = await knexDB('users as u')
+    const user = await attendanceDB('users as u')
         .leftJoin('designations as d', 'u.desg_id', 'd.desg_id')
         .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
         .select(
