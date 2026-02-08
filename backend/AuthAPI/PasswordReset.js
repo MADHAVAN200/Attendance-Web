@@ -2,7 +2,7 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import catchAsync from "../utils/catchAsync.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
 import OtpService from "../services/OtpService.js";
@@ -19,7 +19,7 @@ router.post("/forgot-password", authLimiter, catchAsync(async (req, res) => {
     }
 
     console.log(`[DEBUG] Forgot Password Request for: ${email}`);
-    const user = await knexDB('users')
+    const user = await attendanceDB('users')
         .where('email', email)
         .first();
 
@@ -271,7 +271,7 @@ router.post("/verify-otp", authLimiter, catchAsync(async (req, res) => {
         return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
-    const user = await knexDB('users')
+    const user = await attendanceDB('users')
         .where('email', email)
         .first();
 
@@ -322,7 +322,7 @@ router.post("/reset-password", authLimiter, catchAsync(async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await knexDB("users")
+        await attendanceDB("users")
             .where("user_id", decoded.user_id)
             .update({
                 user_password: hashedPassword
