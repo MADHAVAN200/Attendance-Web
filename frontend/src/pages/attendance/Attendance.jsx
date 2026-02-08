@@ -17,7 +17,9 @@ import {
     Clock,
     BarChart3,
     History,
-    MoreVertical
+    MoreVertical,
+    AlertCircle,
+    Check
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
@@ -107,6 +109,24 @@ const Attendance = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
+    // Correction Request State
+    const [correctionHistory, setCorrectionHistory] = useState([]);
+    const [corrDate, setCorrDate] = useState('');
+    const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
+    const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
+    const [corrMethod, setCorrMethod] = useState('add_session'); // 'add_session' | 'reset'
+    
+    // Inputs for 'fix' and 'reset'
+    const [corrIn, setCorrIn] = useState('');
+    const [corrOut, setCorrOut] = useState('');
+    
+    // Inputs for 'add_session'
+    const [corrSessions, setCorrSessions] = useState([{ time_in: '', time_out: '' }]);
+
+    const [corrReason, setCorrReason] = useState('');
+    const [existingRecord, setExistingRecord] = useState(null); // Data for selected date
+    const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
+
     // --- DATA FETCHING ---
 
     // 1. Fetch Daily Records (for "Mark Attendance" tab)
@@ -144,6 +164,47 @@ const Attendance = () => {
         }
     }, [reportMonth, activeTab]);
 
+    // 3. Fetch Correction History
+    const fetchCorrectionHistory = useCallback(async () => {
+        if (activeTab !== 'correction_request') return;
+        setLoading(true);
+        try {
+            const res = await attendanceService.getCorrectionRequests({ limit: 50 });
+            setCorrectionHistory(res.data || []);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to fetch correction history");
+        } finally {
+            setLoading(false);
+        }
+    }, [activeTab]);
+
+    // 4. Fetch Existing Record for Correction Date
+    useEffect(() => {
+        if (!corrDate) {
+            setExistingRecord(null);
+            return;
+        }
+
+        const fetchRecord = async () => {
+            try {
+                // Reuse getMyRecords to find data for this specific day
+                const res = await attendanceService.getMyRecords(corrDate, corrDate);
+                // API returns { data: [...] }. Access data property.
+                if (res?.data && res.data.length > 0) {
+                    setExistingRecord(res.data[0]);
+                } else {
+                    setExistingRecord(null);
+                }
+            } catch (error) {
+                console.error("Failed to fetch existing record", error);
+                setExistingRecord(null);
+            }
+        };
+
+        fetchRecord();
+    }, [corrDate]);
+
     useEffect(() => {
         fetchDailyRecords();
     }, [fetchDailyRecords]);
@@ -151,6 +212,10 @@ const Attendance = () => {
     useEffect(() => {
         fetchMonthlyRecords();
     }, [fetchMonthlyRecords]);
+
+    useEffect(() => {
+        fetchCorrectionHistory();
+    }, [fetchCorrectionHistory]);
 
 
     // --- ACTION HANDLERS ---
@@ -229,6 +294,7 @@ const Attendance = () => {
     };
 
     const handleDownloadReport = async () => {
+        const toastId = toast.loading("Generating report...");
         try {
             const data = await attendanceService.downloadMyReport(reportMonth);
             const url = window.URL.createObjectURL(new Blob([data]));
@@ -238,9 +304,66 @@ const Attendance = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success("Report downloaded");
+            toast.update(toastId, { render: "Report downloaded", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
-            toast.error(error.message);
+            toast.update(toastId, { render: error.message, type: "error", isLoading: false, autoClose: 3000 });
+        }
+    };
+
+    const handleSubmitCorrection = async (e) => {
+        e.preventDefault();
+        if (!corrDate || !corrReason) {
+            toast.error("Date and Reason are required");
+            return;
+        }
+
+        setIsSubmittingCorrection(true);
+        try {
+            const payload = {
+                correction_type: corrType === 'Other' ? corrOtherType : corrType,
+                request_date: corrDate,
+                reason: corrReason,
+                correction_method: corrMethod
+            };
+
+            // 2. ADD SESSION MODE (Manual Correction)
+            if (corrMethod === 'add_session') {
+                 // Filter out empty sessions
+                const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
+                if (validSessions.length === 0) {
+                    throw new Error("Please add at least one valid session (Time In & Time Out)");
+                }
+                payload.sessions = validSessions;
+            }
+            // 3. RESET MODE
+            else if (corrMethod === 'reset') {
+                 if (!corrIn || !corrOut) {
+                    throw new Error("New Time In and Time Out are required for Reset.");
+                 }
+                 payload.requested_time_in = corrIn;
+                 payload.requested_time_out = corrOut;
+            }
+
+            await attendanceService.submitCorrectionRequest(payload);
+            
+            toast.success("Correction request submitted!");
+            // Reset Form
+            setCorrDate('');
+            setCorrIn('');
+            setCorrOut('');
+            setCorrReason('');
+            setCorrType('Correction');
+            setCorrOtherType('');
+            setCorrMethod('add_session');
+            setCorrSessions([{ time_in: '', time_out: '' }]);
+            setExistingRecord(null);
+            
+            fetchCorrectionHistory();
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || "Failed to submit request");
+        } finally {
+            setIsSubmittingCorrection(false);
         }
     };
 
@@ -355,6 +478,15 @@ const Attendance = () => {
                             }`}
                     >
                         My Attendance
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('correction_request')}
+                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'correction_request'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        Correction Request
                     </button>
                 </div>
 
@@ -792,6 +924,285 @@ const Attendance = () => {
                     </div>
                 )}
 
+                {/* 3. CORRECTION REQUEST TAB */}
+                {activeTab === 'correction_request' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* LEFT: FORM */}
+                            <div className="lg:col-span-1">
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-6">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                            <AlertCircle size={20} />
+                                        </div>
+                                        Apply Correction
+                                    </h3>
+
+                                    <form onSubmit={handleSubmitCorrection} className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Date</label>
+                                            <input
+                                                type="date"
+                                                required
+                                                max={new Date().toISOString().split('T')[0]}
+                                                value={corrDate}
+                                                onChange={(e) => setCorrDate(e.target.value)}
+                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                            />
+                                        </div>
+
+                                        {/* Existing Record Display */}
+                                        {corrDate && (
+                                            <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-xs text-slate-600 dark:text-slate-300">
+                                                <div className="flex items-center gap-1 mb-1 font-bold text-indigo-600 dark:text-indigo-400">
+                                                    <History size={14} />
+                                                    <span>Recorded Attendance</span>
+                                                </div>
+                                                {existingRecord ? (
+                                                    <div className="space-y-1 pl-1">
+                                                        <div className="flex justify-between">
+                                                            <span>Time In:</span>
+                                                            <span className="font-mono">{existingRecord.time_in ? formatTime(existingRecord.time_in) : '--'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span>Time Out:</span>
+                                                            <span className="font-mono">{existingRecord.time_out ? formatTime(existingRecord.time_out) : '--'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <span>Status:</span>
+                                                            <div className="flex gap-2 items-center">
+                                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${existingRecord.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                                    {existingRecord.late_minutes > 0 ? 'LATE' : 'ON TIME'}
+                                                                </span>
+                                                                <span className="uppercase font-bold text-[10px] text-slate-600 dark:text-slate-400">
+                                                                    {existingRecord.status || 'Present'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="italic text-slate-400 pl-1">No attendance found for this date. (Marked Absent)</div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Type</label>
+                                            <select
+                                                value={corrType}
+                                                onChange={(e) => setCorrType(e.target.value)}
+                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all appearance-none"
+                                            >
+                                                <option value="Correction">Correction</option>
+                                                <option value="Missed Punch">Missed Punch</option>
+                                                <option value="Overtime">Overtime</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Custom Type Input */}
+                                        {corrType === 'Other' && (
+                                            <div className="animate-in fade-in slide-in-from-top-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Specify type (e.g. Forgot ID Card)"
+                                                    value={corrOtherType}
+                                                    onChange={(e) => setCorrOtherType(e.target.value)}
+                                                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Correction Method Selector */}
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Method</label>
+                                            <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                {['add_session', 'reset'].map(m => (
+                                                    <button
+                                                        key={m}
+                                                        type="button"
+                                                        onClick={() => setCorrMethod(m)}
+                                                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${corrMethod === m
+                                                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                                            }`}
+                                                    >
+                                                        {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* --- DYNAMIC FIELDS BASED ON METHOD --- */}
+
+                                        {/* 1. RESET MODE (Single Session) */}
+                                        {corrMethod === 'reset' && (
+                                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                                <div>
+                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                                                        New Time In
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        value={corrIn}
+                                                        onChange={(e) => setCorrIn(e.target.value)}
+                                                        required={corrMethod === 'reset'}
+                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
+                                                        New Time Out
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        value={corrOut}
+                                                        onChange={(e) => setCorrOut(e.target.value)}
+                                                        required={corrMethod === 'reset'}
+                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 2. ADD SESSION MODE */}
+                                        {corrMethod === 'add_session' && (
+                                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Sessions</label>
+                                                {corrSessions.map((session, idx) => (
+                                                    <div key={idx} className="flex gap-2 items-center">
+                                                        <div className="grid grid-cols-2 gap-2 flex-1">
+                                                            <input
+                                                                type="time"
+                                                                placeholder="In"
+                                                                value={session.time_in}
+                                                                onChange={(e) => {
+                                                                    const newSessions = [...corrSessions];
+                                                                    newSessions[idx].time_in = e.target.value;
+                                                                    setCorrSessions(newSessions);
+                                                                }}
+                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                            />
+                                                            <input
+                                                                type="time"
+                                                                placeholder="Out"
+                                                                value={session.time_out}
+                                                                onChange={(e) => {
+                                                                    const newSessions = [...corrSessions];
+                                                                    newSessions[idx].time_out = e.target.value;
+                                                                    setCorrSessions(newSessions);
+                                                                }}
+                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                            />
+                                                        </div>
+                                                        {corrSessions.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCorrSessions(corrSessions.filter((_, i) => i !== idx));
+                                                                }}
+                                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                            >
+                                                                <X size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
+                                                    className="w-full py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                                >
+                                                    + Add Another Session
+                                                </button>
+                                            </div>
+                                        )}
+
+
+
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Reason</label>
+                                            <textarea
+                                                required
+                                                rows="3"
+                                                value={corrReason}
+                                                onChange={(e) => setCorrReason(e.target.value)}
+                                                placeholder="Why is this correction needed?"
+                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all resize-none"
+                                            ></textarea>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmittingCorrection}
+                                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
+                                        >
+                                            {isSubmittingCorrection ? <RefreshCw className="animate-spin" size={20} /> : <Check size={20} />}
+                                            Submit Request
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            {/* RIGHT: HISTORY LIST */}
+                            <div className="lg:col-span-2">
+                                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full min-h-[500px]">
+                                    <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+                                        <h3 className="font-bold text-slate-800 dark:text-white">Request History</h3>
+                                    </div>
+
+                                    <div className="overflow-y-auto flex-1 p-6 space-y-4">
+                                        {loading ? (
+                                            <div className="text-center py-10 text-slate-400">Loading history...</div>
+                                        ) : correctionHistory.length === 0 ? (
+                                            <div className="text-center py-10 text-slate-400">No correction requests found.</div>
+                                        ) : (
+                                            correctionHistory.map((req) => (
+                                                <div key={req.acr_id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                                                    <div>
+                                                        <div className="flex items-center gap-3 mb-1">
+                                                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                                                                req.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                                                    'bg-amber-100 text-amber-700'
+                                                                }`}>
+                                                                {req.status}
+                                                            </span>
+                                                            <span className="text-xs text-slate-400 font-mono">
+                                                                {new Date(req.submitted_at).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        <h4 className="font-bold text-slate-700 dark:text-white text-sm">
+                                                            {req.correction_type} for {new Date(req.request_date).toLocaleDateString()}
+                                                        </h4>
+                                                        <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{req.reason}"</p>
+                                                    </div>
+
+                                                    <div className="text-right text-xs">
+                                                        {req.requested_time_in && (
+                                                            <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
+                                                                <span className="font-bold text-slate-400">In:</span> {req.requested_time_in}
+                                                            </div>
+                                                        )}
+                                                        {req.requested_time_out && (
+                                                            <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
+                                                                <span className="font-bold text-slate-400">Out:</span> {req.requested_time_out}
+                                                            </div>
+                                                        )}
+                                                        {!req.requested_time_in && !req.requested_time_out && (
+                                                            <span className="text-slate-400 italic">No time change</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
@@ -852,7 +1263,7 @@ const Attendance = () => {
                 )}
 
             </div>
-        </DashboardLayout>
+        </DashboardLayout >
     );
 };
 

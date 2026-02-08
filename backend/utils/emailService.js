@@ -10,20 +10,31 @@ import nodemailer from 'nodemailer';
  * @param {Array} [options.attachments] - Optional attachments
  */
 export const sendEmail = async ({ to, subject, text, html, attachments }) => {
+    // Trim environment variables to prevent issues with stray whitespace
+    const user = process.env.GMAIL_USER?.trim();
+    const clientId = process.env.GMAIL_CLIENT_ID?.trim();
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
+
+    if (!user || !clientId || !clientSecret || !refreshToken) {
+        console.error('[EMAIL ERROR] Missing OAuth2 credentials in .env');
+        return { ok: false, error: 'Missing email configuration' };
+    }
+
     try {
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
                 type: 'OAuth2',
-                user: process.env.GMAIL_USER,
-                clientId: process.env.GMAIL_CLIENT_ID,
-                clientSecret: process.env.GMAIL_CLIENT_SECRET,
-                refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-            },
+                user,
+                clientId,
+                clientSecret,
+                refreshToken,
+            }
         });
 
         const mailOptions = {
-            from: `"Mano Attendance System" <${process.env.GMAIL_USER}>`,
+            from: `"Mano Attendance System" <${user}>`,
             to,
             subject,
             text,
@@ -32,7 +43,7 @@ export const sendEmail = async ({ to, subject, text, html, attachments }) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent: %s', info.messageId);
+        console.log('Email sent successfully: %s', info.messageId);
         return { ok: true, messageId: info.messageId };
     } catch (error) {
         console.error('Error sending email:', error);

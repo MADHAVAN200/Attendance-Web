@@ -6,6 +6,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
 
   // Move fetchUser definition OUTSIDE useEffect
   const fetchUser = async () => {
@@ -18,6 +19,7 @@ export const AuthProvider = ({ children }) => {
           user_type: res.data.user_type?.toLowerCase()
         };
         setUser(normalizedUser);
+        setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
       } else {
         setUser(null);
       }
@@ -43,6 +45,7 @@ export const AuthProvider = ({ children }) => {
               user_type: userRes.data.user_type?.toLowerCase()
             };
             setUser(normalizedUser);
+            setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
           }
         }
       } catch (error) {
@@ -79,6 +82,7 @@ export const AuthProvider = ({ children }) => {
         user_type: res.data.user.user_type?.toLowerCase()
       };
       setUser(normalizedUser);
+      setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
       res.data.user = normalizedUser; // Update response for Login.jsx
     } else {
       await fetchUser();
@@ -93,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, authChecked, fetchUser }}>
+    <AuthContext.Provider value={{ user, login, logout, authChecked, fetchUser, avatarTimestamp }}>
       {children}
     </AuthContext.Provider>
   );

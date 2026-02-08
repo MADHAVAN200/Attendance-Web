@@ -1,6 +1,6 @@
 
 import jwt from 'jsonwebtoken';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -23,18 +23,9 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         let user;
 
         // Check based on token contents
-        // Super Admin tokens (issued by SuperAdmin.js) have user_type='super_admin'
         // User tokens (issued by LoginAPI.js) have user_type='employee'/'admin'/etc.
 
-        if (decoded.user_type === 'super_admin' || decoded.role === 'super_admin') {
-            user = await knexDB('super_admins').where({ id: decoded.id }).first();
-            if (user) {
-                user.user_type = 'super_admin';
-                req.superAdmin = user; // Legacy support
-            }
-        } else {
-            user = await knexDB('users').where({ user_id: decoded.user_id }).first();
-        }
+        user = await attendanceDB('users').where({ user_id: decoded.user_id }).first();
 
         if (!user) {
             return res.status(403).json({ message: "Forbidden: Invalid token user" });
@@ -44,13 +35,16 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         req.user = {
             ...decoded,
             id: user.user_id || user.id, // standardized ID accessor
-            user_type: user.user_type,
+            user_type: user.user_type ? user.user_type.toLowerCase() : 'employee',
             org_id: user.org_id || null
         };
 
         next();
 
     } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(403).json({ message: "Forbidden: Token expired" });
+        }
         console.error("Auth Middleware Error:", err);
         return res.status(403).json({ message: "Forbidden: Invalid or expired token" });
     }

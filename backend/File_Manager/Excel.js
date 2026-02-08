@@ -1,6 +1,6 @@
 // src/utils/exportAttendance.js
 import ExcelJS from "exceljs";
-import { knexDB } from "../Database.js";
+import { attendanceDB } from "../Database.js";
 
 // Helper to convert column index (1-based) to Excel Letter (e.g., 1->A, 27->AA)
 function getColumnLetter(colIndex) {
@@ -26,14 +26,14 @@ function getDatesInRange(startDate, endDate) {
 
 export async function exportAttendanceToFile(filePath, startDate, endDate, specificUserId = null) {
   // 1. Fetch Users
-  let usersQuery = knexDB("users").select("user_id", "user_name", "email", "designation").orderBy("user_name", "asc");
+  let usersQuery = attendanceDB("users").select("user_id", "user_name", "email", "designation").orderBy("user_name", "asc");
   if (specificUserId) {
     usersQuery = usersQuery.where("user_id", specificUserId);
   }
   const users = await usersQuery;
 
   // 2. Fetch Attendance Records within Date Range
-  let attendanceQuery = knexDB("attendance_records")
+  let attendanceQuery = attendanceDB("attendance_records")
     .whereRaw("DATE(time_in) >= ?", [startDate])
     .whereRaw("DATE(time_in) <= ?", [endDate]);
 
@@ -43,8 +43,8 @@ export async function exportAttendanceToFile(filePath, startDate, endDate, speci
 
   const rawRecords = await attendanceQuery.select(
     "*",
-    knexDB.raw("DATE_FORMAT(time_in, '%Y-%m-%d %H:%i:%s') as time_in_str"),
-    knexDB.raw("DATE_FORMAT(time_out, '%Y-%m-%d %H:%i:%s') as time_out_str")
+    attendanceDB.raw("DATE_FORMAT(time_in, '%Y-%m-%d %H:%i:%s') as time_in_str"),
+    attendanceDB.raw("DATE_FORMAT(time_out, '%Y-%m-%d %H:%i:%s') as time_out_str")
   ).orderBy("time_in", "asc");
 
   // 3. Organize Records by User -> Date

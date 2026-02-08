@@ -28,6 +28,7 @@ import {
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 import {
     PieChart, Pie, Cell,
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -35,6 +36,7 @@ import {
 } from 'recharts';
 
 const AttendanceMonitoring = () => {
+    const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
     const [selectedRequest, setSelectedRequest] = useState(1); // For Detail View
@@ -55,12 +57,20 @@ const AttendanceMonitoring = () => {
     const [reviewComment, setReviewComment] = useState('');
     const [requestsLoading, setRequestsLoading] = useState(false);
     const [correctionSearchTerm, setCorrectionSearchTerm] = useState('');
+    // Correction Filters
     const [correctionFilter, setCorrectionFilter] = useState({
         type: 'day',
         date: new Date().toISOString().split('T')[0],
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear()
     });
+
+    // Admin Override State
+    const [overrideMode, setOverrideMode] = useState(false);
+    const [overrideMethod, setOverrideMethod] = useState('fix');
+    const [overrideIn, setOverrideIn] = useState('');
+    const [overrideOut, setOverrideOut] = useState('');
+    const [overrideSessions, setOverrideSessions] = useState([{ time_in: '', time_out: '' }]);
 
     // Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
@@ -177,22 +187,25 @@ const AttendanceMonitoring = () => {
             const interval = setInterval(() => fetchData(true), 15000);
             return () => clearInterval(interval);
         }
-    }, [activeTab, selectedDate, correctionFilter.type, correctionFilter.date, correctionFilter.month, correctionFilter.year]);
+    }, [activeTab, selectedDate]);
 
     const fetchCorrectionRequests = async () => {
         setRequestsLoading(true);
         try {
-            const params = { limit: 50 };
-            if (correctionFilter.type === 'day') params.date = correctionFilter.date;
-            if (correctionFilter.type === 'month') {
-                params.month = correctionFilter.month;
-                params.year = correctionFilter.year;
-            }
-            if (correctionFilter.type === 'year') params.year = correctionFilter.year;
+            const params = { limit: 100 }; // Increased limit to show more recent requests
+            // Removed date filters as per user request
 
             const res = await attendanceService.getCorrectionRequests(params);
-            setCorrectionRequests(res.data || []);
-            setRequestCount(res.count || 0);
+            
+            // Sort: Pending first, then by date (newest first)
+            const sortedData = (res.data || []).sort((a, b) => {
+                if (a.status === 'pending' && b.status !== 'pending') return -1;
+                if (a.status !== 'pending' && b.status === 'pending') return 1;
+                return new Date(b.request_date) - new Date(a.request_date);
+            });
+
+            setCorrectionRequests(sortedData);
+            setRequestCount(sortedData.filter(r => r.status === 'pending').length);
 
             // Auto-select first request if none selected or if previously selected one is gone
             if (res.data && res.data.length > 0) {
@@ -214,6 +227,46 @@ const AttendanceMonitoring = () => {
             const data = await attendanceService.getCorrectionDetails(acr_id);
             setSelectedRequestData(data);
             setReviewComment(data.review_comments || '');
+            
+            // Reset Override State
+            setOverrideMode(false);
+            setOverrideMethod(data.correction_method || 'add_session'); // default to add_session (Manual Correction)
+            
+            let correctionData = {};
+            try {
+                correctionData = typeof data.correction_data === 'string' 
+                    ? JSON.parse(data.correction_data) 
+                    : data.correction_data || {};
+            } catch (error) {
+                console.error("Error parsing correction data", error);
+            }
+
+            setOverrideIn(correctionData.time_in || '');
+            setOverrideOut(correctionData.time_out || '');
+            
+            // Parse sessions if available
+            try {
+                 let sessions = correctionData.sessions;
+
+                 // Fallback for fallback/legacy if sessions is empty but we have time_in/out
+                 if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
+                     // Helper to extract HH:MM
+                     const getTime = (t) => {
+                         if (!t) return '';
+                         if (t.includes('T')) return t.split('T')[1].substring(0, 5);
+                         if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
+                         return t.substring(0, 5);
+                     };
+                     sessions = [{
+                         time_in: getTime(correctionData.time_in),
+                         time_out: getTime(correctionData.time_out)
+                     }];
+                 }
+
+                 setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
+            } catch (e) {
+                 setOverrideSessions([{ time_in: '', time_out: '' }]);
+            }
         } catch (error) {
             toast.error("Failed to fetch request details");
         }
@@ -284,7 +337,31 @@ const AttendanceMonitoring = () => {
 
     const handleUpdateStatus = async (acr_id, status) => {
         try {
-            await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment);
+            const overrides = {};
+            if (status === 'approved' && overrideMode) {
+                overrides.correction_method = overrideMethod;
+                
+                if (overrideMethod === 'reset') {
+                     if (!overrideIn || !overrideOut) {
+                         toast.error("Both Start and End times are required for Reset override");
+                         return;
+                     }
+                     overrides.reset_time_in = overrideIn;
+                     overrides.reset_time_out = overrideOut;
+                } else if (overrideMethod === 'add_session' || overrideMethod === 'fix') {
+                     const valid = overrideSessions.filter(s => s.time_in && s.time_out);
+                     if (valid.length === 0) {
+                         toast.error("At least one valid session required for manual correction");
+                         return;
+                     }
+                     overrides.sessions = valid;
+                     // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
+                     // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
+                     // Backend handles both.
+                }
+            }
+
+            await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment, overrides);
             toast.success(`Request ${status} successfully`);
             fetchCorrectionRequests();
             if (selectedRequestData && selectedRequestData.acr_id === acr_id) {
@@ -547,7 +624,7 @@ const AttendanceMonitoring = () => {
                                                                     <div className="flex items-center gap-3">
                                                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
                                                                             {item.avatar.startsWith('http') ? (
-                                                                                <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                                <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
                                                                             ) : (
                                                                                 item.avatar
                                                                             )}
@@ -632,7 +709,7 @@ const AttendanceMonitoring = () => {
                                                                 <div className="flex gap-4">
                                                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
                                                                         {item.avatar.startsWith('http') ? (
-                                                                            <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                            <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
                                                                         ) : (
                                                                             item.avatar
                                                                         )}
@@ -888,7 +965,7 @@ const AttendanceMonitoring = () => {
                                 <div className="flex justify-between items-center px-1">
                                     <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">Requests</h3>
                                     <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-                                        {requestCount} Total
+                                        {requestCount} Pending
                                     </div>
                                 </div>
 
@@ -904,30 +981,7 @@ const AttendanceMonitoring = () => {
                                 </div>
 
                                 {/* Date Navigation */}
-                                <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto">
-                                    <button
-                                        onClick={handleCorrectionPrevDay}
-                                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm flex-shrink-0"
-                                    >
-                                        <ChevronLeft size={14} />
-                                    </button>
-
-                                    <div className="relative flex-1">
-                                        <input
-                                            type="date"
-                                            value={correctionFilter.date}
-                                            onChange={(e) => setCorrectionFilter(prev => ({ ...prev, date: e.target.value }))}
-                                            className="w-full px-2 py-1.5 text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none text-center transition-all cursor-pointer text-indigo-600"
-                                        />
-                                    </div>
-
-                                    <button
-                                        onClick={handleCorrectionNextDay}
-                                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm flex-shrink-0"
-                                    >
-                                        <ChevronRight size={14} />
-                                    </button>
-                                </div>
+                                { /* Date Navigation Removed */ }
                             </div>
                             <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700">
                                 {requestsLoading ? (
@@ -952,7 +1006,7 @@ const AttendanceMonitoring = () => {
                                                     </div>
                                                 </div>
                                                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${getRequestTypeStyle(request.correction_type)}`}>
-                                                    {request.correction_type.replace('_', ' ')}
+                                                    {(request.correction_type || '').replace('_', ' ')}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 mt-3">
@@ -966,7 +1020,7 @@ const AttendanceMonitoring = () => {
                                                     }`}>
                                                     {request.status === 'pending' && (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000)
                                                         ? 'Expired'
-                                                        : request.status.charAt(0).toUpperCase() + request.status.slice(1)
+                                                        : (request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)
                                                     }
                                                 </div>
                                             </div>
@@ -1005,6 +1059,89 @@ const AttendanceMonitoring = () => {
                                         )}
                                     </div>
 
+                                    {/* ADMIN OVERRIDE SECTION */}
+                                    {selectedRequestData.status === 'pending' && (
+                                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <input 
+                                                    type="checkbox" 
+                                                    id="overrideToggle" 
+                                                    checked={overrideMode} 
+                                                    onChange={(e) => {
+                                                        const isChecked = e.target.checked;
+                                                        setOverrideMode(isChecked);
+                                                        if (isChecked && selectedRequestData) {
+                                                            const getTime = (val) => {
+                                                                if (!val) return '';
+                                                                // Handle "YYYY-MM-DD HH:MM:SS" or "HH:MM:SS"
+                                                                const timePart = val.includes(' ') ? val.split(' ')[1] : (val.includes('T') ? val.split('T')[1] : val);
+                                                                return timePart.substring(0, 5);
+                                                            };
+                                                            setOverrideIn(getTime(selectedRequestData.requested_time_in));
+                                                            setOverrideOut(getTime(selectedRequestData.requested_time_out));
+                                                            // Also match the method
+                                                            setOverrideMethod(selectedRequestData.correction_method || 'fix');
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" 
+                                                />
+                                                <label htmlFor="overrideToggle" className="text-sm font-bold text-slate-700 dark:text-white select-none cursor-pointer">
+                                                    Override Request Details
+                                                </label>
+                                            </div>
+
+                                            {overrideMode && (
+                                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                                     {/* Method Selector */}
+                                                    <div className="flex gap-2">
+                                                        {['add_session', 'reset'].map(m => (
+                                                            <button
+                                                                key={m}
+                                                                onClick={() => setOverrideMethod(m)}
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
+                                                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                                                                    }`}
+                                                            >
+                                                                {m === 'add_session' ? 'MANUAL CORRECTION' : 'RESET DAY'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Dynamic Inputs */}
+                                                    {overrideMethod === 'add_session' || overrideMethod === 'fix' ? (
+                                                        <div className="space-y-2">
+                                                            {overrideSessions.map((s, idx) => (
+                                                                <div key={idx} className="flex gap-2 items-center">
+                                                                    <input type="time" value={s.time_in} onChange={(e) => {
+                                                                        const ns = [...overrideSessions]; ns[idx].time_in = e.target.value; setOverrideSessions(ns);
+                                                                    }} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                                    <span className="text-slate-400">-</span>
+                                                                    <input type="time" value={s.time_out} onChange={(e) => {
+                                                                        const ns = [...overrideSessions]; ns[idx].time_out = e.target.value; setOverrideSessions(ns);
+                                                                    }} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                                    <button onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-red-500 hover:bg-red-50 p-1 rounded">X</button>
+                                                                </div>
+                                                            ))}
+                                                            <button onClick={() => setOverrideSessions([...overrideSessions, {time_in:'', time_out:''}])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">+ Add Session</button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-4">
+                                                            <div className="flex-1">
+                                                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">New In</label>
+                                                                <input type="time" value={overrideIn} onChange={(e) => setOverrideIn(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">New Out</label>
+                                                                <input type="time" value={overrideOut} onChange={(e) => setOverrideOut(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="flex-1 overflow-y-auto p-6">
 
                                         {/* Grid Layout for details */}
@@ -1012,24 +1149,86 @@ const AttendanceMonitoring = () => {
                                             <div>
                                                 <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-3">Correction Details</h4>
                                                 <div className="space-y-4">
-                                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                        <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Request Type</span>
-                                                        <span className="font-semibold text-slate-800 dark:text-white">{selectedRequestData.correction_type.replace('_', ' ').toUpperCase()}</span>
-                                                    </div>
                                                     <div className="flex gap-4">
-                                                        <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Requested Time In</span>
-                                                            <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">
-                                                                {selectedRequestData.requested_time_in ? new Date(selectedRequestData.requested_time_in).toLocaleTimeString() : '-'}
-                                                            </span>
+                                                        <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Request Type</span>
+                                                            <span className="font-semibold text-slate-800 dark:text-white">{selectedRequestData.correction_type.replace('_', ' ').toUpperCase()}</span>
                                                         </div>
-                                                        <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
-                                                            <span className="text-sm text-indigo-600 dark:text-indigo-400 block mb-1">Requested Time Out</span>
-                                                            <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">
-                                                                {selectedRequestData.requested_time_out ? new Date(selectedRequestData.requested_time_out).toLocaleTimeString() : '-'}
+                                                        <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                                                            <span className="text-sm text-indigo-600 dark:text-indigo-400 block mb-1">Method</span>
+                                                            <span className="font-bold text-indigo-700 dark:text-indigo-300">
+                                                                {selectedRequestData.correction_method ? selectedRequestData.correction_method.toUpperCase() : 'FIX'}
                                                             </span>
                                                         </div>
                                                     </div>
+
+                                                    {/* DETAILS DISPLAY BASED ON METHOD */}
+                                                    {selectedRequestData.correction_method === 'add_session' ? (
+                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-2">Requested Sessions</span>
+                                                            <div className="space-y-2">
+                                                                {(() => {
+                                                                    try {
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        
+                                                                        const sessions = correctionData.sessions || [];
+
+                                                                        const formatSessionTime = (t) => {
+                                                                            if (!t) return '--:--';
+                                                                            // Handle HH:MM or HH:MM:SS
+                                                                            const [h, m] = t.split(':');
+                                                                            const date = new Date();
+                                                                            date.setHours(parseInt(h), parseInt(m));
+                                                                            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                                                                        };
+                                                                        return (sessions).map((s, i) => (
+                                                                            <div key={i} className="flex justify-between text-sm font-mono border-b border-slate-200 dark:border-slate-700 pb-1 last:border-0 last:pb-0">
+                                                                                <span>{formatSessionTime(s.time_in)}</span>
+                                                                                <span className="text-slate-400">to</span>
+                                                                                <span>{formatSessionTime(s.time_out)}</span>
+                                                                            </div>
+                                                                        ));
+                                                                    } catch (e) { return <span className="text-red-500 text-xs">Error parsing sessions</span>; }
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-4">
+                                                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                                <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New In' : 'Time In'}</span>
+                                                                <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">
+                                                                    {(() => {
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        const val = correctionData.time_in;
+                                                                        if (!val) return '-';
+                                                                        let d = new Date(val.replace(' ', 'T'));
+                                                                        if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
+                                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                                <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New Out' : 'Time Out'}</span>
+                                                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                                                                    {(() => {
+                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
+                                                                            ? JSON.parse(selectedRequestData.correction_data)
+                                                                            : selectedRequestData.correction_data || {};
+                                                                        const val = correctionData.time_out;
+                                                                        if (!val) return '-';
+                                                                        let d = new Date(val.replace(' ', 'T'));
+                                                                        if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
+                                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
                                                     {selectedRequestData.location_name && (
                                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
                                                             <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Requested Location</span>

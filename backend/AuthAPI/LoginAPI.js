@@ -21,7 +21,7 @@ import { authenticateJWT } from "../middleware/auth.js";
 
 
 // Login route
-router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) => {
+router.post("/login", authLimiter, catchAsync(async (req, res) => {
   const { user_input, user_password } = req.body;
 
   if (!user_input || !user_password) {
@@ -29,7 +29,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
   }
 
   // 1. Fetch user by Email or Phone
-  const user = await DB.knexDB('users')
+  const user = await DB.attendanceDB('users')
     .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
     .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
     .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
@@ -106,7 +106,7 @@ router.post("/login", authLimiter, verifyCaptcha, catchAsync(async (req, res) =>
       designation: user.desg_name,
       department: user.dept_name,
       org_id: user.org_id,
-      avatar_url: user.profile_image_url
+      profile_image_url: user.profile_image_url
     }
   });
 
@@ -185,7 +185,7 @@ router.post("/refresh", async (req, res) => {
 // Route: GET /me - Check current auth/session
 router.get("/me", authenticateJWT, catchAsync(async (req, res) => {
   // Fetch fresh user data to ensure avatar updates are reflected immediately
-  const user = await DB.knexDB('users')
+  const user = await DB.attendanceDB('users')
     .where('user_id', req.user.user_id)
     .select('user_code', 'user_name', 'email', 'user_type', 'org_id', 'profile_image_url')
     .first();
@@ -201,7 +201,6 @@ router.get("/me", authenticateJWT, catchAsync(async (req, res) => {
     email: user.email,
     user_type: user.user_type,
     org_id: user.org_id,
-    avatar_url: user.profile_image_url,
     profile_image_url: user.profile_image_url
   });
 }));

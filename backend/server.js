@@ -36,6 +36,8 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'https://localhost:5173',
   'https://127.0.0.1:5173',
+  'http://localhost:5174', // Vite fallback port
+  'https://localhost:5174', // Vite fallback port
   process.env.FRONTEND_URL,
 ];
 
@@ -74,14 +76,13 @@ import { initAttendanceProcessor } from './cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './cron/cleanupScheduler.js';
 
 
-// import SuperAdminRoutes from './Admin/SuperAdmin.js';
+
 // import { initSubscriptionManager } from './cron/SubscriptionManager.js';
 
 app.use('/auth', AuthRoutes);
 app.use('/auth', PasswordResetRoutes);
 app.use('/attendance', AttendanceRoutes);
 app.use('/admin', AdminRoutes);
-// app.use('/super-admin', SuperAdminRoutes); // New Super Admin Routes
 app.use('/admin/reports', ReportRoutes);
 app.use('/attendance/reports', ReportRoutes);
 app.use('/locations', LocationRoutes); // Admin locations
@@ -96,6 +97,11 @@ app.use('/dar/activities', ActivitiesAPI);
 app.use('/dar/requests', RequestsAPI);
 app.use('/dar/settings', SettingsAPI);
 app.use('/profile', ProfileRoutes);
+
+// Payment Routes
+import PaymentRoutes from './Payment/paymentRoutes.js';
+app.use('/api/payment', PaymentRoutes);
+
 app.get('/', (req, res) => {
   res.send('Backend is running 🚀');
 });

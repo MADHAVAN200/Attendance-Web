@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -10,7 +10,7 @@ router.get('/', authenticateJWT, catchAsync(async (req, res) => {
     const user_id = req.user.user_id;
     const { limit = 20, unread_only = false } = req.query;
 
-    let query = knexDB('notifications')
+    let query = attendanceDB('notifications')
         .where({ user_id })
         .orderBy('created_at', 'desc')
         .limit(Math.min(parseInt(limit), 50));
@@ -20,7 +20,7 @@ router.get('/', authenticateJWT, catchAsync(async (req, res) => {
     }
 
     const notifications = await query;
-    const unreadCount = await knexDB('notifications').where({ user_id, is_read: 0 }).count('notification_id as count').first();
+    const unreadCount = await attendanceDB('notifications').where({ user_id, is_read: 0 }).count('notification_id as count').first();
 
     res.json({
         ok: true,
@@ -34,7 +34,7 @@ router.put('/:id/read', authenticateJWT, catchAsync(async (req, res) => {
     const user_id = req.user.user_id;
     const { id } = req.params;
 
-    await knexDB('notifications')
+    await attendanceDB('notifications')
         .where({ notification_id: id, user_id })
         .update({ is_read: 1 });
 
@@ -45,7 +45,7 @@ router.put('/:id/read', authenticateJWT, catchAsync(async (req, res) => {
 router.put('/read-all', authenticateJWT, catchAsync(async (req, res) => {
     const user_id = req.user.user_id;
 
-    await knexDB('notifications')
+    await attendanceDB('notifications')
         .where({ user_id, is_read: 0 })
         .update({ is_read: 1 });
 

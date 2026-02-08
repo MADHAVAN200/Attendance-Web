@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Helper: Get Org Buffer Settings
 export async function getOrgBuffer(org_id) {
-    const settings = await knexDB("dar_settings").where({ org_id }).first();
+    const settings = await attendanceDB("dar_settings").where({ org_id }).first();
     return settings ? settings.buffer_minutes : 30; // Default 30 mins
 }
 
@@ -35,7 +35,7 @@ export async function validateActivityTime(user_id, date, start_time, end_time, 
     }
 
     // 2. Check Attendance Window (Time In / Time Out)
-    const attendance = await knexDB("attendance_records")
+    const attendance = await attendanceDB("attendance_records")
         .where("user_id", user_id)
         .whereRaw("DATE(time_in) = ?", [date])
         .orderBy("time_in", "asc");
@@ -115,7 +115,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(400).json({ ok: false, message: err.message });
     }
 
-    const [activity_id] = await knexDB("daily_activities").insert({
+    const [activity_id] = await attendanceDB("daily_activities").insert({
         org_id,
         user_id,
         activity_date,
@@ -125,7 +125,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
         description,
         activity_type,
         status,
-        created_at: knexDB.fn.now(),
+        created_at: attendanceDB.fn.now(),
     });
 
     res.json({ ok: true, message: "Activity logged successfully", activity_id, status });
@@ -144,7 +144,7 @@ router.put('/update/:activity_id', authenticateJWT, catchAsync(async (req, res) 
         return res.status(400).json({ ok: false, message: err.message });
     }
 
-    await knexDB("daily_activities")
+    await attendanceDB("daily_activities")
         .where({ activity_id, org_id, user_id })
         .update({
             activity_date,
@@ -154,7 +154,7 @@ router.put('/update/:activity_id', authenticateJWT, catchAsync(async (req, res) 
             description,
             activity_type,
             status,
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     res.json({ ok: true, message: "Activity updated successfully", status });
@@ -165,7 +165,7 @@ router.delete('/delete/:activity_id', authenticateJWT, catchAsync(async (req, re
     const { activity_id } = req.params;
     const { user_id, org_id } = req.user;
 
-    const deleted = await knexDB("daily_activities")
+    const deleted = await attendanceDB("daily_activities")
         .where({ activity_id, org_id, user_id })
         .del();
 
@@ -180,10 +180,10 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
     const { date, date_from, date_to } = req.query;
     const { user_id, org_id } = req.user;
 
-    let query = knexDB("daily_activities")
+    let query = attendanceDB("daily_activities")
         .select(
             "*",
-            knexDB.raw("DATE_FORMAT(activity_date, '%Y-%m-%d') as activity_date")
+            attendanceDB.raw("DATE_FORMAT(activity_date, '%Y-%m-%d') as activity_date")
         )
         .where({ org_id, user_id });
 
@@ -208,13 +208,13 @@ router.get('/settings', authenticateJWT, catchAsync(async (req, res) => {
 router.get('/admin/all', authenticateJWT, catchAsync(async (req, res) => {
     const { org_id, user_type } = req.user;
 
-    if (user_type !== 'admin') {
+    if (user_type !== 'admin' && user_type !== 'hr') {
         return res.status(403).json({ ok: false, message: 'Access denied. Admins only.' });
     }
 
     const { date, startDate, endDate } = req.query;
 
-    let query = knexDB('daily_activities as da')
+    let query = attendanceDB('daily_activities as da')
         .join('users as u', 'da.user_id', 'u.user_id')
         .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
         .leftJoin('shifts as s', 'u.shift_id', 's.shift_id')

@@ -14,7 +14,8 @@ import {
     Users,
     X,
     Building, // Import building icon
-    Clock // Import Clock icon for Shifts
+    Clock, // Import Clock icon for Shifts
+    Edit // Import Edit icon
 } from 'lucide-react';
 import MinimalSelect from '../../components/MinimalSelect';
 import {
@@ -27,7 +28,7 @@ import MiniCalendar from '../../components/dar/MiniCalendar';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
-const DARAdmin = () => {
+const DARAdmin = ({ embedded = false }) => {
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'settings' | 'data'
 
     // --- SETTINGS STATE ---
@@ -35,6 +36,7 @@ const DARAdmin = () => {
     const [newCat, setNewCat] = useState("");
     const [bufferTime, setBufferTime] = useState(30);
     const [loadingSettings, setLoadingSettings] = useState(false);
+
 
     // Fetch Settings
     const fetchSettings = async () => {
@@ -555,7 +557,59 @@ const DARAdmin = () => {
                 })),
                 status: r.status
             }));
-            setRequests(mapped);
+            // Mock Data for demonstration
+            const mockRequests = [
+                {
+                    id: 'mock-1',
+                    user: 'Rohan Sharma',
+                    date: '2024-02-02',
+                    changes: 3,
+                    employeeName: 'Rohan Sharma',
+                    originalTasks: [
+                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '11:00', category: 'SITE_VISIT' },
+                        { id: 't2', title: 'Material Handover', startTime: '11:30', endTime: '12:30', category: 'LOGISTICS' },
+                        { id: 't3', title: 'Client Call', startTime: '14:00', endTime: '15:00', category: 'MEETING' }
+                    ],
+                    proposedTasks: [
+                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '12:00', category: 'SITE_VISIT' }, // Extended
+                        { id: 't3', title: 'Client Call', startTime: '15:00', endTime: '16:00', category: 'MEETING' }, // Moved
+                        { id: 't4', title: 'Safety Briefing', startTime: '12:00', endTime: '12:30', category: 'MISC' } // New
+                    ],
+                    status: 'pending'
+                },
+                {
+                    id: 'mock-2',
+                    user: 'Priya Patel',
+                    date: '2024-02-01',
+                    changes: 1,
+                    employeeName: 'Priya Patel',
+                    originalTasks: [
+                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '13:00', category: 'OFFICE' }
+                    ],
+                    proposedTasks: [
+                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '14:00', category: 'OFFICE' } // Extended
+                    ],
+                    status: 'pending'
+                },
+                {
+                    id: 'mock-3', // The one "just rejected" - restored
+                    user: 'Amit Singh',
+                    date: '2024-02-03',
+                    changes: 2,
+                    employeeName: 'Amit Singh',
+                    originalTasks: [
+                        { id: 'a1', title: 'Morning Standup', startTime: '09:00', endTime: '09:30', category: 'MEETING' },
+                        { id: 'a2', title: 'Inventory Check', startTime: '10:00', endTime: '12:00', category: 'INVENTORY' }
+                    ],
+                    proposedTasks: [
+                        { id: 'a1', title: 'Morning Standup', startTime: '09:30', endTime: '10:00', category: 'MEETING' },
+                        // Inventory Check Deleted
+                    ],
+                    status: 'pending'
+                }
+            ];
+
+            setRequests([...mockRequests, ...mapped]);
         } catch (err) {
             console.error(err);
             toast.error("Failed to load requests");
@@ -566,8 +620,9 @@ const DARAdmin = () => {
 
     useEffect(() => {
         if (activeTab === 'insights') {
-            fetchRequests();
             fetchInsights();
+        } else if (activeTab === 'requests') {
+            fetchRequests();
         } else if (activeTab === 'settings') {
             fetchSettings();
         } else if (activeTab === 'data') {
@@ -668,14 +723,15 @@ const DARAdmin = () => {
     // --- HANDLERS ---
     const handleAddCategory = () => {
         if (newCat.trim()) {
-            setCategories([...categories, newCat.trim()]);
+            setCategories(prev => [...prev, newCat.trim()]);
             setNewCat("");
         }
     };
 
     const handleRemoveCategory = (cat) => {
-        setCategories(categories.filter(c => c !== cat));
+        setCategories(prev => prev.filter(c => c !== cat));
     };
+
 
     const formatTime = (val) => {
         const normalized = val >= 24 ? val - 24 : val;
@@ -686,26 +742,41 @@ const DARAdmin = () => {
         return `${h12}${m > 0 ? ':' + m : ''} ${ampm}`;
     };
 
+    const Wrapper = embedded ? React.Fragment : DashboardLayout;
+
     return (
-        <DashboardLayout title="DAR Admin Panel">
+        <Wrapper {...(embedded ? {} : { title: "DAR Admin Panel" })}>
             <div className="flex flex-col h-[calc(100vh-140px)] gap-6">
 
-                {/* Tabs Header */}
-                <div className="flex items-center gap-1 bg-white dark:bg-dark-card p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-fit">
+                {/* Tabs Header - Styled like Attendance.jsx */}
+                <div className="border-b border-slate-200 dark:border-slate-700 flex gap-12 px-2">
                     {[
-                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Insights' },
-                        { id: 'data', icon: <FileText size={16} />, label: 'Master Data' },
-                        { id: 'settings', icon: <Settings size={16} />, label: 'Configuration' },
+                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Live Dashboard', type: 'tab' },
+                        { id: 'requests', icon: <Edit size={16} />, label: 'Edit Requests', type: 'tab' },
+                        { id: 'data', icon: <FileText size={16} />, label: 'Master Data', type: 'tab' },
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === tab.id
-                                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            onClick={() => {
+                                if (tab.type === 'modal') {
+                                    setShowSettings(true);
+                                } else {
+                                    setActiveTab(tab.id);
+                                    setSelectedRequest(null);
+                                }
+                            }}
+                            className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tab.id
+                                ? 'text-indigo-600 dark:text-indigo-400'
+                                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                 }`}
                         >
-                            {tab.icon} {tab.label}
+                            <div className="flex items-center gap-2">
+                                {tab.icon}
+                                {tab.label}
+                            </div>
+                            {activeTab === tab.id && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
+                            )}
                         </button>
                     ))}
                 </div>
@@ -713,78 +784,87 @@ const DARAdmin = () => {
                 {/* Content Area */}
                 <div className="flex-1 overflow-hidden">
 
-                    {/* --- CONFIGURATION TAB --- */}
-                    {activeTab === 'settings' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full overflow-y-auto pb-10">
-                            {/* Category Manager */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Activity Categories</h3>
-                                <p className="text-sm text-slate-500 mb-6">Define the list of activities users can select. This will appear in their dropdown.</p>
-
-                                <div className="flex gap-2 mb-6">
-                                    <input
-                                        type="text"
-                                        value={newCat}
-                                        onChange={(e) => setNewCat(e.target.value)}
-                                        placeholder="Enter new category (e.g. 'Safety Check')"
-                                        className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                                    />
+                    {/* --- CONFIGURATION MODAL --- */}
+                    {showSettings && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                            <div className="bg-white dark:bg-dark-card w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                {/* Modal Header */}
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                                    <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <Settings size={20} className="text-indigo-600" />
+                                        DAR Configuration
+                                    </h2>
                                     <button
-                                        onClick={handleAddCategory}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors"
+                                        onClick={() => setShowSettings(false)}
+                                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                     >
-                                        <Plus size={20} />
+                                        <X size={20} />
                                     </button>
                                 </div>
 
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                                    {categories.map((cat, i) => (
-                                        <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors">
-                                            <span className="font-semibold text-slate-700 dark:text-slate-200">{cat}</span>
+                                {/* Modal Body */}
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 h-full flex flex-col">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Activity Categories</h3>
+                                        <p className="text-sm text-slate-500 mb-6">Manage the list of standard activities available for employees.</p>
+
+                                        <div className="flex gap-2 mb-6">
+                                            <input
+                                                type="text"
+                                                value={newCat}
+                                                onChange={(e) => setNewCat(e.target.value)}
+                                                placeholder="Enter new category..."
+                                                className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                            />
                                             <button
-                                                onClick={() => handleRemoveCategory(cat)}
-                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                type="button"
+                                                onClick={handleAddCategory}
+                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
                                             >
-                                                <Trash2 size={16} />
+                                                <Plus size={20} />
                                             </button>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
 
-                            {/* General Settings */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 h-fit">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">General Configuration</h3>
-
-                                <div className="space-y-6">
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                                            DAR Buffer Time (Minutes)
-                                        </label>
-                                        <p className="text-xs text-slate-500 mb-3">
-                                            Grace period allowing users to log tasks into the near future.
-                                        </p>
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="number"
-                                                value={bufferTime}
-                                                onChange={(e) => setBufferTime(e.target.value)}
-                                                className="w-24 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold text-center"
-                                            />
-                                            <span className="text-sm font-medium text-slate-500">minutes</span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 overflow-y-auto custom-scrollbar pr-2 content-start">
+                                            {categories.map((cat, i) => (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors h-fit shadow-sm">
+                                                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
+                                                    <button
+                                                        onClick={() => handleRemoveCategory(cat)}
+                                                        className="min-w-[32px] p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {categories.length === 0 && (
+                                                <div className="col-span-full flex flex-col items-center justify-center p-8 text-slate-400 italic">
+                                                    No categories defined. Add one properly.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="pt-6 border-t border-slate-100 dark:border-slate-700">
-                                        <button
-                                            onClick={handleSaveSettings}
-                                            className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] transition-transform"
-                                        >
-                                            <Save size={18} />
-                                            Save Changes
-                                        </button>
-                                    </div>
+                                {/* Modal Footer */}
+                                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+                                    <button
+                                        onClick={() => setShowSettings(false)}
+                                        className="px-6 py-2.5 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            handleSaveSettings();
+                                            setShowSettings(false);
+                                        }}
+                                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+                                    >
+                                        <Save size={18} />
+                                        Save Changes
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1047,10 +1127,135 @@ const DARAdmin = () => {
                     )}
 
 
-                    {/* --- INSIGHTS TAB --- */}
+                    {/* --- REQUESTS TAB --- */}
+                    {activeTab === 'requests' && (
+                        <div className="flex h-full gap-6 pb-6">
+                            {/* Left: List */}
+                            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 dark:border-slate-700 space-y-3 bg-white dark:bg-dark-card z-10">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-bold text-slate-800 dark:text-white">Requests</h3>
+                                        <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-bold">{requests.length} Total</span>
+                                    </div>
+                                    <div className="relative">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by employee name..."
+                                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                                    {loadingRequests ? (
+                                        <div className="text-center py-10 text-slate-400">Loading requests...</div>
+                                    ) : requests.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400 italic">No requests found.</div>
+                                    ) : (
+                                        requests.map(req => (
+                                            <div
+                                                key={req.id}
+                                                onClick={() => setSelectedRequest(req)}
+                                                className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${selectedRequest?.id === req.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200'}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>{req.user}</span>
+                                                    <span className="text-[10px] text-slate-400 font-mono">{req.date}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mb-2">{req.changes} changes proposed</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{req.status}</span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right: Details */}
+                            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col relative">
+                                {selectedRequest ? (
+                                    <RequestReviewModal
+                                        isOpen={true}
+                                        onClose={() => setSelectedRequest(null)}
+                                        request={selectedRequest}
+                                        onApprove={() => handleApproveRequest(selectedRequest.id)}
+                                        onReject={() => handleRejectRequest(selectedRequest.id)}
+                                        inline={true}
+                                    />
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
+                                        <FileText size={48} className="mb-4 opacity-50" />
+                                        <span className="text-lg font-medium">Select a request to view details</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* --- INSIGHTS TAB --- */}
                     {activeTab === 'insights' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto pb-10 custom-scrollbar">
+
+                            {/* Chart 3: Pending DAR Edit Requests */}
+                            {/* Configurations Card */}
+                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col lg:col-span-2">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <Settings size={20} className="text-indigo-600" /> Configurations
+                                    </h3>
+                                    <button
+                                        onClick={handleSaveSettings}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors"
+                                    >
+                                        <Save size={14} /> Save
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 flex flex-col">
+                                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Activity Categories</h4>
+                                    <p className="text-xs text-slate-500 mb-4">Manage standard activities available for employees.</p>
+
+                                    <div className="flex gap-2 mb-4">
+                                        <input
+                                            type="text"
+                                            value={newCat}
+                                            onChange={(e) => setNewCat(e.target.value)}
+                                            placeholder="Enter new category..."
+                                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddCategory}
+                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
+                                        >
+                                            <Plus size={18} />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[300px]">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {categories.map((cat, i) => (
+                                                <div key={i} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors">
+                                                    <span className="font-medium text-xs text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
+                                                    <button
+                                                        onClick={() => handleRemoveCategory(cat)}
+                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {categories.length === 0 && (
+                                                <div className="col-span-full flex flex-col items-center justify-center p-6 text-slate-400 italic text-sm">
+                                                    No categories defined.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Row 1: Key Metrics (Condensed) */}
                             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1129,54 +1334,25 @@ const DARAdmin = () => {
                                 </div>
                             </div>
 
-                            {/* Chart 3: Pending DAR Edit Requests */}
-                            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <FileText size={20} className="text-amber-500" /> Pending Edit Requests
-                                </h3>
-
-                                <div className="flex-1 w-full flex flex-col gap-3">
-                                    {loadingRequests ? (
-                                        <div className="text-center py-10 text-slate-400">Loading requests...</div>
-                                    ) : requests.length === 0 ? (
-                                        <div className="text-center py-10 text-slate-400 italic bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                                            No pending requests found.
-                                        </div>
-                                    ) : (
-                                        requests.map(req => (
-                                            <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-800 dark:text-white">{req.user}</span>
-                                                    <span className="text-xs text-slate-500">Requested for <span className="font-mono">{req.date}</span> • {req.changes} items</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => setSelectedRequest(req)}
-                                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition"
-                                                >
-                                                    Review Changes
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
                         </div>
                     )}
 
                     {/* Diff Modal */}
                     {/* Premium Diff Review Modal */}
-                    <RequestReviewModal
-                        isOpen={!!selectedRequest}
-                        onClose={() => setSelectedRequest(null)}
-                        request={selectedRequest}
-                        onApprove={() => handleApproveRequest(selectedRequest?.id)}
-                        onReject={() => handleRejectRequest(selectedRequest?.id)}
-                    />
+                    {/* Diff Modal - Only show as modal if NOT in requests tab (where it is inline) */}
+                    {activeTab !== 'requests' && (
+                        <RequestReviewModal
+                            isOpen={!!selectedRequest}
+                            onClose={() => setSelectedRequest(null)}
+                            request={selectedRequest}
+                            onApprove={() => handleApproveRequest(selectedRequest?.id)}
+                            onReject={() => handleRejectRequest(selectedRequest?.id)}
+                        />
+                    )}
 
                 </div>
             </div>
-        </DashboardLayout>
+        </Wrapper>
     );
 };
 

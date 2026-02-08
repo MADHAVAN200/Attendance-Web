@@ -9,12 +9,14 @@ import UpcomingMeetings from '../../components/dar/UpcomingMeetings';
 import UpcomingHolidays from '../../components/dar/UpcomingHolidays';
 import TaskCreationPanel from '../../components/dar/TaskCreationPanel';
 import EventMeetingModal from '../../components/dar/EventMeetingModal'; // Import
-import { Plus, ChevronDown, Calendar, CheckSquare, Video } from 'lucide-react';
+import DARAdmin from './DARAdmin';
+import { Plus, ChevronDown, Calendar, CheckSquare, Video, Shield } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 
 
 const DailyActivity = () => {
+    const [activeMainTab, setActiveMainTab] = useState('daily_activity'); // 'daily_activity' | 'admin'
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [daysToShow, setDaysToShow] = useState(7);
     const [tasks, setTasks] = useState([]);
@@ -258,160 +260,197 @@ const DailyActivity = () => {
 
     return (
         <DashboardLayout title="Daily Activity Report">
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
+            {/* Admin Tabs */}
+            {['admin', 'hr'].includes(user?.user_type) && (
+                <div className="flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit mb-4">
+                    <button
+                        onClick={() => setActiveMainTab('daily_activity')}
+                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeMainTab === 'daily_activity'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Calendar size={18} />
+                            Daily Activity
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setActiveMainTab('admin')}
+                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeMainTab === 'admin'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Shield size={18} />
+                            DAR Admin Panel
+                        </div>
+                    </button>
+                </div>
+            )}
 
-                {/* Left Sidebar (Dynamic Width) */}
-                <motion.div
-                    layout
-                    initial={false}
-                    animate={{ width: sidebarMode === 'create-task' ? 420 : 300 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    className="shrink-0 flex flex-col gap-6"
-                >
-                    <AnimatePresence mode="wait">
-                        {sidebarMode === 'create-task' ? (
-                            <TaskCreationPanel
-                                key="task-panel"
-                                onClose={() => {
-                                    setSidebarMode('default');
-                                    setSelectedTaskId(null);
-                                    fetchRangeData(); // Refresh after save
-                                }}
-                                onUpdate={handleTaskPreviewUpdate} // Optional: keep for live preview if logic supports
-                                initialTimeIn={attendanceData[panelDate]?.timeIn || "09:00"}
-                                attendanceIntervals={attendanceData[panelDate]?.intervals || []}
-                                highlightTaskId={selectedTaskId}
-                                initialDate={panelDate}
-                                onDateChange={(d) => setPanelDate(d)}
-                            />
-                        ) : (
-                            <motion.div
-                                key="default-sidebar"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                transition={{ duration: 0.2 }}
-                                className="flex flex-col gap-6 w-full"
-                            >
-                                {/* Create Meeting Button (Direct) */}
-                                <div className="relative z-20">
-                                    <button
-                                        onClick={() => handleCreate('Meeting')}
-                                        className="w-full py-3 px-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 shadow-sm rounded-full flex items-center justify-between transition-all hover:shadow-md active:scale-95"
+            {activeMainTab === 'admin' ? (
+                <DARAdmin embedded={true} />
+            ) : (
+                <>
+                    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
+
+                        {/* Left Sidebar (Dynamic Width) */}
+                        <motion.div
+                            layout
+                            initial={false}
+                            animate={{ width: sidebarMode === 'create-task' ? 420 : 300 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            className="shrink-0 flex flex-col gap-6"
+                        >
+                            <AnimatePresence mode="wait">
+                                {sidebarMode === 'create-task' ? (
+                                    <TaskCreationPanel
+                                        key="task-panel"
+                                        onClose={() => {
+                                            setSidebarMode('default');
+                                            setSelectedTaskId(null);
+                                            fetchRangeData(); // Refresh after save
+                                        }}
+                                        onUpdate={handleTaskPreviewUpdate} // Optional: keep for live preview if logic supports
+                                        initialTimeIn={attendanceData[panelDate]?.timeIn || "09:00"}
+                                        attendanceIntervals={attendanceData[panelDate]?.intervals || []}
+                                        highlightTaskId={selectedTaskId}
+                                        initialDate={panelDate}
+                                        onDateChange={(d) => setPanelDate(d)}
+                                    />
+                                ) : (
+                                    <motion.div
+                                        key="default-sidebar"
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex flex-col gap-6 w-full"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
-                                                <Plus size={24} />
-                                            </div>
-                                            <span className="font-semibold text-gray-700 dark:text-gray-200">Create Meeting</span>
+                                        {/* Create Meeting Button (Direct) */}
+                                        <div className="relative z-20">
+                                            <button
+                                                onClick={() => handleCreate('Meeting')}
+                                                className="w-full py-3 px-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 shadow-sm rounded-full flex items-center justify-between transition-all hover:shadow-md active:scale-95"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
+                                                        <Plus size={24} />
+                                                    </div>
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-200">Create Meeting</span>
+                                                </div>
+                                            </button>
                                         </div>
-                                    </button>
+
+                                        {/* Mini Calendar */}
+                                        <MiniCalendar
+                                            selectedDate={selectedDate}
+                                            endDate={(() => {
+                                                const d = new Date(selectedDate);
+                                                d.setDate(d.getDate() + daysToShow - 1);
+                                                return d.toISOString().split('T')[0];
+                                            })()}
+                                            onDateSelect={handleDateRangeSelect} // Updated handler
+                                        />
+
+                                        {/* Add Task Button (Standalone) */}
+                                        <button
+                                            onClick={() => handleCreate('Task')}
+                                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors active:scale-95"
+                                        >
+                                            <CheckSquare size={18} />
+                                            <span>Add Daily Tasks</span>
+                                        </button>
+
+                                        {/* Upcoming Meetings Widget */}
+                                        <UpcomingMeetings />
+
+                                        {/* Upcoming Holidays Widget */}
+                                        <UpcomingHolidays />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+
+
+                        {/* Main Content (Horizontal Multi-Day Timeline) */}
+                        <motion.div
+                            layout
+                            className="flex-1 min-w-0 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col"
+                        >
+                            <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-dark-card/50">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                                        {new Date(selectedDate).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                    </h2>
+                                    {sidebarMode === 'create-task' && (
+                                        <motion.span
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-xs font-bold animate-pulse"
+                                        >
+                                            Editing {new Date(panelDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}...
+                                        </motion.span>
+                                    )}
                                 </div>
+                                <div className="text-sm text-gray-500 dark:text-slate-400">
+                                    {daysToShow}-Day View
+                                </div>
+                            </div>
 
-                                {/* Mini Calendar */}
-                                <MiniCalendar
-                                    selectedDate={selectedDate}
-                                    endDate={(() => {
-                                        const d = new Date(selectedDate);
-                                        d.setDate(d.getDate() + daysToShow - 1);
-                                        return d.toISOString().split('T')[0];
-                                    })()}
-                                    onDateSelect={handleDateRangeSelect} // Updated handler
-                                />
+                            <div className="flex-1 overflow-hidden relative">
+                                {loading ? (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 z-50">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    </div>
+                                ) : (
+                                    <MultiDayTimeline
+                                        tasks={tasks}
+                                        startDate={selectedDate}
+                                        daysToShow={daysToShow} // Dynamic days
+                                        attendanceData={attendanceData}
+                                        holidays={holidays} // Pass holidays
+                                        startHour={timelineRange.start}
+                                        endHour={timelineRange.end}
+                                        onEditTask={(t) => {
+                                            if (t.type === 'task') {
+                                                setSidebarMode('create-task');
+                                                const rawId = t.id.startsWith('act-') ? t.id.split('-')[1] : null;
+                                                if (rawId) setSelectedTaskId(Number(rawId));
+                                                setPanelDate(t.date); // Set panel date to task's date
+                                            } else {
+                                                // It's an Event or Meeting
+                                                // Open Modal in Edit Mode
+                                                const type = t.type === 'meeting' ? 'Meeting' : 'Event';
+                                                setEventModal({ isOpen: true, type, initialData: t });
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </motion.div>
+                    </div>
 
-                                {/* Add Task Button (Standalone) */}
-                                <button
-                                    onClick={() => handleCreate('Task')}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors active:scale-95"
-                                >
-                                    <CheckSquare size={18} />
-                                    <span>Add Daily Tasks</span>
-                                </button>
-
-                                {/* Upcoming Meetings Widget */}
-                                <UpcomingMeetings />
-
-                                {/* Upcoming Holidays Widget */}
-                                <UpcomingHolidays />
-                            </motion.div>
+                    {/* Draggable Event/Meeting Modal */}
+                    <AnimatePresence>
+                        {eventModal.isOpen && (
+                            <EventMeetingModal
+                                type={eventModal.type}
+                                initialDate={selectedDate}
+                                initialData={eventModal.initialData}
+                                onClose={() => setEventModal({ ...eventModal, isOpen: false, initialData: null })}
+                                onSave={() => {
+                                    fetchRangeData(); // Refresh all data
+                                    toast.success(`${eventModal.type} updated successfully!`);
+                                }}
+                            />
                         )}
                     </AnimatePresence>
-                </motion.div>
 
-
-                {/* Main Content (Horizontal Multi-Day Timeline) */}
-                <motion.div
-                    layout
-                    className="flex-1 min-w-0 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col"
-                >
-                    <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-dark-card/50">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                                {new Date(selectedDate).toLocaleString('default', { month: 'long', year: 'numeric' })}
-                            </h2>
-                            {sidebarMode === 'create-task' && (
-                                <motion.span
-                                    initial={{ scale: 0.8, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-xs font-bold animate-pulse"
-                                >
-                                    Editing {new Date(panelDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}...
-                                </motion.span>
-                            )}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-slate-400">
-                            {daysToShow}-Day View
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-hidden relative">
-                        {loading ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 z-50">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                            </div>
-                        ) : (
-                            <MultiDayTimeline
-                                tasks={tasks}
-                                startDate={selectedDate}
-                                daysToShow={daysToShow} // Dynamic days
-                                attendanceData={attendanceData}
-                                holidays={holidays} // Pass holidays
-                                startHour={timelineRange.start}
-                                endHour={timelineRange.end}
-                                onEditTask={(t) => {
-                                    if (t.type === 'task') {
-                                        setSidebarMode('create-task');
-                                        const rawId = t.id.startsWith('act-') ? t.id.split('-')[1] : null;
-                                        if (rawId) setSelectedTaskId(Number(rawId));
-                                        setPanelDate(t.date); // Set panel date to task's date
-                                    } else {
-                                        // It's an Event or Meeting
-                                        // Open Modal in Edit Mode
-                                        const type = t.type === 'meeting' ? 'Meeting' : 'Event';
-                                        setEventModal({ isOpen: true, type, initialData: t });
-                                    }
-                                }}
-                            />
-                        )}
-                    </div>
-                </motion.div>
-            </div>
-
-            {/* Draggable Event/Meeting Modal */}
-            <AnimatePresence>
-                {eventModal.isOpen && (
-                    <EventMeetingModal
-                        type={eventModal.type}
-                        initialDate={selectedDate}
-                        initialData={eventModal.initialData}
-                        onClose={() => setEventModal({ ...eventModal, isOpen: false, initialData: null })}
-                        onSave={() => {
-                            fetchRangeData(); // Refresh all data
-                            toast.success(`${eventModal.type} updated successfully!`);
-                        }}
-                    />
-                )}
-            </AnimatePresence>
+                </>
+            )}
 
         </DashboardLayout>
     );

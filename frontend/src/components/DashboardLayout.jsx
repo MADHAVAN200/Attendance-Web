@@ -20,7 +20,7 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const { logout, user } = useAuth();
+    const { logout, user, avatarTimestamp } = useAuth();
 
     // Initialize theme from localStorage or default to 'light'
     const [theme, setTheme] = useState(() => {
@@ -105,9 +105,9 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                                     </p>
                                 </div>
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer overflow-hidden">
-                                    {useAuth().user?.avatar_url || useAuth().user?.profile_image_url ? (
+                                    {useAuth().user?.profile_image_url ? (
                                         <img
-                                            src={useAuth().user?.avatar_url || useAuth().user?.profile_image_url}
+                                            src={`${useAuth().user?.profile_image_url}?t=${avatarTimestamp}`}
                                             alt="Profile"
                                             className="w-full h-full object-cover"
                                         />
