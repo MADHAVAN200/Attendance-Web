@@ -28,7 +28,92 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
     return res.status(400).json({ message: "Username and password are required." });
   }
 
-  // 1. Fetch user by Email or Phone
+  // Try Super Admin Login
+  const superAdminResponse = await handleSuperAdminLogin(user_input, user_password, req, res);
+  if (superAdminResponse) return; // Response already sent
+
+  // Try Normal User Login
+  const userResponse = await handleUserLogin(user_input, user_password, req, res);
+  if (userResponse) return; // Response already sent
+
+  return res.status(401).json({ message: 'Invalid credentials' });
+}));
+
+
+// Admin Login
+async function handleSuperAdminLogin(userInput, password, req, res) {
+  const superAdmin = await DB.knexDB('super_admins')
+    .where('admin_code', userInput)
+    .first();
+
+  if (!superAdmin) return false;
+
+  const isMatch = await bcrypt.compare(password, superAdmin.password_hash);
+  if (!isMatch) {
+    res.status(401).json({ message: 'Incorrect Password' });
+    return true;
+  }
+
+  if (!superAdmin.is_active) {
+    res.status(403).json({ message: 'Account is inactive. Contact support.' });
+    return true;
+  }
+
+  const tokenPayload = {
+    user_id: superAdmin.id,
+    user_code: superAdmin.admin_code,
+    user_name: superAdmin.name,
+    email: superAdmin.email,
+    user_type: 'super_admin',
+    org_id: null,
+    profile_image_url: superAdmin.profile_image_url
+  };
+
+  const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  const refreshToken = TokenService.generateRefreshToken();
+
+  // Cookie Set
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
+    path: '/'
+  });
+
+  // Super Admin Activity Log
+  EventBus.emitActivityLog({
+    user_id: superAdmin.id,
+    org_id: null, // Super Admins are global
+    event_type: "SUPER_ADMIN_LOGIN",
+    event_source: getEventSource(req),
+    object_type: "SUPER_ADMIN",
+    object_id: superAdmin.id,
+    description: "Super Admin logged in via Admin Code",
+    request_ip: req.ip || req.connection.remoteAddress,
+    user_agent: req.get('User-Agent')
+  });
+
+  res.status(200).json({
+    accessToken: accessToken,
+    user: {
+      id: superAdmin.id,
+      user_code: superAdmin.admin_code,
+      user_name: superAdmin.name,
+      email: superAdmin.email,
+      user_type: 'super_admin',
+      phone: superAdmin.mobile_number,
+      designation: 'Super Admin',
+      department: 'Administration',
+      org_id: null,
+      profile_image_url: superAdmin.profile_image_url
+    }
+  });
+  return true;
+}
+
+// User Login
+async function handleUserLogin(userInput, password, req, res) {
   const user = await DB.knexDB('users')
     .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
     .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
@@ -37,22 +122,18 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
       'users.user_id', 'users.user_code', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
       'users.profile_image_url', 'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
     )
-    .where('users.email', user_input)
-    .orWhere('users.phone_no', user_input)
+    .where('users.email', userInput)
+    .orWhere('users.phone_no', userInput)
     .first();
 
+  if (!user) return false;
 
-  if (!user) {
-    return res.status(401).json({ message: 'User not found' });
-  }
-
-  // 2. Compare password
-  const isMatch = await bcrypt.compare(user_password, user.user_password);
+  const isMatch = await bcrypt.compare(password, user.user_password);
   if (!isMatch) {
-    return res.status(401).json({ message: 'Incorrect Password' });
+    res.status(401).json({ message: 'Incorrect Password' });
+    return true;
   }
 
-  // 3. Generate Access Token (JWT)
   const tokenPayload = {
     user_id: user.user_id,
     user_name: user.user_name,
@@ -63,24 +144,20 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
   };
 
   const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-
-  // 4. Generate & Save Refresh Token (Opaque)
   const refreshToken = TokenService.generateRefreshToken();
   const ipAddress = req.ip || req.connection.remoteAddress;
   const userAgent = req.get('User-Agent') || 'Unknown';
 
   await TokenService.saveRefreshToken(user.user_id, refreshToken, ipAddress, userAgent);
 
-  // 5. Set Refresh Token in Cookie (HttpOnly)
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // true in prod
-    sameSite: 'Lax', // or 'Strict' depending on cross-site needs, 'Lax' is good for now
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
     maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
     path: '/'
   });
 
-  // Event Logging
   EventBus.emitActivityLog({
     user_id: user.user_id,
     org_id: user.org_id,
@@ -93,7 +170,6 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
     user_agent: req.get('User-Agent')
   });
 
-  // 6. Return response (Access Token in Body)
   res.status(200).json({
     accessToken: accessToken,
     user: {
@@ -109,8 +185,8 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
       profile_image_url: user.profile_image_url
     }
   });
-
-}));
+  return true;
+}
 
 
 // Refresh Token Route

@@ -25,7 +25,11 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         // Check based on token contents
         // User tokens (issued by LoginAPI.js) have user_type='employee'/'admin'/etc.
 
-        user = await knexDB('users').where({ user_id: decoded.user_id }).first();
+        if (decoded.user_type === 'super_admin') {
+            user = await knexDB('super_admins').where({ id: decoded.user_id }).first();
+        } else {
+            user = await knexDB('users').where({ user_id: decoded.user_id }).first();
+        }
 
         if (!user) {
             return res.status(403).json({ message: "Forbidden: Invalid token user" });
@@ -35,7 +39,7 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         req.user = {
             ...decoded,
             id: user.user_id || user.id, // standardized ID accessor
-            user_type: user.user_type ? user.user_type.toLowerCase() : 'employee',
+            user_type: decoded.user_type || user.user_type.toLowerCase(),
             org_id: user.org_id || null
         };
 

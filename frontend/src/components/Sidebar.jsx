@@ -14,7 +14,8 @@ import {
     FileText,
     ClipboardList,
     ClipboardCheck,
-    Bug
+    Bug,
+    Building
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import FeedbackModal from './FeedbackModal';
@@ -56,7 +57,8 @@ const SidebarItem = ({ icon, text, to }) => {
 
 const getNavItems = (userType) => {
     const allItems = [
-        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/", roles: ['admin', 'hr', 'employee'] },
+        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/", roles: ['admin', 'hr', 'employee', 'super_admin'] },
+        { icon: <Building size={20} />, text: "Organizations", to: "/organizations", roles: ['super_admin'] },
         { icon: <Users size={20} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
         { icon: <Calendar size={20} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
         { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },

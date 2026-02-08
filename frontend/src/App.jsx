@@ -32,6 +32,7 @@ import LeaveApplication from "./pages/holidays/LeaveApplication"
 
 
 
+import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
 import EmployeeDashboard from "./pages/dashboard/EmployeeDashboard";
 import { useAuth } from "./context/AuthContext";
 
@@ -40,6 +41,9 @@ const DashboardHandler = () => {
   const { user } = useAuth();
   if (user?.user_type === 'employee') {
     return <EmployeeDashboard />;
+  }
+  if (user?.user_type === 'super_admin') {
+    return <SuperAdminDashboard />;
   }
   return <AdminDashboard />;
 };
@@ -67,7 +71,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/unauthorized" element={<Unauthorized />} />
             {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
-            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee', 'super_admin']} />}>
               <Route path="/" element={<DashboardHandler />} />
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/holidays" element={<HolidayManagement />} />
