@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
@@ -37,7 +37,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
     // --- LOGICAL VALIDATION END ---
 
     // Check for existing PENDING request for this user + date
-    const existingRequest = await knexDB("dar_requests")
+    const existingRequest = await attendanceDB("dar_requests")
         .where({
             user_id,
             request_date, // assuming date string format matches
@@ -49,25 +49,25 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
 
     if (existingRequest) {
         // Update existing request
-        await knexDB("dar_requests")
+        await attendanceDB("dar_requests")
             .where({ request_id: existingRequest.request_id })
             .update({
                 proposed_data: JSON.stringify(proposed_data),
-                updated_at: knexDB.fn.now()
+                updated_at: attendanceDB.fn.now()
                 // We keep original_data as is, assuming the baseline hasn't changed. 
                 // Alternatively, we could update original_data too if passed.
             });
         request_id = existingRequest.request_id;
     } else {
         // Insert new Request
-        const [id] = await knexDB("dar_requests").insert({
+        const [id] = await attendanceDB("dar_requests").insert({
             org_id,
             user_id,
             request_date,
             original_data: JSON.stringify(original_data || []),
             proposed_data: JSON.stringify(proposed_data),
             status: 'PENDING',
-            created_at: knexDB.fn.now()
+            created_at: attendanceDB.fn.now()
         });
         request_id = id;
     }
@@ -82,13 +82,13 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
 
     // Join with Users table to get names
     // Typically admin only, but for now we just check org_id
-    const requests = await knexDB("dar_requests")
+    const requests = await attendanceDB("dar_requests")
         .join("users", "dar_requests.user_id", "users.user_id")
         .select(
             "dar_requests.*",
             "users.user_name as user_name",
             "users.email as user_email",
-            knexDB.raw("DATE_FORMAT(dar_requests.request_date, '%Y-%m-%d') as request_date_str")
+            attendanceDB.raw("DATE_FORMAT(dar_requests.request_date, '%Y-%m-%d') as request_date_str")
         )
         .where("dar_requests.org_id", org_id)
         .where("dar_requests.status", 'PENDING') // Only pending by default? Or all? Let's show all for history if needed, but for now PENDING.
@@ -111,8 +111,8 @@ router.post('/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
     const { id } = req.params;
     const { org_id } = req.user; // Ensure admin belongs to same org
 
-    const request = await knexDB("dar_requests")
-        .select("*", knexDB.raw("DATE_FORMAT(request_date, '%Y-%m-%d') as request_date_str"))
+    const request = await attendanceDB("dar_requests")
+        .select("*", attendanceDB.raw("DATE_FORMAT(request_date, '%Y-%m-%d') as request_date_str"))
         .where({ request_id: id, org_id }).first();
 
     if (!request) {
@@ -128,7 +128,7 @@ router.post('/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
     const targetDate = request.request_date_str;
 
     // Transaction to ensure atomicity
-    await knexDB.transaction(async (trx) => {
+    await attendanceDB.transaction(async (trx) => {
         // 1. DELETE existing activities for that User + Date
         await trx("daily_activities")
             .where({ user_id: request.user_id, org_id })
@@ -147,7 +147,7 @@ router.post('/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
                 description: t.description,
                 activity_type: t.activity_type || 'TASK',
                 status: 'COMPLETED', // Approved retro-edits are always COMPLETED
-                created_at: knexDB.fn.now()
+                created_at: attendanceDB.fn.now()
             }));
             await trx("daily_activities").insert(inserts);
         }
@@ -155,7 +155,7 @@ router.post('/approve/:id', authenticateJWT, catchAsync(async (req, res) => {
         // 3. UPDATE request status
         await trx("dar_requests")
             .where({ request_id: id })
-            .update({ status: 'APPROVED', updated_at: knexDB.fn.now() });
+            .update({ status: 'APPROVED', updated_at: attendanceDB.fn.now() });
     });
 
     res.json({ ok: true, message: "Request approved and changes applied." });
@@ -167,12 +167,12 @@ router.post('/reject/:id', authenticateJWT, catchAsync(async (req, res) => {
     const { org_id } = req.user;
     const { comment } = req.body;
 
-    const updated = await knexDB("dar_requests")
+    const updated = await attendanceDB("dar_requests")
         .where({ request_id: id, org_id })
         .update({
             status: 'REJECTED',
             admin_comment: comment,
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     if (!updated) {
