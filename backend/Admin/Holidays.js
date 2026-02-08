@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -19,10 +19,10 @@ router.get('/', authenticateJWT, catchAsync(async (req, res) => {
     // try removed
     const org_id = req.user.org_id;
     // Format date as YYYY-MM-DD string to avoid timezone confusion (e.g. 18:30 prev day)
-    const holidays = await knexDB('holidays')
+    const holidays = await attendanceDB('holidays')
         .select(
             '*',
-            knexDB.raw("DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date")
+            attendanceDB.raw("DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date")
         )
         .where({ org_id });
     res.json({ ok: true, holidays });
@@ -61,7 +61,7 @@ router.post('/', authenticateJWT, catchAsync(async (req, res) => {
         };
     });
 
-    await knexDB.transaction(async (trx) => {
+    await attendanceDB.transaction(async (trx) => {
         await trx('holidays').insert(prepareData);
     });
 
@@ -80,7 +80,7 @@ router.put('/:id', authenticateJWT, catchAsync(async (req, res) => {
     if (holiday_type) updates.holiday_type = holiday_type;
     if (applicable_json) updates.applicable_json = JSON.stringify(applicable_json);
 
-    const count = await knexDB('holidays')
+    const count = await attendanceDB('holidays')
         .where({ holiday_id: id, org_id })
         .update(updates);
 
@@ -98,7 +98,7 @@ router.delete('/', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Please provide an array of "ids" to delete' });
     }
 
-    const count = await knexDB('holidays')
+    const count = await attendanceDB('holidays')
         .where({ org_id })
         .whereIn('holiday_id', ids)
         .del();

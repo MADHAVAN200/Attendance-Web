@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -18,7 +18,7 @@ const ensureAdmin = (req, res, next) => {
 router.get('/', authenticateJWT, catchAsync(async (req, res) => {
     // try removed
     const org_id = req.user.org_id;
-    const locations = await knexDB('work_locations')
+    const locations = await attendanceDB('work_locations')
         .where({ org_id });
     res.json({ ok: true, locations });
 }));
@@ -33,7 +33,7 @@ router.post('/', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Missing required fields' });
     }
 
-    const [id] = await knexDB('work_locations').insert({
+    const [id] = await attendanceDB('work_locations').insert({
         org_id,
         location_name,
         address,
@@ -52,7 +52,7 @@ router.put('/:id', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => 
     const org_id = req.user.org_id;
     const updates = req.body;
 
-    const count = await knexDB('work_locations')
+    const count = await attendanceDB('work_locations')
         .where({ location_id: id, org_id })
         .update(updates);
 
@@ -67,7 +67,7 @@ router.delete('/:id', authenticateJWT, ensureAdmin, catchAsync(async (req, res) 
     const { id } = req.params;
     const org_id = req.user.org_id;
 
-    await knexDB('work_locations')
+    await attendanceDB('work_locations')
         .where({ location_id: id, org_id })
         .update({ is_active: 0 });
 
@@ -87,7 +87,7 @@ router.post('/assignments', authenticateJWT, ensureAdmin, catchAsync(async (req,
     const requestedLocIds = [...new Set(assignments.map(a => a.work_location_id).filter(id => id))];
 
     if (requestedLocIds.length > 0) {
-        const validLocations = await knexDB('work_locations')
+        const validLocations = await attendanceDB('work_locations')
             .whereIn('location_id', requestedLocIds)
             .where({ org_id })
             .select('location_id');
@@ -101,7 +101,7 @@ router.post('/assignments', authenticateJWT, ensureAdmin, catchAsync(async (req,
         }
     }
 
-    await knexDB.transaction(async (trx) => {
+    await attendanceDB.transaction(async (trx) => {
         for (const item of assignments) {
             const { work_location_id, add, remove } = item;
 
