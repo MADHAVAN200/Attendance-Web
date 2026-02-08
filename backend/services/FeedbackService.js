@@ -1,4 +1,4 @@
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import { uploadFile, getFileUrl } from "../s3/s3Service.js";
 import { sendEmail } from "../utils/emailService.js";
 
@@ -19,14 +19,14 @@ export class FeedbackService {
      */
     static async submitFeedback(user_id, { title, description, type = 'FEEDBACK', files = [] }) {
         // 1. Insert feedback record
-        const [feedback_id] = await knexDB('feedback').insert({
+        const [feedback_id] = await attendanceDB('feedback').insert({
             user_id,
             type,
             title,
             description,
             status: 'OPEN',
-            created_at: knexDB.fn.now(),
-            updated_at: knexDB.fn.now()
+            created_at: attendanceDB.fn.now(),
+            updated_at: attendanceDB.fn.now()
         });
 
         // 2. Upload files and create attachment records
@@ -44,7 +44,7 @@ export class FeedbackService {
                     contentType: file.mimetype
                 });
 
-                await knexDB('feedback_attachments').insert({
+                await attendanceDB('feedback_attachments').insert({
                     feedback_id,
                     file_key: uploadResult.key,
                     file_name: file.originalname,
@@ -65,7 +65,7 @@ export class FeedbackService {
 
         // 3. Send email notification to admin(s) with attachments
         try {
-            const user = await knexDB('users').where('user_id', user_id).first();
+            const user = await attendanceDB('users').where('user_id', user_id).first();
 
             // Use the feedback title as the email subject
             const emailSubject = title;
@@ -328,7 +328,7 @@ h2 {
      * @returns {Array} - Array of feedback records with attachments
      */
     static async getFeedbackList({ status, type, limit = 50 } = {}) {
-        let query = knexDB('feedback')
+        let query = attendanceDB('feedback')
             .join('users', 'feedback.user_id', 'users.user_id')
             .select(
                 'feedback.*',
@@ -350,7 +350,7 @@ h2 {
         // Fetch attachments for each feedback and generate signed URLs
         return await Promise.all(
             feedbackRecords.map(async (feedback) => {
-                const attachments = await knexDB('feedback_attachments')
+                const attachments = await attendanceDB('feedback_attachments')
                     .where('feedback_id', feedback.feedback_id)
                     .select('*');
 
@@ -387,11 +387,11 @@ h2 {
      * @returns {boolean} - True if updated successfully
      */
     static async updateStatus(id, status) {
-        const updated = await knexDB('feedback')
+        const updated = await attendanceDB('feedback')
             .where('feedback_id', id)
             .update({
                 status,
-                updated_at: knexDB.fn.now()
+                updated_at: attendanceDB.fn.now()
             });
 
         return updated > 0;
