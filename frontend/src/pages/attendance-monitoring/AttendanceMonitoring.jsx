@@ -40,6 +40,7 @@ const AttendanceMonitoring = () => {
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
     const [selectedRequest, setSelectedRequest] = useState(1); // For Detail View
+    const [selectedLiveUser, setSelectedLiveUser] = useState(null); // For Live Attendance Detail Modal
 
     const [loading, setLoading] = useState(true);
     const [attendanceData, setAttendanceData] = useState([]);
@@ -196,7 +197,7 @@ const AttendanceMonitoring = () => {
             // Removed date filters as per user request
 
             const res = await attendanceService.getCorrectionRequests(params);
-            
+
             // Sort: Pending first, then by date (newest first)
             const sortedData = (res.data || []).sort((a, b) => {
                 if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -227,15 +228,15 @@ const AttendanceMonitoring = () => {
             const data = await attendanceService.getCorrectionDetails(acr_id);
             setSelectedRequestData(data);
             setReviewComment(data.review_comments || '');
-            
+
             // Reset Override State
             setOverrideMode(false);
             setOverrideMethod(data.correction_method || 'add_session'); // default to add_session (Manual Correction)
-            
+
             let correctionData = {};
             try {
-                correctionData = typeof data.correction_data === 'string' 
-                    ? JSON.parse(data.correction_data) 
+                correctionData = typeof data.correction_data === 'string'
+                    ? JSON.parse(data.correction_data)
                     : data.correction_data || {};
             } catch (error) {
                 console.error("Error parsing correction data", error);
@@ -243,29 +244,29 @@ const AttendanceMonitoring = () => {
 
             setOverrideIn(correctionData.time_in || '');
             setOverrideOut(correctionData.time_out || '');
-            
+
             // Parse sessions if available
             try {
-                 let sessions = correctionData.sessions;
+                let sessions = correctionData.sessions;
 
-                 // Fallback for fallback/legacy if sessions is empty but we have time_in/out
-                 if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
-                     // Helper to extract HH:MM
-                     const getTime = (t) => {
-                         if (!t) return '';
-                         if (t.includes('T')) return t.split('T')[1].substring(0, 5);
-                         if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
-                         return t.substring(0, 5);
-                     };
-                     sessions = [{
-                         time_in: getTime(correctionData.time_in),
-                         time_out: getTime(correctionData.time_out)
-                     }];
-                 }
+                // Fallback for fallback/legacy if sessions is empty but we have time_in/out
+                if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
+                    // Helper to extract HH:MM
+                    const getTime = (t) => {
+                        if (!t) return '';
+                        if (t.includes('T')) return t.split('T')[1].substring(0, 5);
+                        if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
+                        return t.substring(0, 5);
+                    };
+                    sessions = [{
+                        time_in: getTime(correctionData.time_in),
+                        time_out: getTime(correctionData.time_out)
+                    }];
+                }
 
-                 setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
+                setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
             } catch (e) {
-                 setOverrideSessions([{ time_in: '', time_out: '' }]);
+                setOverrideSessions([{ time_in: '', time_out: '' }]);
             }
         } catch (error) {
             toast.error("Failed to fetch request details");
@@ -340,24 +341,24 @@ const AttendanceMonitoring = () => {
             const overrides = {};
             if (status === 'approved' && overrideMode) {
                 overrides.correction_method = overrideMethod;
-                
+
                 if (overrideMethod === 'reset') {
-                     if (!overrideIn || !overrideOut) {
-                         toast.error("Both Start and End times are required for Reset override");
-                         return;
-                     }
-                     overrides.reset_time_in = overrideIn;
-                     overrides.reset_time_out = overrideOut;
+                    if (!overrideIn || !overrideOut) {
+                        toast.error("Both Start and End times are required for Reset override");
+                        return;
+                    }
+                    overrides.reset_time_in = overrideIn;
+                    overrides.reset_time_out = overrideOut;
                 } else if (overrideMethod === 'add_session' || overrideMethod === 'fix') {
-                     const valid = overrideSessions.filter(s => s.time_in && s.time_out);
-                     if (valid.length === 0) {
-                         toast.error("At least one valid session required for manual correction");
-                         return;
-                     }
-                     overrides.sessions = valid;
-                     // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
-                     // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
-                     // Backend handles both.
+                    const valid = overrideSessions.filter(s => s.time_in && s.time_out);
+                    if (valid.length === 0) {
+                        toast.error("At least one valid session required for manual correction");
+                        return;
+                    }
+                    overrides.sessions = valid;
+                    // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
+                    // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
+                    // Backend handles both.
                 }
             }
 
@@ -619,7 +620,7 @@ const AttendanceMonitoring = () => {
                                                         </tr>
                                                     ) : (
                                                         filteredData.map((item) => (
-                                                            <tr key={item.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${item.status === 'Absent' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
+                                                            <tr key={item.id} onClick={() => setSelectedLiveUser(item)} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${item.status === 'Absent' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
                                                                 <td className="px-6 py-4">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
@@ -643,19 +644,37 @@ const AttendanceMonitoring = () => {
                                                                 </td>
                                                                 <td className="px-6 py-4">
                                                                     {item.sessions.length > 0 ? (
-                                                                        <div className="space-y-1">
-                                                                            {item.sessions.slice(0, 2).map((session, idx) => ( // Show only first 2 sessions in table to save space
-                                                                                <div key={idx} className="flex items-center gap-2 text-xs">
-                                                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400">{session.in}</span>
-                                                                                    <span className="text-slate-300 dark:text-slate-600">→</span>
-                                                                                    <span className={`font-mono ${session.isActive ? 'text-indigo-500 font-bold animate-pulse' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                                                        {session.out}
-                                                                                    </span>
+                                                                        <div className="flex flex-col gap-1.5">
+                                                                            {/* Time Row */}
+                                                                            <div className="flex items-center gap-2 text-xs">
+                                                                                <span className="font-mono text-emerald-600 dark:text-emerald-400">{item.sessions[0].in}</span>
+                                                                                <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                                                <span className={`font-mono ${item.sessions[0].isActive ? 'text-indigo-500 font-bold animate-pulse' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                                                    {item.sessions[0].out}
+                                                                                </span>
+                                                                                {item.sessions.length > 1 && (
+                                                                                    <span className="text-[10px] text-slate-400 italic font-medium ml-1">+{item.sessions.length - 1} more</span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Location Row */}
+                                                                            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                                                                <div className="flex items-center gap-1" title={item.sessions[0].inLocation}>
+                                                                                    <MapPin size={10} className="text-emerald-500 shrink-0" />
+                                                                                    <span className="max-w-[120px] truncate">{item.sessions[0].inLocation}</span>
                                                                                 </div>
-                                                                            ))}
-                                                                            {item.sessions.length > 2 && (
-                                                                                <span className="text-[10px] text-slate-400 italic">+{item.sessions.length - 2} more sessions</span>
-                                                                            )}
+                                                                                {(item.sessions[0].outLocation || item.sessions[0].isActive) && (
+                                                                                    <>
+                                                                                        <span className="text-slate-300">→</span>
+                                                                                        <div className="flex items-center gap-1" title={item.sessions[0].outLocation || "Active"}>
+                                                                                            <MapPin size={10} className={`${item.sessions[0].isActive ? 'text-indigo-400 animate-pulse' : 'text-red-500'} shrink-0`} />
+                                                                                            <span className="max-w-[120px] truncate">
+                                                                                                {item.sessions[0].outLocation || "Current Location"}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     ) : (
                                                                         <span className="text-slate-400 text-xs italic">-</span>
@@ -703,7 +722,10 @@ const AttendanceMonitoring = () => {
                                                                 <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
                                                             </div>
                                                         )}
-                                                        <div className={`bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}>
+                                                        <div
+                                                            onClick={() => setSelectedLiveUser(item)}
+                                                            className={`bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
+                                                        >
                                                             {/* Card Header */}
                                                             <div className="p-5 flex items-start justify-between">
                                                                 <div className="flex gap-4">
@@ -735,64 +757,69 @@ const AttendanceMonitoring = () => {
                                                             {/* Divider */}
                                                             <div className="h-px bg-slate-100 dark:bg-slate-800 mx-5"></div>
 
-                                                            {/* Card Body - Sessions */}
+                                                            {/* Card Body - Latest Session Only */}
                                                             <div className="p-5 flex-1 overflow-hidden">
                                                                 {item.status === 'Absent' ? (
                                                                     <div className="h-full flex flex-col items-center justify-center text-slate-400 py-4 italic">
                                                                         <Clock size={20} className="mb-2 opacity-30" />
                                                                         <span className="text-xs">No activity yet</span>
                                                                     </div>
-                                                                ) : (
-                                                                    <div className="space-y-4">
-                                                                        {item.sessions.map((session, sIdx) => (
-                                                                            <div key={session.id} className={`relative pl-4 border-l-2 ${session.isActive ? 'border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                                                                                {/* Session Indicator Dot */}
-                                                                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${session.isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
+                                                                ) : item.sessions.length > 0 ? (
+                                                                    <div className="relative pl-4 border-l-2 border-indigo-500">
+                                                                        {/* Session Indicator Dot */}
+                                                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${item.sessions[0].isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
 
-                                                                                <div className="flex items-center justify-between mb-2">
-                                                                                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                                                                                        Session {item.sessions.length - sIdx}
-                                                                                    </span>
-                                                                                    {session.isActive && (
-                                                                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase animate-pulse">
-                                                                                            Active
-                                                                                        </span>
-                                                                                    )}
+                                                                        <div className="flex items-center justify-between mb-2">
+                                                                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                                                                Latest Session
+                                                                            </span>
+                                                                            {item.sessions[0].isActive && (
+                                                                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase animate-pulse">
+                                                                                    Active
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                                    In {item.sessions[0].in}
                                                                                 </div>
-
-                                                                                <div className="grid grid-cols-2 gap-4">
-                                                                                    <div className="space-y-1">
-                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
-                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                                                                            In {session.in}
-                                                                                        </div>
-                                                                                        <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                                                            <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
-                                                                                            <span className="line-clamp-2" title={session.inLocation}>{session.inLocation}</span>
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div className="space-y-1">
-                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
-                                                                                            <div className={`w-1.5 h-1.5 rounded-full ${session.isActive ? 'bg-slate-300 dark:bg-slate-600' : 'bg-red-500'}`}></div>
-                                                                                            Out {session.out}
-                                                                                        </div>
-                                                                                        {session.outLocation ? (
-                                                                                            <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                                                                <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
-                                                                                                <span className="line-clamp-2" title={session.outLocation}>{session.outLocation}</span>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <div className="h-full flex items-center p-1.5">
-                                                                                                <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
+                                                                                <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                    <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
+                                                                                    <span className="line-clamp-2" title={item.sessions[0].inLocation}>{item.sessions[0].inLocation}</span>
                                                                                 </div>
                                                                             </div>
-                                                                        ))}
+
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${item.sessions[0].isActive ? 'bg-slate-300 dark:bg-slate-600' : 'bg-red-500'}`}></div>
+                                                                                    Out {item.sessions[0].out}
+                                                                                </div>
+                                                                                {item.sessions[0].outLocation ? (
+                                                                                    <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                        <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
+                                                                                        <span className="line-clamp-2" title={item.sessions[0].outLocation}>{item.sessions[0].outLocation}</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="h-full flex items-center p-1.5">
+                                                                                        <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* More Sessions Indicator */}
+                                                                        {item.sessions.length > 1 && (
+                                                                            <div className="mt-3 text-center">
+                                                                                <span className="text-[10px] text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-full cursor-pointer hover:bg-indigo-100 transition-colors">
+                                                                                    +{item.sessions.length - 1} more sessions
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                )}
+                                                                ) : null}
                                                             </div>
 
                                                             {/* Card Footer (Duration) */}
@@ -981,7 +1008,7 @@ const AttendanceMonitoring = () => {
                                 </div>
 
                                 {/* Date Navigation */}
-                                { /* Date Navigation Removed */ }
+                                { /* Date Navigation Removed */}
                             </div>
                             <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700">
                                 {requestsLoading ? (
@@ -1063,10 +1090,10 @@ const AttendanceMonitoring = () => {
                                     {selectedRequestData.status === 'pending' && (
                                         <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                                             <div className="flex items-center gap-3 mb-4">
-                                                <input 
-                                                    type="checkbox" 
-                                                    id="overrideToggle" 
-                                                    checked={overrideMode} 
+                                                <input
+                                                    type="checkbox"
+                                                    id="overrideToggle"
+                                                    checked={overrideMode}
                                                     onChange={(e) => {
                                                         const isChecked = e.target.checked;
                                                         setOverrideMode(isChecked);
@@ -1083,7 +1110,7 @@ const AttendanceMonitoring = () => {
                                                             setOverrideMethod(selectedRequestData.correction_method || 'fix');
                                                         }
                                                     }}
-                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" 
+                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                 />
                                                 <label htmlFor="overrideToggle" className="text-sm font-bold text-slate-700 dark:text-white select-none cursor-pointer">
                                                     Override Request Details
@@ -1092,7 +1119,7 @@ const AttendanceMonitoring = () => {
 
                                             {overrideMode && (
                                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                                     {/* Method Selector */}
+                                                    {/* Method Selector */}
                                                     <div className="flex gap-2">
                                                         {['add_session', 'reset'].map(m => (
                                                             <button
@@ -1123,7 +1150,7 @@ const AttendanceMonitoring = () => {
                                                                     <button onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-red-500 hover:bg-red-50 p-1 rounded">X</button>
                                                                 </div>
                                                             ))}
-                                                            <button onClick={() => setOverrideSessions([...overrideSessions, {time_in:'', time_out:''}])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">+ Add Session</button>
+                                                            <button onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">+ Add Session</button>
                                                         </div>
                                                     ) : (
                                                         <div className="flex gap-4">
@@ -1172,7 +1199,7 @@ const AttendanceMonitoring = () => {
                                                                         const correctionData = typeof selectedRequestData.correction_data === 'string'
                                                                             ? JSON.parse(selectedRequestData.correction_data)
                                                                             : selectedRequestData.correction_data || {};
-                                                                        
+
                                                                         const sessions = correctionData.sessions || [];
 
                                                                         const formatSessionTime = (t) => {
@@ -1228,7 +1255,7 @@ const AttendanceMonitoring = () => {
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
+
                                                     {selectedRequestData.location_name && (
                                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
                                                             <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Requested Location</span>
@@ -1311,10 +1338,139 @@ const AttendanceMonitoring = () => {
                     </div>
                 )}
 
+                {/* --- Live Attendance Detail Modal --- */}
+                <UserAttendanceDetailsModal
+                    user={selectedLiveUser}
+                    onClose={() => setSelectedLiveUser(null)}
+                />
+
             </div>
         </DashboardLayout >
     );
-}
+};
 
+// --- Sub-components ---
+
+const UserAttendanceDetailsModal = ({ user, onClose }) => {
+    if (!user) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
+            <div className="relative bg-white dark:bg-dark-card w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between bg-slate-50/50 dark:bg-slate-800/50 rounded-t-2xl">
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl shadow-sm overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                            {user.avatar && user.avatar.startsWith('http') ? (
+                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                user.avatar
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-white">{user.name}</h2>
+                            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                <span>{user.role}</span>
+                                <span>•</span>
+                                <span>{user.department}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded textxs font-bold uppercase tracking-wider border shadow-sm ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                                    user.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                        user.status.includes('Late') ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                            'bg-slate-50 text-slate-500 border-slate-200'
+                                    }`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full mr-1.5 bg-current`}></div>
+                                    {user.status}
+                                </span>
+                                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                    {user.totalHours} Hrs Total
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                    >
+                        <XCircle size={24} />
+                    </button>
+                </div>
+
+                {/* Body - Session Timeline */}
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Clock size={16} /> Today's Timeline
+                    </h3>
+
+                    <div className="relative pl-4 space-y-8 before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 dark:before:bg-slate-700">
+                        {user.sessions.length === 0 ? (
+                            <div className="text-center py-10 text-slate-400 italic">No activity recorded for today.</div>
+                        ) : (
+                            user.sessions.map((session, idx) => (
+                                <div key={idx} className="relative pl-8">
+                                    {/* Timeline Dot */}
+                                    <div className={`absolute left-0 top-1 w-10 h-10 rounded-full border-4 border-white dark:border-dark-card shadow-sm flex items-center justify-center z-10 ${session.isActive ? 'bg-indigo-500 text-white animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                        }`}>
+                                        <span className="text-xs font-bold">{user.sessions.length - idx}</span>
+                                    </div>
+
+                                    <div className={`bg-white dark:bg-slate-800/50 border ${session.isActive ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-700'} rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow`}>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock In</span>
+                                                    <span className="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                                        {session.in}
+                                                    </span>
+                                                </div>
+                                                <div className="w-8 h-0.5 bg-slate-100 dark:bg-slate-700"></div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock Out</span>
+                                                    <span className={`text-lg font-mono font-bold flex items-center gap-2 ${session.isActive ? 'text-indigo-500 animate-pulse' : 'text-slate-600 dark:text-slate-400'}`}>
+                                                        {session.out}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Duration</span>
+                                                <span className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">{session.hours}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-50 dark:border-slate-700/50">
+                                            <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-emerald-500" />
+                                                <span className="line-clamp-2">{session.inLocation}</span>
+                                            </div>
+                                            {session.outLocation && (
+                                                <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                    <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-red-500" />
+                                                    <span className="line-clamp-2">{session.outLocation}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 rounded-b-2xl flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm font-bold text-slate-600 dark:text-white hover:bg-slate-50 transition-colors"
+                    >
+                        Close Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default AttendanceMonitoring;

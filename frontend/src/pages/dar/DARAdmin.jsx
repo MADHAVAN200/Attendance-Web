@@ -15,7 +15,8 @@ import {
     X,
     Building, // Import building icon
     Clock, // Import Clock icon for Shifts
-    Edit // Import Edit icon
+    Edit, // Import Edit icon
+    PieChart as PieChartIcon // Import PieChart icon aliased
 } from 'lucide-react';
 import MinimalSelect from '../../components/MinimalSelect';
 import {
@@ -139,12 +140,20 @@ const DARAdmin = ({ embedded = false }) => {
     const fetchInsights = async () => {
         setLoadingData(true);
         try {
-            // Last 7 days
+            // Last 7 days (Use local date to avoid timezone issues)
             const end = new Date();
             const start = new Date();
             start.setDate(end.getDate() - 6);
-            const sStr = start.toISOString().split('T')[0];
-            const eStr = end.toISOString().split('T')[0];
+
+            const toLocalYMD = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            const sStr = toLocalYMD(start);
+            const eStr = toLocalYMD(end);
 
             const res = await api.get(`/dar/activities/admin/all?startDate=${sStr}&endDate=${eStr}`);
             if (res.data.ok) {
@@ -162,10 +171,24 @@ const DARAdmin = ({ embedded = false }) => {
         // 1. Category Data (Pie)
         const catMap = {};
         let totalHours = 0;
+
+        const parseMinutes = (t) => {
+            if (!t) return 0;
+            const parts = t.split(':');
+            return (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
+        };
+
         activities.forEach(a => {
-            const h = (new Date(`1970-01-01T${a.end_time}`) - new Date(`1970-01-01T${a.start_time}`)) / 3600000;
-            const hours = Math.max(0, h);
-            catMap[a.activity_type] = (catMap[a.activity_type] || 0) + hours;
+            if (!a.start_time || !a.end_time) return;
+            let startM = parseMinutes(a.start_time);
+            let endM = parseMinutes(a.end_time);
+
+            // Handle overnight (if end < start, add 24h)
+            if (endM < startM) endM += (24 * 60);
+
+            const hours = Math.max(0, (endM - startM) / 60);
+            const type = a.activity_type || "Uncategorized";
+            catMap[type] = (catMap[type] || 0) + hours;
             totalHours += hours;
         });
 
@@ -499,6 +522,7 @@ const DARAdmin = ({ embedded = false }) => {
     const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
     const [requests, setRequests] = useState([]);
     const [loadingRequests, setLoadingRequests] = useState(false);
+    const [requestSearch, setRequestSearch] = useState("");
 
     const [employeesList, setEmployeesList] = useState([]);
     const [selectedEmployee, setSelectedEmployee] = useState("All Employees");
@@ -655,7 +679,7 @@ const DARAdmin = ({ embedded = false }) => {
     const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
     const buttonRef = useRef(null);
 
-    const [showSettings, setShowSettings] = useState(false);
+
 
     const toggleCalendar = () => {
         if (!showCalendar && buttonRef.current) {
@@ -721,15 +745,35 @@ const DARAdmin = ({ embedded = false }) => {
     }
 
     // --- HANDLERS ---
-    const handleAddCategory = () => {
+    const handleAddCategory = async () => {
         if (newCat.trim()) {
-            setCategories(prev => [...prev, newCat.trim()]);
+            const updated = [...categories, newCat.trim()];
+            setCategories(updated);
             setNewCat("");
+            try {
+                await api.post('/dar/settings/update', {
+                    buffer_minutes: parseInt(bufferTime),
+                    categories: updated
+                });
+                toast.success("Category added");
+            } catch (err) {
+                toast.error("Failed to add category");
+            }
         }
     };
 
-    const handleRemoveCategory = (cat) => {
-        setCategories(prev => prev.filter(c => c !== cat));
+    const handleRemoveCategory = async (cat) => {
+        const updated = categories.filter(c => c !== cat);
+        setCategories(updated);
+        try {
+            await api.post('/dar/settings/update', {
+                buffer_minutes: parseInt(bufferTime),
+                categories: updated
+            });
+            toast.success("Category removed");
+        } catch (err) {
+            toast.error("Failed to remove category");
+        }
     };
 
 
@@ -754,16 +798,13 @@ const DARAdmin = ({ embedded = false }) => {
                         { id: 'insights', icon: <BarChart3 size={16} />, label: 'Live Dashboard', type: 'tab' },
                         { id: 'requests', icon: <Edit size={16} />, label: 'Edit Requests', type: 'tab' },
                         { id: 'data', icon: <FileText size={16} />, label: 'Master Data', type: 'tab' },
+                        { id: 'settings', icon: <Settings size={16} />, label: 'Configurations', type: 'tab' },
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => {
-                                if (tab.type === 'modal') {
-                                    setShowSettings(true);
-                                } else {
-                                    setActiveTab(tab.id);
-                                    setSelectedRequest(null);
-                                }
+                                setActiveTab(tab.id);
+                                setSelectedRequest(null);
                             }}
                             className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tab.id
                                 ? 'text-indigo-600 dark:text-indigo-400'
@@ -784,88 +825,100 @@ const DARAdmin = ({ embedded = false }) => {
                 {/* Content Area */}
                 <div className="flex-1 overflow-hidden">
 
-                    {/* --- CONFIGURATION MODAL --- */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                            <div className="bg-white dark:bg-dark-card w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                {/* Modal Header */}
-                                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                    {/* --- CONFIGURATIONS TAB --- */}
+                    {activeTab === 'settings' && (
+                        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 dark:border-slate-700">
+                                <div>
                                     <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <Settings size={20} className="text-indigo-600" />
-                                        DAR Configuration
+                                        <Settings size={22} className="text-indigo-600" />
+                                        Configurations
                                     </h2>
-                                    <button
-                                        onClick={() => setShowSettings(false)}
-                                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                    >
-                                        <X size={20} />
-                                    </button>
+                                    <p className="text-sm text-slate-500 mt-1">Manage system-wide settings and master lists.</p>
                                 </div>
+                                <button
+                                    onClick={handleSaveSettings}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+                                >
+                                    <Save size={18} />
+                                    Save Changes
+                                </button>
+                            </div>
 
-                                {/* Modal Body */}
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 h-full flex flex-col">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Activity Categories</h3>
-                                        <p className="text-sm text-slate-500 mb-6">Manage the list of standard activities available for employees.</p>
+                            {/* Body */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 flex flex-col gap-8">
 
-                                        <div className="flex gap-2 mb-6">
-                                            <input
-                                                type="text"
-                                                value={newCat}
-                                                onChange={(e) => setNewCat(e.target.value)}
-                                                placeholder="Enter new category..."
-                                                className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleAddCategory}
-                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
-                                            >
-                                                <Plus size={20} />
-                                            </button>
-                                        </div>
+                                {/* Section 1: Categories */}
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Activity Categories</h3>
+                                    <p className="text-sm text-slate-500 mb-6">Manage standard activities available for employees to select properly.</p>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1 overflow-y-auto custom-scrollbar pr-2 content-start">
-                                            {categories.map((cat, i) => (
-                                                <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors h-fit shadow-sm">
-                                                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
-                                                    <button
-                                                        onClick={() => handleRemoveCategory(cat)}
-                                                        className="min-w-[32px] p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {categories.length === 0 && (
-                                                <div className="col-span-full flex flex-col items-center justify-center p-8 text-slate-400 italic">
-                                                    No categories defined. Add one properly.
-                                                </div>
-                                            )}
-                                        </div>
+                                    <div className="flex gap-3 mb-6">
+                                        <input
+                                            type="text"
+                                            value={newCat}
+                                            onChange={(e) => setNewCat(e.target.value)}
+                                            placeholder="Enter new category..."
+                                            className="flex-1 px-5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddCategory}
+                                            className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors shadow-md shadow-indigo-100 dark:shadow-none"
+                                        >
+                                            <Plus size={20} />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {categories.map((cat, i) => (
+                                            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-200 dark:hover:border-indigo-900 transition-all shadow-sm">
+                                                <span className="font-semibold text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
+                                                <button
+                                                    onClick={() => handleRemoveCategory(cat)}
+                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {categories.length === 0 && (
+                                            <div className="col-span-full flex flex-col items-center justify-center p-10 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 italic">
+                                                <Settings size={32} className="mb-2 opacity-20" />
+                                                No categories defined. Add one above.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Modal Footer */}
-                                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
-                                    <button
-                                        onClick={() => setShowSettings(false)}
-                                        className="px-6 py-2.5 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            handleSaveSettings();
-                                            setShowSettings(false);
-                                        }}
-                                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
-                                    >
-                                        <Save size={18} />
-                                        Save Changes
-                                    </button>
+                                <div className="w-full h-[1px] bg-slate-100 dark:bg-slate-700"></div>
+
+                                {/* Section 2: Buffer Time */}
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Grace Period Buffer</h3>
+                                        <p className="text-sm text-slate-500 max-w-md">
+                                            Time in minutes allowed after the current time for 'Execution Mode' tasks.
+                                            Tasks logged after this buffer will be marked as future planning.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <button
+                                            onClick={() => setBufferTime(Math.max(0, bufferTime - 5))}
+                                            className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all font-bold text-lg"
+                                        >-</button>
+                                        <div className="w-16 text-center font-bold text-lg text-slate-700 dark:text-white">
+                                            {bufferTime}m
+                                        </div>
+                                        <button
+                                            onClick={() => setBufferTime(bufferTime + 5)}
+                                            className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all font-bold text-lg"
+                                        >+</button>
+                                    </div>
                                 </div>
+
                             </div>
                         </div>
                     )}
@@ -1141,6 +1194,8 @@ const DARAdmin = ({ embedded = false }) => {
                                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
                                             type="text"
+                                            value={requestSearch}
+                                            onChange={(e) => setRequestSearch(e.target.value)}
                                             placeholder="Search by employee name..."
                                             className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                                         />
@@ -1152,7 +1207,7 @@ const DARAdmin = ({ embedded = false }) => {
                                     ) : requests.length === 0 ? (
                                         <div className="text-center py-10 text-slate-400 italic">No requests found.</div>
                                     ) : (
-                                        requests.map(req => (
+                                        requests.filter(req => req.user.toLowerCase().includes(requestSearch.toLowerCase())).map(req => (
                                             <div
                                                 key={req.id}
                                                 onClick={() => setSelectedRequest(req)}
@@ -1198,64 +1253,7 @@ const DARAdmin = ({ embedded = false }) => {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto pb-10 custom-scrollbar">
 
                             {/* Chart 3: Pending DAR Edit Requests */}
-                            {/* Configurations Card */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col lg:col-span-2">
-                                <div className="flex items-center justify-between mb-6">
-                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <Settings size={20} className="text-indigo-600" /> Configurations
-                                    </h3>
-                                    <button
-                                        onClick={handleSaveSettings}
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors"
-                                    >
-                                        <Save size={14} /> Save
-                                    </button>
-                                </div>
 
-                                <div className="flex-1 flex flex-col">
-                                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Activity Categories</h4>
-                                    <p className="text-xs text-slate-500 mb-4">Manage standard activities available for employees.</p>
-
-                                    <div className="flex gap-2 mb-4">
-                                        <input
-                                            type="text"
-                                            value={newCat}
-                                            onChange={(e) => setNewCat(e.target.value)}
-                                            placeholder="Enter new category..."
-                                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleAddCategory}
-                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
-                                        >
-                                            <Plus size={18} />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[300px]">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {categories.map((cat, i) => (
-                                                <div key={i} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors">
-                                                    <span className="font-medium text-xs text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
-                                                    <button
-                                                        onClick={() => handleRemoveCategory(cat)}
-                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {categories.length === 0 && (
-                                                <div className="col-span-full flex flex-col items-center justify-center p-6 text-slate-400 italic text-sm">
-                                                    No categories defined.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
 
                             {/* Row 1: Key Metrics (Condensed) */}
                             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1283,33 +1281,76 @@ const DARAdmin = ({ embedded = false }) => {
 
                             {/* Chart 1: Hours by Category (Donut) */}
                             <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <PieChart size={20} className="text-indigo-500" /> Hours by Category
-                                </h3>
-                                <div className="flex-1 w-full min-h-[300px]">
+                                <div className="flex items-start justify-between mb-6">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                            <PieChartIcon size={20} className="text-indigo-500" /> Hours by Category
+                                        </h3>
+                                        <p className="text-xs text-slate-500 mt-1 max-w-[200px]">
+                                            Distribution of logged hours across activity types.
+                                        </p>
+                                    </div>
+                                    <div className="group relative">
+                                        <div className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full cursor-help transition-colors">
+                                            {/* Import Info from lucide-react first if not imported, assuming it is or using a similar icon */}
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
+                                        </div>
+                                        {/* Custom Info Tooltip */}
+                                        <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                            <p className="font-semibold mb-1">How this works:</p>
+                                            <p className="opacity-80">
+                                                This chart aggregates the duration of all tasks logged by employees within the selected date range, grouped by their category tag.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Donut Chart - User Preferred Style */}
+                                <div className="w-full h-[300px] flex flex-col items-center justify-center">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={categoryData}
+                                                data={categoryData.length > 0 ? categoryData : [{ name: 'No Data', value: 1, color: '#e2e8f0' }]}
                                                 cx="50%"
                                                 cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                paddingAngle={5}
+                                                innerRadius={80} // Thinner ring like the image
+                                                outerRadius={110}
+                                                paddingAngle={0}
                                                 dataKey="value"
+                                                stroke="none"
                                             >
-                                                {categoryData.map((entry, index) => (
+                                                {(categoryData.length > 0 ? categoryData : [{ name: 'No Data', value: 1, color: '#e2e8f0' }]).map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>
                                             <Tooltip
-                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        const data = payload[0].payload;
+                                                        return (
+                                                            <div className="bg-white dark:bg-slate-800 p-2 px-3 rounded-lg shadow-xl border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white">
+                                                                {data.name}: {data.value} hrs
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
                                             />
-                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                            {categoryData.length > 0 && (
+                                                <Legend
+                                                    verticalAlign="bottom"
+                                                    height={36}
+                                                    iconType="square"
+                                                    iconSize={10}
+                                                    formatter={(value) => <span className="text-sm font-bold text-slate-600 dark:text-slate-300 ml-1 mr-4">{value}</span>}
+                                                />
+                                            )}
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
                             </div>
+
+
 
                             {/* Chart 2: Daily Submission Compliance (Bar) */}
                             <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
@@ -1352,7 +1393,7 @@ const DARAdmin = ({ embedded = false }) => {
 
                 </div>
             </div>
-        </Wrapper>
+        </Wrapper >
     );
 };
 
