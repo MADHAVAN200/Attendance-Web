@@ -4,6 +4,7 @@ import './config.js';
 const DB_HOST = process.env.DB_HOST;
 const DB_PORT = Number(process.env.DB_PORT) || 3306;
 
+//admin access only for local dev environment
 export let adminDB = null;
 
 if (process.env.NODE_ENV === 'development') {
