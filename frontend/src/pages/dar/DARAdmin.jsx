@@ -209,6 +209,37 @@ const DARAdmin = ({ embedded = false }) => {
         return activeUsers.size > 0 ? (totalH / activeUsers.size) : 0;
     };
 
+    // Helper for Submission Rate Calculation (Daily Average)
+    const calculateSubmissionRate = (acts, totalEmps) => {
+        if (totalEmps === 0) return { rate: 0, count: 0 };
+
+        // 1. Group by Date
+        const dateMap = {};
+        acts.forEach(a => {
+            const d = a.activity_date.split('T')[0];
+            if (!dateMap[d]) dateMap[d] = new Set();
+            // Only count if COMPLETED? Assuming "Submission" means at least one completed task.
+            if (a.status === 'COMPLETED') dateMap[d].add(a.user_id);
+        });
+
+        // 2. Average Count Calculation
+        let totalCount = 0;
+        Object.values(dateMap).forEach(usersSet => {
+            totalCount += usersSet.size;
+        });
+
+        const start = new Date(filters.startDate);
+        const end = new Date(filters.endDate);
+        const duration = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (duration <= 0) return { rate: 0, count: 0 };
+
+        const avgCount = totalCount / duration; // Keep decimal precision
+        const rate = Math.round((avgCount / totalEmps) * 100);
+
+        return { rate, count: avgCount };
+    };
+
     // Helper for Idle Time Calculation
     const calculateIdleTime = (acts) => {
         // Group by User -> Date
@@ -236,11 +267,6 @@ const DARAdmin = ({ embedded = false }) => {
             dayActs.sort((a, b) => a.start - b.start);
 
             // Calculate gaps between activities
-            // Assuming simplified model: Gap is time between End of Act N and Start of Act N+1
-            // We are NOT checking against Shift Start/End here (complexity), just inter-activity gaps.
-            // If user wants "Unaccounted Time" vs Shift, that's different. 
-            // "Gaps" usually means "Breaks". Let's stick to Gaps for now as requested.
-
             for (let i = 0; i < dayActs.length - 1; i++) {
                 const gap = dayActs[i + 1].start - dayActs[i].end;
                 if (gap > 0) totalIdleM += gap;
@@ -300,6 +326,7 @@ const DARAdmin = ({ embedded = false }) => {
             setLoadingData(false);
         }
     };
+
 
     const processInsights = (activities, prevAvg = 0) => {
         // --- 1. KEY METRICS CALCULATION ---
@@ -384,8 +411,8 @@ const DARAdmin = ({ embedded = false }) => {
         // If searching, maybe narrow down further? Usually "Submission Rate" is per Dept context. 
         // User asked: "when a filter is selected suppose "sales" then the filed should dynamically display the count of employess of that department only"
 
-        // Submission Rate Recalculation
-        const subRate = dynamicTotalEmp > 0 ? Math.round((activeUsers.size / dynamicTotalEmp) * 100) : 0;
+        // Submission Rate Recalculation (Daily Average)
+        const { rate: subRate, count: subCount } = calculateSubmissionRate(activities, dynamicTotalEmp);
 
         // B. Avg Work Hrs (Restore)
         // Total Hours / Active Users (If 0 active, 0)
@@ -409,7 +436,7 @@ const DARAdmin = ({ embedded = false }) => {
 
         setStats({
             submissionRate: subRate,
-            submittedCount: activeUsers.size,
+            submittedCount: subCount, // Use Average Daily Count
             totalEmployees: dynamicTotalEmp,
             topActivity: topAct,
             topActivityPercent: topActPercent,
@@ -1502,7 +1529,9 @@ const DARAdmin = ({ embedded = false }) => {
                                     <div>
                                         <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
                                         <div className="text-2xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
-                                        <div className="text-[10px] text-emerald-500 font-bold mt-1">{stats.submittedCount}/{stats.totalEmployees} Employees</div>
+                                        <div className="text-[10px] text-emerald-500 font-bold mt-1">
+                                            {Math.round(stats.submittedCount)}/{stats.totalEmployees} Employees
+                                        </div>
                                     </div>
                                     <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-full">
                                         <FileText size={20} className="text-emerald-500" />
