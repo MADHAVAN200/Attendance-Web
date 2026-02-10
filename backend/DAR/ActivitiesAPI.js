@@ -226,7 +226,8 @@ router.get('/admin/all', authenticateJWT, catchAsync(async (req, res) => {
             'dep.dept_name as user_dept',
             's.shift_name as user_shift_name'
         )
-        .where('da.org_id', org_id);
+        .where('da.org_id', org_id)
+        .where('da.status', 'COMPLETED');;
 
     // Filter by date or range
     if (date) {

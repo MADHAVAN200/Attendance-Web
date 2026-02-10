@@ -1281,70 +1281,29 @@ const DARAdmin = ({ embedded = false }) => {
 
                             {/* Chart 1: Hours by Category (Donut) */}
                             <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <div className="flex items-start justify-between mb-6">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                            <PieChartIcon size={20} className="text-indigo-500" /> Hours by Category
-                                        </h3>
-                                        <p className="text-xs text-slate-500 mt-1 max-w-[200px]">
-                                            Distribution of logged hours across activity types.
-                                        </p>
-                                    </div>
-                                    <div className="group relative">
-                                        <div className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full cursor-help transition-colors">
-                                            {/* Import Info from lucide-react first if not imported, assuming it is or using a similar icon */}
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
-                                        </div>
-                                        {/* Custom Info Tooltip */}
-                                        <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                                            <p className="font-semibold mb-1">How this works:</p>
-                                            <p className="opacity-80">
-                                                This chart aggregates the duration of all tasks logged by employees within the selected date range, grouped by their category tag.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Donut Chart - User Preferred Style */}
-                                <div className="w-full h-[300px] flex flex-col items-center justify-center">
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <PieChartIcon size={20} className="text-indigo-500" /> Hours by Category
+                                </h3>
+                                <div className="flex-1 w-full min-h-[300px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={categoryData.length > 0 ? categoryData : [{ name: 'No Data', value: 1, color: '#e2e8f0' }]}
+                                                data={categoryData}
                                                 cx="50%"
                                                 cy="50%"
-                                                innerRadius={80} // Thinner ring like the image
-                                                outerRadius={110}
-                                                paddingAngle={0}
+                                                innerRadius={60}
+                                                outerRadius={100}
+                                                paddingAngle={5}
                                                 dataKey="value"
-                                                stroke="none"
                                             >
-                                                {(categoryData.length > 0 ? categoryData : [{ name: 'No Data', value: 1, color: '#e2e8f0' }]).map((entry, index) => (
+                                                {categoryData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>
                                             <Tooltip
-                                                content={({ active, payload }) => {
-                                                    if (active && payload && payload.length) {
-                                                        const data = payload[0].payload;
-                                                        return (
-                                                            <div className="bg-white dark:bg-slate-800 p-2 px-3 rounded-lg shadow-xl border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-white">
-                                                                {data.name}: {data.value} hrs
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                }}
+                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                             />
-                                            {categoryData.length > 0 && (
-                                                <Legend
-                                                    verticalAlign="bottom"
-                                                    height={36}
-                                                    iconType="square"
-                                                    iconSize={10}
-                                                    formatter={(value) => <span className="text-sm font-bold text-slate-600 dark:text-slate-300 ml-1 mr-4">{value}</span>}
-                                                />
-                                            )}
+                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
