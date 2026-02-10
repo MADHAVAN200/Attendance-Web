@@ -39,6 +39,33 @@ const DARAdmin = ({ embedded = false }) => {
     const [loadingSettings, setLoadingSettings] = useState(false);
 
 
+    // --- STATIC MOCK DATA (TEMPORARY) ---
+    const mockTrendData = [
+        { date: 'Mon', 'Site Visit': 80, 'Office': 40, 'Meeting': 25, total: 145 },
+        { date: 'Tue', 'Site Visit': 120, 'Office': 50, 'Meeting': 40, total: 210 },
+        { date: 'Wed', 'Site Visit': 90, 'Office': 60, 'Meeting': 30, total: 180 },
+        { date: 'Thu', 'Site Visit': 140, 'Office': 70, 'Meeting': 30, total: 240 },
+        { date: 'Fri', 'Site Visit': 100, 'Office': 60, 'Meeting': 35, total: 195 },
+        { date: 'Sat', 'Site Visit': 60, 'Office': 40, 'Meeting': 20, total: 120 },
+        { date: 'Sun', 'Site Visit': 30, 'Office': 20, 'Meeting': 10, total: 60 },
+    ];
+
+    const mockDeptData = [
+        { name: 'Engineering', Development: 120, Meeting: 40, Break: 10 },
+        { name: 'Sales', Calls: 80, Meeting: 50, Travel: 30 },
+        { name: 'HR', Admin: 60, Meeting: 30, Break: 5 },
+        { name: 'Site Ops', Inspection: 150, Travel: 40, Report: 20 },
+    ];
+
+    const mockConsistencyData = [
+        { id: 1, name: 'Rohan Sharma', role: 'Site Engineer', dars: 6, target: 6, hours: 48 },
+        { id: 2, name: 'Priya Patel', role: 'Architect', dars: 5, target: 6, hours: 45 },
+        { id: 3, name: 'Amit Singh', role: 'Supervisor', dars: 6, target: 6, hours: 42 },
+        { id: 4, name: 'Sneha Gupta', role: 'HR Manager', dars: 4, target: 6, hours: 32 },
+        { id: 5, name: 'Vikram Malhotra', role: 'Sales Lead', dars: 2, target: 6, hours: 15 },
+    ];
+    // -------------------------------------
+
     // Fetch Settings
     const fetchSettings = async () => {
         setLoadingSettings(true);
@@ -1250,87 +1277,221 @@ const DARAdmin = ({ embedded = false }) => {
 
                     {/* --- INSIGHTS TAB --- */}
                     {activeTab === 'insights' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto pb-10 custom-scrollbar">
-
-                            {/* Chart 3: Pending DAR Edit Requests */}
-
+                        <div className="flex flex-col gap-6 h-full overflow-y-auto pb-10 custom-scrollbar pr-2">
 
                             {/* Row 1: Key Metrics (Condensed) */}
-                            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                                     <div>
                                         <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
-                                        <div className="text-3xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
-                                        <div className="text-xs text-emerald-500 font-bold mt-1">{stats.submittedCount}/{stats.totalEmployees} Employees</div>
+                                        <div className="text-2xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
+                                        <div className="text-[10px] text-emerald-500 font-bold mt-1">{stats.submittedCount}/{stats.totalEmployees} Employees</div>
                                     </div>
-                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-full">
-                                        <FileText size={24} className="text-emerald-500" />
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-full">
+                                        <FileText size={20} className="text-emerald-500" />
                                     </div>
                                 </div>
                                 <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
                                     <div>
                                         <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Top Activity</div>
-                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate">{stats.topActivity}</div>
-                                        <div className="text-xs text-slate-400 font-bold mt-1">{stats.topActivityPercent}% of total time</div>
+                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate max-w-[120px]" title={stats.topActivity}>{stats.topActivity}</div>
+                                        <div className="text-[10px] text-slate-400 font-bold mt-1 max-w-[120px] truncate">{stats.topActivityPercent}% of total time</div>
                                     </div>
-                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-full">
-                                        <BarChart3 size={24} className="text-indigo-500" />
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-2.5 rounded-full">
+                                        <BarChart3 size={20} className="text-indigo-500" />
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Avg Work Hours</div>
+                                        <div className="text-2xl font-black text-purple-600 dark:text-purple-400">7.2</div>
+                                        <div className="text-[10px] text-emerald-500 font-bold mt-1 flex items-center gap-1">↑ 5% vs last week</div>
+                                    </div>
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-full">
+                                        <Clock size={20} className="text-purple-500" />
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Active Depts</div>
+                                        <div className="text-2xl font-black text-orange-500 dark:text-orange-400">8/10</div>
+                                        <div className="text-[10px] text-slate-400 font-bold mt-1">2 Pending Reports</div>
+                                    </div>
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2.5 rounded-full">
+                                        <Building size={20} className="text-orange-500" />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Chart 1: Hours by Category (Donut) */}
+                            {/* Row 2: Workload Trend (Area Chart) */}
                             <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                    <PieChartIcon size={20} className="text-indigo-500" /> Hours by Category
-                                </h3>
-                                <div className="flex-1 w-full min-h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={categoryData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                            >
-                                                {categoryData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip
-                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                            />
-                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <BarChart3 size={20} className="text-indigo-500" /> Organization Workload Trend
+                                    </h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
+                                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div> Site Visit
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Office
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
+                                            <div className="w-2 h-2 rounded-full bg-amber-500"></div> Meeting
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-
-
-
-                            {/* Chart 2: Daily Submission Compliance (Bar) */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <Users size={20} className="text-emerald-500" /> Submission Compliance
-                                </h3>
-                                <div className="flex-1 w-full min-h-[300px]">
+                                <div className="w-full h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <AreaChart data={mockTrendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                                            <defs>
+                                                <linearGradient id="colorSite" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="colorOffice" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="colorMeeting" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
                                             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
                                             <Tooltip
-                                                cursor={{ fill: '#F1F5F9' }}
                                                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                             />
-                                            <Legend verticalAlign="top" height={36} iconType="circle" />
-                                            <Bar dataKey="submitted" name="Submitted" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} barSize={30} />
-                                            <Bar dataKey="pending" name="Pending" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={30} />
-                                        </BarChart>
+                                            <Area type="monotone" dataKey="Site Visit" stackId="1" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorSite)" />
+                                            <Area type="monotone" dataKey="Office" stackId="1" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorOffice)" />
+                                            <Area type="monotone" dataKey="Meeting" stackId="1" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorMeeting)" />
+                                        </AreaChart>
                                     </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Row 3: Department Breakdown & Capacity Alerts */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Department Activity Stacked Bar */}
+                                <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <Building size={20} className="text-orange-500" /> Department Focus
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[300px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={mockDeptData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
+                                                <XAxis type="number" hide />
+                                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 13, fontWeight: 600, fill: '#475569' }} width={100} />
+                                                <Tooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                                                {/* No Legend needed if labeled elsewhere, but keeping simpler look */}
+                                                <Bar dataKey="Development" stackId="a" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                                                <Bar dataKey="Meeting" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={20} />
+                                                <Bar dataKey="Calls" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20} />
+                                                <Bar dataKey="Site Visit" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20} />
+                                                <Bar dataKey="Admin" stackId="a" fill="#8b5cf6" radius={[0, 0, 0, 0]} barSize={20} />
+                                                <Bar dataKey="Inspection" stackId="a" fill="#ec4899" radius={[0, 4, 4, 0]} barSize={20} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Employee Consistency */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                            <FileText size={20} className="text-indigo-500" /> Employee Consistency
+                                        </h3>
+                                        <select className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 outline-none text-slate-500">
+                                            <option>This Week</option>
+                                            <option>Last Week</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar max-h-[300px]">
+                                        {mockConsistencyData.map((user, i) => {
+                                            const pct = (user.dars / user.target) * 100;
+                                            let barColor = 'bg-emerald-500';
+                                            if (pct < 50) barColor = 'bg-red-500';
+                                            else if (pct < 80) barColor = 'bg-amber-400';
+
+                                            return (
+                                                <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                    <div className="flex-1 min-w-0 mr-4">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{user.name}</div>
+                                                            <div className="text-[10px] font-bold text-slate-400">{user.dars}/{user.target} Reports</div>
+                                                        </div>
+                                                        {/* Progress Bar */}
+                                                        <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700">
+                                                        <div className="text-xs text-slate-400 font-bold uppercase">Total</div>
+                                                        <div className="text-sm font-black text-slate-800 dark:text-white">{user.hours}h</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Row 4: Category Pie & Compliance Bar (Existing, just moved down) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Chart 3: Hours by Category (Donut) */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <PieChartIcon size={20} className="text-purple-500" /> Hours by Category
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[250px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={categoryData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={50}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {categoryData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip
+                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                />
+                                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Chart 4: Daily Submission Compliance (Bar) */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <Users size={20} className="text-emerald-500" /> Submission Compliance
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[250px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                                                <Tooltip
+                                                    cursor={{ fill: '#F1F5F9' }}
+                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                />
+                                                <Legend verticalAlign="top" height={36} iconType="circle" />
+                                                <Bar dataKey="submitted" name="Submitted" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} barSize={20} />
+                                                <Bar dataKey="pending" name="Pending" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={20} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 </div>
                             </div>
 
