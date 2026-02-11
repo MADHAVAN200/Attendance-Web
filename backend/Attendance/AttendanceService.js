@@ -38,7 +38,7 @@ export const AttendanceService = {
         const openSession = await attendanceDB("attendance_records")
             .where({ user_id })
             .whereNull("time_out")
-            .whereRaw("DATE(time_in) = DATE(?)", [localTime])
+            .whereRaw("time_in >= DATE_SUB(?, INTERVAL 12 HOUR)", [localTime])
             .first();
 
         if (openSession) {
@@ -201,7 +201,8 @@ export const AttendanceService = {
         const openSession = await attendanceDB("attendance_records")
             .where({ user_id })
             .whereNull("time_out")
-            .whereRaw("DATE(time_in) = DATE(?)", [localTime])
+            .whereRaw("time_in >= DATE_SUB(?, INTERVAL 12 HOUR)", [localTime])
+            .orderBy("time_in", "desc")
             .first();
 
         if (!openSession) {

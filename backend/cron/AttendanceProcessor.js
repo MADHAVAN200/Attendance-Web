@@ -20,6 +20,7 @@ export async function processHourlyAttendance() {
             'users.org_id',
             'users.shift_id',
             'shifts.policy_rules', // Fetch JSON rules instead of missing columns
+            'shifts.processing_time', // Configurable auto-close time (Default 02:00:00)
             'work_locations.timezone', // Location timezone (optional/unused priority)
             'organizations.timezone as org_timezone' // Fallback 2
         );
@@ -67,9 +68,18 @@ export async function processHourlyAttendance() {
             const nowInUserTZ = new Date(new Date().toLocaleString('en-US', { timeZone }));
             const currentHour = nowInUserTZ.getHours();
 
-            // 🎯 Target Window: 02:00 AM - 02:59 AM
-            // If it is 2 AM for the user, we process "Yesterday"
-            if (currentHour === 2) {
+            // 🎯 Target Window: Matching the Shift's Processing Time
+            // Default is 02:00:00. Night shifts might be 14:00:00 (2 PM).
+
+            let targetHour = 2; // Default
+            if (user.processing_time) {
+                // processing_time is likely a string "HH:mm:ss"
+                const [h] = user.processing_time.split(':');
+                targetHour = parseInt(h, 10);
+            }
+
+            // If it is the Target Processing Hour for the user, we process "Yesterday"
+            if (currentHour === targetHour) {
                 const yesterday = new Date(nowInUserTZ);
                 yesterday.setDate(yesterday.getDate() - 1);
                 const targetDate = yesterday.toISOString().split('T')[0];
