@@ -20,14 +20,66 @@ import {
     Plus,
     X,
     Trash2,
-    Paperclip
+    Paperclip,
+    ExternalLink,
+    Download,
+    Image as ImageIcon
 } from 'lucide-react';
+
+const AttachmentModal = ({ file, onClose }) => {
+    if (!file) return null;
+    const isImage = file.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.file_key || file.name);
+    const isPdf = file.file_type === 'application/pdf' || /\.pdf$/i.test(file.file_key || file.name);
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+            <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
+                            {isImage ? <ImageIcon size={20} /> : <FileText size={20} />}
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-800 dark:text-white text-sm">
+                                {(file.file_key || file.name)?.split('/').pop() || 'Attachment'}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {file.file_type || 'Unknown Type'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <a href={file.file_url} download target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800" title="Download">
+                            <Download size={20} />
+                        </a>
+                        <button onClick={onClose} className="p-2 text-slate-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 dark:hover:bg-red-900/20">
+                            <X size={20} />
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 bg-slate-100 dark:bg-slate-950/50 p-4 flex items-center justify-center overflow-hidden relative">
+                    {isImage ? (
+                        <img src={file.file_url} alt="Attachment" className="max-w-full max-h-full object-contain rounded-lg shadow-sm" />
+                    ) : isPdf ? (
+                        <iframe src={file.file_url} className="w-full h-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white" title="PDF Viewer"></iframe>
+                    ) : (
+                        <div className="text-center">
+                            <p className="text-slate-500 dark:text-slate-400 mb-4">This file type cannot be previewed.</p>
+                            <a href={file.file_url} download className="text-indigo-600 hover:underline">Download to view</a>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const LeaveApplication = () => {
     const { user } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedLeave, setSelectedLeave] = useState(null); // For Detail View
+    const [viewingAttachment, setViewingAttachment] = useState(null);
     const [adminAction, setAdminAction] = useState({ status: '', remarks: '', payType: 'Paid', payPercentage: 100 });
 
     // Admin Filter States
@@ -40,8 +92,15 @@ const LeaveApplication = () => {
         start_date: '',
         end_date: '',
         reason: '',
-        attachment: null
+        attachments: []
     });
+
+    const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
+
+    // Reset extended view when changing selected leave
+    useEffect(() => {
+        setAttachmentsExpanded(false);
+    }, [selectedLeave]);
 
     const [showForm, setShowForm] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
@@ -127,8 +186,10 @@ const LeaveApplication = () => {
             data.append('start_date', formData.start_date);
             data.append('end_date', formData.end_date);
             data.append('reason', formData.reason);
-            if (formData.attachment) {
-                data.append('attachment', formData.attachment);
+            if (formData.attachments && formData.attachments.length > 0) {
+                formData.attachments.forEach(file => {
+                    data.append('attachments', file);
+                });
             }
 
             const res = await api.post('/leaves/request', data, {
@@ -137,7 +198,7 @@ const LeaveApplication = () => {
 
             if (res.data.ok) {
                 toast.success("Leave request submitted successfully");
-                setFormData({ leave_type: 'Casual Leave', start_date: '', end_date: '', reason: '', attachment: null });
+                setFormData({ leave_type: 'Casual Leave', start_date: '', end_date: '', reason: '', attachments: [] });
                 setShowForm(false);
                 setIsCustomType(false);
                 fetchLeaves();
@@ -149,9 +210,22 @@ const LeaveApplication = () => {
     };
 
     const handleFileChange = (e) => {
-        if (e.target.files[0]) {
-            setFormData({ ...formData, attachment: e.target.files[0] });
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files);
+            setFormData(prev => ({
+                ...prev,
+                attachments: [...(prev.attachments || []), ...newFiles]
+            }));
+            // Reset input value to allow selecting same file again if needed
+            e.target.value = '';
         }
+    };
+
+    const removeFile = (indexToRemove) => {
+        setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.filter((_, index) => index !== indexToRemove)
+        }));
     };
 
     const handleTextareaInput = (e) => {
@@ -390,6 +464,57 @@ const LeaveApplication = () => {
                                                 </div>
                                             </div>
 
+                                            {/* Attachments Section - Condensed with Inline Expansion */}
+                                            {selectedLeave.attachments && selectedLeave.attachments.length > 0 && (
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700 overflow-hidden">
+                                                    <div
+                                                        className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
+                                                        onClick={() => setAttachmentsExpanded(!attachmentsExpanded)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <Paperclip size={18} className="text-slate-400" />
+                                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                                {selectedLeave.attachments.length} Attachments
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1"
+                                                        >
+                                                            {attachmentsExpanded ? 'Hide' : 'View All'}
+                                                            <ChevronDown size={14} className={`transform transition-transform ${attachmentsExpanded ? 'rotate-180' : ''}`} />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expanded Content */}
+                                                    {attachmentsExpanded && (
+                                                        <div className="px-4 pb-4 pt-0 space-y-2 border-t border-slate-100 dark:border-slate-700/50 mt-2">
+                                                            {selectedLeave.attachments.map((file, index) => (
+                                                                <div
+                                                                    key={index}
+                                                                    onClick={() => setViewingAttachment(file)}
+                                                                    className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg hover:border-indigo-200 dark:hover:border-indigo-900/50 hover:shadow-sm transition-all group cursor-pointer"
+                                                                >
+                                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                                        <FileText size={16} />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                                                            {file.file_key.split('/').pop()}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-slate-400 uppercase font-bold">
+                                                                            {file.file_type ? file.file_type.split('/')[1]?.toUpperCase() : 'FILE'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="text-slate-300 group-hover:text-indigo-500 transition-colors">
+                                                                        <ExternalLink size={14} />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             {/* Action / Remarks Section */}
                                             {selectedLeave.status === 'pending' ? (
                                                 <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border-2 border-slate-100 dark:border-slate-700 shadow-sm">
@@ -441,6 +566,12 @@ const LeaveApplication = () => {
                         </div>
                     )}
                 </div>
+                {viewingAttachment && (
+                    <AttachmentModal
+                        file={viewingAttachment}
+                        onClose={() => setViewingAttachment(null)}
+                    />
+                )}
             </div>
         );
     }
@@ -534,45 +665,69 @@ const LeaveApplication = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Attachment (Optional)</label>
-                                <div className="relative group">
-                                    <input
-                                        type="file"
-                                        id="leave-attachment"
-                                        className="hidden"
-                                        onChange={handleFileChange}
-                                    />
-                                    <label
-                                        htmlFor="leave-attachment"
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                            <Paperclip size={16} />
-                                        </div>
-                                        <div className="flex-1 truncate">
-                                            {formData.attachment ? (
-                                                <span className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                                                    {formData.attachment.name}
+                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Attachments (Optional)</label>
+                                <div className="space-y-3">
+                                    {/* Upload Area */}
+                                    <div className="relative group">
+                                        <input
+                                            type="file"
+                                            id="leave-attachment"
+                                            className="hidden"
+                                            multiple
+                                            accept=".jpg,.jpeg,.png,.pdf"
+                                            onChange={handleFileChange}
+                                        />
+                                        <label
+                                            htmlFor="leave-attachment"
+                                            className="w-full flex flex-col items-center gap-2 px-4 py-6 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group-hover:scale-[1.01]"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                <Paperclip size={18} />
+                                            </div>
+                                            <div className="text-center">
+                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                    Click to upload documents
                                                 </span>
-                                            ) : (
-                                                <span className="text-sm text-slate-400">
-                                                    Click to attach document...
-                                                </span>
-                                            )}
+                                                <p className="text-xs text-slate-400 mt-1">
+                                                    JPG, PNG, PDF (Max 5MB)
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* Selected Files List */}
+                                    {formData.attachments && formData.attachments.length > 0 && (
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {formData.attachments.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div className="w-8 h-8 rounded bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                                            <FileText size={16} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                                                {file.name}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400 uppercase font-bold">
+                                                                {(file.size / 1024).toFixed(1)} KB
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            removeFile(index);
+                                                        }}
+                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                                        title="Remove file"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
-                                        {formData.attachment && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setFormData({ ...formData, attachment: null });
-                                                }}
-                                                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full text-slate-400 hover:text-red-500 transition-colors"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        )}
-                                    </label>
+                                    )}
                                 </div>
                             </div>
 
