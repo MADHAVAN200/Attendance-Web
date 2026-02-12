@@ -53,7 +53,7 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col relative w-full min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-white dark:bg-dark-bg border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-10 z-10 shadow-sm shrink-0 transition-colors duration-300 sticky top-0">
+                <header className="h-16 bg-white dark:bg-dark-bg border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-10 z-[1200] shadow-sm shrink-0 transition-colors duration-300 sticky top-0">
                     <div className="flex items-center gap-4">
                         <button
                             className="md:hidden p-2 bg-slate-100 dark:bg-slate-800 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300"
