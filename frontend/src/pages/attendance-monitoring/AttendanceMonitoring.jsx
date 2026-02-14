@@ -105,38 +105,37 @@ const AttendanceMonitoring = () => {
                     // Process all sessions
                     sessions = userRecords.map(r => {
                         const inTime = new Date(r.time_in);
-                        const outTime = r.time_out ? new Date(r.time_out) : null;
-
-                        let sessionHours = '-';
-                        if (outTime) {
-                            const diff = (outTime - inTime) / (1000 * 60);
-                            totalMin += diff;
-                            sessionHours = `${(diff / 60).toFixed(1)}h`;
-                        }
-
+                        // ... (existing code for session mapping) ...
                         return {
-                            id: r.attendance_id,
-                            in: inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            out: outTime ? outTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active',
-                            hours: sessionHours,
-                            isLate: r.late_minutes > 0,
-                            isActive: !r.time_out,
-                            rawIn: inTime,
-                            rawOut: outTime,
-                            inLocation: r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Location unknown'),
-                            outLocation: r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : (r.time_out ? 'Location unknown' : null))
+                            // ... (existing return object) ...
                         };
                     });
 
                     // Determine overall status
-                    const latest = userRecords[0]; // records is sorted desc by time
+                    const latest = userRecords[0];
                     lastLocation = latest.time_in_address || (latest.time_in_lat ? `${latest.time_in_lat}, ${latest.time_in_lng}` : '-');
+
+                    // Extract late reason
+                    const lateReason = latest.late_reason || '';
 
                     if (sessions.some(s => s.isActive)) {
                         status = latest.late_minutes > 0 ? 'Late Active' : 'Active';
                     } else {
                         status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
                     }
+
+                    return {
+                        id: user.user_id,
+                        name: user.user_name || 'Unknown',
+                        role: user.desg_name || user.designation_title || 'Employee',
+                        avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
+                        department: user.dept_name || user.department_title || 'General',
+                        sessions,
+                        status,
+                        totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
+                        location: lastLocation,
+                        lateReason // Add to object
+                    };
                 }
 
                 return {
@@ -145,10 +144,11 @@ const AttendanceMonitoring = () => {
                     role: user.desg_name || user.designation_title || 'Employee',
                     avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
                     department: user.dept_name || user.department_title || 'General',
-                    sessions,
-                    status,
-                    totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
-                    location: lastLocation,
+                    sessions: [],
+                    status: 'Absent',
+                    totalHours: '-',
+                    location: '-',
+                    lateReason: ''
                 };
             });
 
@@ -585,7 +585,7 @@ const AttendanceMonitoring = () => {
                                     />
 
                                     <button
-                                        onClick={fetchData}
+                                        onClick={() => fetchData()}
                                         className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                         title={`Refresh (Last sync: ${lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
                                     >
@@ -747,11 +747,16 @@ const AttendanceMonitoring = () => {
                                                             </div>
 
                                                             {/* Status Badge Line */}
-                                                            <div className="px-5 pb-4">
+                                                            <div className="px-5 pb-4 flex items-center gap-2">
                                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
                                                                     <div className={`w-1.5 h-1.5 rounded-full mr-2 ${item.status === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
                                                                     {item.status}
                                                                 </span>
+                                                                {item.status.includes('Late') && item.lateReason && (
+                                                                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate max-w-[120px]" title={item.lateReason}>
+                                                                        — {item.lateReason}
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             {/* Divider */}
@@ -1388,6 +1393,11 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                                     {user.totalHours} Hrs Total
                                 </span>
+                                {user.lateReason && (
+                                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30">
+                                        {user.lateReason}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -19,6 +19,25 @@ const calculateWorkHours = (timeIn, timeOut) => {
     return (diffMs / (1000 * 60 * 60)).toFixed(2);
 };
 
+// Helper: Derive Status dynamically
+const deriveStatus = (r) => {
+    if (!r.time_in) return "Absent";
+    if (r.status === 'ON_LEAVE') return "On Leave";
+    if (r.status === 'HALF_DAY') return "Half Day";
+    // If status is specifically ABSENT in DB but has time_in? Should not happen normally.
+    // However, if status is 'ABSENT' we respect it?
+    if (r.status === 'ABSENT') return "Absent";
+
+    let statusParts = [];
+    if (r.late_minutes > 0) statusParts.push("Late");
+    if (r.overtime_hours > 0) statusParts.push("Overtime");
+
+    if (statusParts.length > 0) return statusParts.join(" & ");
+
+    // Fallback for normal present
+    return "Present";
+};
+
 // GET /admin/reports/preview
 router.get("/preview", authenticateJWT, catchAsync(async (req, res) => {
     if (req.user.user_type !== "admin" && req.user.user_type !== "HR") {
@@ -94,7 +113,7 @@ router.get("/preview", authenticateJWT, catchAsync(async (req, res) => {
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
             .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
-            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status")
+            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.late_minutes", "ar.overtime_hours")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
@@ -109,7 +128,7 @@ router.get("/preview", authenticateJWT, catchAsync(async (req, res) => {
             r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
             r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
             calculateWorkHours(r.time_in, r.time_out),
-            r.status
+            deriveStatus(r)
         ]);
     } else if (type === "attendance_summary") {
         const [year, monthNum] = month.split("-").map(Number);
@@ -353,7 +372,7 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                     .join("users as u", "ar.user_id", "u.user_id")
                     .leftJoin("departments as d", "u.dept_id", "d.dept_id")
                     .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
-                    .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address")
+                    .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address", "ar.late_minutes", "ar.overtime_hours")
                     .where("ar.org_id", org_id)
                     .whereRaw("DATE(ar.time_in) >= ?", [startDate])
                     .whereRaw("DATE(ar.time_in) <= ?", [endDate])
@@ -367,7 +386,7 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                     r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                     r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                     calculateWorkHours(r.time_in, r.time_out),
-                    r.status,
+                    deriveStatus(r),
                     r.time_in_address || "-",
                     r.time_out_address || "-"
                 ]);
@@ -507,7 +526,7 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
             .join("users as u", "ar.user_id", "u.user_id")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
             .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
-            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address")
+            .select("ar.time_in", "u.user_id", "u.user_name", "d.dept_name", "s.shift_name", "ar.time_out", "ar.status", "ar.time_in_address", "ar.time_out_address", "ar.late_minutes", "ar.overtime_hours")
             .where("ar.org_id", org_id)
             .whereRaw("DATE(ar.time_in) >= ?", [startDate])
             .whereRaw("DATE(ar.time_in) <= ?", [endDate])
@@ -523,7 +542,7 @@ router.get("/download", authenticateJWT, catchAsync(async (req, res) => {
                 time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
                 time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
                 work_hrs: calculateWorkHours(r.time_in, r.time_out),
-                status: r.status,
+                status: deriveStatus(r),
                 time_in_address: r.time_in_address || "-",
                 time_out_address: r.time_out_address || "-"
             });

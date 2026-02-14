@@ -8,7 +8,8 @@ import {
     AlertCircle,
     X,
     ChevronRight,
-    Download
+    Download,
+    ArrowLeft
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { adminService } from '../../services/adminService';
@@ -178,6 +179,16 @@ const BulkUpload = () => {
     return (
         <DashboardLayout title="Bulk Employee Upload">
             <div className="max-w-4xl mx-auto space-y-8">
+
+
+                {/* Back Button */}
+                <button
+                    onClick={() => navigate('/employees')}
+                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors mb-4"
+                >
+                    <ArrowLeft size={20} />
+                    <span>Back to Employees</span>
+                </button>
 
                 {/* Progress Steps */}
                 <div className="flex items-center justify-center mb-8">

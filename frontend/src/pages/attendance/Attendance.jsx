@@ -19,7 +19,10 @@ import {
     History,
     MoreVertical,
     AlertCircle,
-    Check
+    Check,
+    FileClock,
+    CheckCircle,
+    XCircle
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
@@ -115,17 +118,18 @@ const Attendance = () => {
     const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
     const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
     const [corrMethod, setCorrMethod] = useState('add_session'); // 'add_session' | 'reset'
-    
+
     // Inputs for 'fix' and 'reset'
     const [corrIn, setCorrIn] = useState('');
     const [corrOut, setCorrOut] = useState('');
-    
+
     // Inputs for 'add_session'
     const [corrSessions, setCorrSessions] = useState([{ time_in: '', time_out: '' }]);
 
     const [corrReason, setCorrReason] = useState('');
     const [existingRecord, setExistingRecord] = useState(null); // Data for selected date
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
+    const [selectedRequest, setSelectedRequest] = useState(null); // For details modal
 
     // --- DATA FETCHING ---
 
@@ -166,18 +170,19 @@ const Attendance = () => {
 
     // 3. Fetch Correction History
     const fetchCorrectionHistory = useCallback(async () => {
-        if (activeTab !== 'correction_request') return;
-        setLoading(true);
-        try {
-            const res = await attendanceService.getCorrectionRequests({ limit: 50 });
-            setCorrectionHistory(res.data || []);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to fetch correction history");
-        } finally {
-            setLoading(false);
+        if (activeTab === 'my_attendance' && subTab === 'correction') {
+            setLoading(true);
+            try {
+                const res = await attendanceService.getCorrectionRequests({ limit: 50 });
+                setCorrectionHistory(res.data || []);
+            } catch (error) {
+                console.error(error);
+                toast.error("Failed to fetch correction history");
+            } finally {
+                setLoading(false);
+            }
         }
-    }, [activeTab]);
+    }, [activeTab, subTab]);
 
     // 4. Fetch Existing Record for Correction Date
     useEffect(() => {
@@ -328,7 +333,7 @@ const Attendance = () => {
 
             // 2. ADD SESSION MODE (Manual Correction)
             if (corrMethod === 'add_session') {
-                 // Filter out empty sessions
+                // Filter out empty sessions
                 const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
                 if (validSessions.length === 0) {
                     throw new Error("Please add at least one valid session (Time In & Time Out)");
@@ -337,15 +342,15 @@ const Attendance = () => {
             }
             // 3. RESET MODE
             else if (corrMethod === 'reset') {
-                 if (!corrIn || !corrOut) {
+                if (!corrIn || !corrOut) {
                     throw new Error("New Time In and Time Out are required for Reset.");
-                 }
-                 payload.requested_time_in = corrIn;
-                 payload.requested_time_out = corrOut;
+                }
+                payload.requested_time_in = corrIn;
+                payload.requested_time_out = corrOut;
             }
 
             await attendanceService.submitCorrectionRequest(payload);
-            
+
             toast.success("Correction request submitted!");
             // Reset Form
             setCorrDate('');
@@ -357,7 +362,7 @@ const Attendance = () => {
             setCorrMethod('add_session');
             setCorrSessions([{ time_in: '', time_out: '' }]);
             setExistingRecord(null);
-            
+
             fetchCorrectionHistory();
         } catch (error) {
             console.error(error);
@@ -375,6 +380,26 @@ const Attendance = () => {
     const formatTime = (isoString) => {
         if (!isoString) return null;
         return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    };
+
+    const calculateDuration = (timeIn, timeOut) => {
+        if (!timeIn || !timeOut) return null;
+        const start = new Date(timeIn);
+        const end = new Date(timeOut);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+
+        let diffMs = end - start;
+        // Handle overnight shifts where end time is on the next day (or incorrectly stored as same day)
+        if (diffMs < 0) {
+            diffMs += 24 * 60 * 60 * 1000;
+        }
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours === 0) return `${minutes}m`;
+        return `${hours}h ${minutes}m`;
     };
 
     const handlePrevDay = () => {
@@ -462,7 +487,7 @@ const Attendance = () => {
                 {/* --- TOP LEVEL TABS --- */}
                 <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full sm:w-fit">
                     <button
-                        onClick={() => setActiveTab('mark_attendance')}
+                        onClick={() => { setActiveTab('mark_attendance'); setSubTab('list'); }}
                         className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'mark_attendance'
                             ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -471,7 +496,7 @@ const Attendance = () => {
                         Mark Attendance
                     </button>
                     <button
-                        onClick={() => setActiveTab('my_attendance')}
+                        onClick={() => { setActiveTab('my_attendance'); setSubTab('history'); }}
                         className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'my_attendance'
                             ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -479,15 +504,7 @@ const Attendance = () => {
                     >
                         My Attendance
                     </button>
-                    <button
-                        onClick={() => setActiveTab('correction_request')}
-                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'correction_request'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                            }`}
-                    >
-                        Correction Request
-                    </button>
+                    {/* Hidden Correction Request Tab Button */}
                 </div>
 
                 {/* --- CONTENT AREA --- */}
@@ -495,29 +512,31 @@ const Attendance = () => {
                 {/* 1. MARK ATTENDANCE TAB */}
                 {activeTab === 'mark_attendance' && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {/* Buttons */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <button
-                                onClick={() => openCamera('IN')}
-                                className="flex items-center justify-center gap-3 bg-indigo-600 text-white h-24 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 hover:bg-indigo-700 hover:shadow-xl transition-all active:scale-95 group">
-                                <div className="p-2 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
-                                    <ArrowRight size={24} />
-                                </div>
-                                <span className="text-2xl font-bold">Time In</span>
-                            </button>
+                        {/* Action Buttons & Correction Toggle */}
+                        <div className="flex flex-col gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <button
+                                    onClick={() => openCamera('IN')}
+                                    className="flex items-center justify-center gap-3 bg-indigo-600 text-white h-24 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 hover:bg-indigo-700 hover:shadow-xl transition-all active:scale-95 group">
+                                    <div className="p-2 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
+                                        <ArrowRight size={24} />
+                                    </div>
+                                    <span className="text-2xl font-bold">Time In</span>
+                                </button>
 
-                            <button
-                                onClick={() => openCamera('OUT')}
-                                className="flex items-center justify-center gap-3 bg-slate-800 dark:bg-slate-700 text-white h-24 rounded-2xl shadow-lg shadow-slate-200 dark:shadow-slate-900/30 hover:bg-slate-900 dark:hover:bg-slate-600 hover:shadow-xl transition-all active:scale-95 group">
-                                <div className="p-2 bg-white/10 rounded-lg group-hover:bg-white/20 transition-colors">
-                                    <LogOut size={24} />
-                                </div>
-                                <span className="text-2xl font-bold">Time Out</span>
-                            </button>
+                                <button
+                                    onClick={() => openCamera('OUT')}
+                                    className="flex items-center justify-center gap-3 bg-slate-800 dark:bg-slate-700 text-white h-24 rounded-2xl shadow-lg shadow-slate-200 dark:shadow-slate-900/30 hover:bg-slate-900 dark:hover:bg-slate-600 hover:shadow-xl transition-all active:scale-95 group">
+                                    <div className="p-2 bg-white/10 rounded-lg group-hover:bg-white/20 transition-colors">
+                                        <LogOut size={24} />
+                                    </div>
+                                    <span className="text-2xl font-bold">Time Out</span>
+                                </button>
+                            </div>
+
                         </div>
 
-                        {/* Date Picker & List */}
-                        <div className="space-y-4">
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-end items-center gap-4 relative" ref={calendarRef}>
                                 <button
                                     onClick={handlePrevDay}
@@ -578,7 +597,7 @@ const Attendance = () => {
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                                    {session.total_hours ? `${session.total_hours} Hrs` : '--'}
+                                                    {session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}
                                                 </p>
                                                 <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${session.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                     {session.late_minutes > 0 ? 'Late' : 'On Time'}
@@ -589,6 +608,7 @@ const Attendance = () => {
                                 )}
                             </div>
                         </div>
+
                     </div>
                 )}
 
@@ -669,6 +689,21 @@ const Attendance = () => {
                                     <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
                                 )}
                             </button>
+                            <button
+                                onClick={() => setSubTab('correction')}
+                                className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'correction'
+                                    ? 'text-indigo-600 dark:text-indigo-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <FileClock size={16} />
+                                    Correction Requests
+                                </div>
+                                {subTab === 'correction' && (
+                                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
+                                )}
+                            </button>
                         </div>
 
                         {/* SUB-TAB: HISTORY (Weekly Grouped) */}
@@ -735,7 +770,7 @@ const Attendance = () => {
                                                                 <div className="text-right min-w-[60px]">
                                                                     <p className="text-xs text-slate-400 uppercase font-bold mb-1">Hrs</p>
                                                                     <p className="font-bold text-indigo-600 dark:text-indigo-400">
-                                                                        {session.total_hours || '-'}
+                                                                        {session.total_hours || calculateDuration(session.time_in, session.time_out) || '-'}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -921,288 +956,358 @@ const Attendance = () => {
                                 </div>
                             </div>
                         )}
-                    </div>
-                )}
 
-                {/* 3. CORRECTION REQUEST TAB */}
-                {activeTab === 'correction_request' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            {/* LEFT: FORM */}
-                            <div className="lg:col-span-1">
-                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-6">
-                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
-                                            <AlertCircle size={20} />
-                                        </div>
-                                        Apply Correction
-                                    </h3>
-
-                                    <form onSubmit={handleSubmitCorrection} className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Date</label>
-                                            <input
-                                                type="date"
-                                                required
-                                                max={new Date().toISOString().split('T')[0]}
-                                                value={corrDate}
-                                                onChange={(e) => setCorrDate(e.target.value)}
-                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                                            />
-                                        </div>
-
-                                        {/* Existing Record Display */}
-                                        {corrDate && (
-                                            <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-xs text-slate-600 dark:text-slate-300">
-                                                <div className="flex items-center gap-1 mb-1 font-bold text-indigo-600 dark:text-indigo-400">
-                                                    <History size={14} />
-                                                    <span>Recorded Attendance</span>
-                                                </div>
-                                                {existingRecord ? (
-                                                    <div className="space-y-1 pl-1">
-                                                        <div className="flex justify-between">
-                                                            <span>Time In:</span>
-                                                            <span className="font-mono">{existingRecord.time_in ? formatTime(existingRecord.time_in) : '--'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between">
-                                                            <span>Time Out:</span>
-                                                            <span className="font-mono">{existingRecord.time_out ? formatTime(existingRecord.time_out) : '--'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <span>Status:</span>
-                                                            <div className="flex gap-2 items-center">
-                                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${existingRecord.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                                    {existingRecord.late_minutes > 0 ? 'LATE' : 'ON TIME'}
-                                                                </span>
-                                                                <span className="uppercase font-bold text-[10px] text-slate-600 dark:text-slate-400">
-                                                                    {existingRecord.status || 'Present'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="italic text-slate-400 pl-1">No attendance found for this date. (Marked Absent)</div>
-                                                )}
+                        {/* SUB-TAB: CORRECTION REQUESTS */}
+                        {subTab === 'correction' && (
+                            <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    {/* Application Form */}
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 h-fit">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                                <AlertCircle size={24} />
                                             </div>
-                                        )}
-
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Type</label>
-                                            <select
-                                                value={corrType}
-                                                onChange={(e) => setCorrType(e.target.value)}
-                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all appearance-none"
-                                            >
-                                                <option value="Correction">Correction</option>
-                                                <option value="Missed Punch">Missed Punch</option>
-                                                <option value="Overtime">Overtime</option>
-                                                <option value="Other">Other</option>
-                                            </select>
+                                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Apply Correction</h3>
                                         </div>
 
-                                        {/* Custom Type Input */}
-                                        {corrType === 'Other' && (
-                                            <div className="animate-in fade-in slide-in-from-top-1">
+                                        <form onSubmit={handleSubmitCorrection} className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
                                                 <input
-                                                    type="text"
-                                                    placeholder="Specify type (e.g. Forgot ID Card)"
-                                                    value={corrOtherType}
-                                                    onChange={(e) => setCorrOtherType(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                                                    type="date"
+                                                    value={corrDate}
+                                                    max={new Date().toISOString().split('T')[0]}
+                                                    onChange={(e) => setCorrDate(e.target.value)}
+                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
                                                     required
                                                 />
                                             </div>
-                                        )}
 
-                                        {/* Correction Method Selector */}
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Method</label>
-                                            <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                                                {['add_session', 'reset'].map(m => (
+                                            {existingRecord && (
+                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm">
+                                                    <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Existing Record Found:</p>
+                                                    <div className="flex justify-between text-xs text-slate-500">
+                                                        <span>In: {existingRecord.time_in ? formatTime(existingRecord.time_in) : '--'}</span>
+                                                        <span>Out: {existingRecord.time_out ? formatTime(existingRecord.time_out) : '--'}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
+                                                <select
+                                                    value={corrType}
+                                                    onChange={(e) => setCorrType(e.target.value)}
+                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white appearance-none"
+                                                >
+                                                    <option value="Correction">Correction</option>
+                                                    <option value="Missed Punch">Missed Punch</option>
+                                                    <option value="Overtime">Overtime</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                                {corrType === 'Other' && (
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Specify Type"
+                                                        value={corrOtherType}
+                                                        onChange={(e) => setCorrOtherType(e.target.value)}
+                                                        className="w-full mt-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                        required
+                                                    />
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Method</label>
+                                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                                     <button
-                                                        key={m}
                                                         type="button"
-                                                        onClick={() => setCorrMethod(m)}
-                                                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${corrMethod === m
-                                                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                                                            }`}
+                                                        onClick={() => setCorrMethod('add_session')}
+                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                                                     >
-                                                        {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
+                                                        Manual Correction
                                                     </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* --- DYNAMIC FIELDS BASED ON METHOD --- */}
-
-                                        {/* 1. RESET MODE (Single Session) */}
-                                        {corrMethod === 'reset' && (
-                                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
-                                                <div>
-                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                                                        New Time In
-                                                    </label>
-                                                    <input
-                                                        type="time"
-                                                        value={corrIn}
-                                                        onChange={(e) => setCorrIn(e.target.value)}
-                                                        required={corrMethod === 'reset'}
-                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-                                                        New Time Out
-                                                    </label>
-                                                    <input
-                                                        type="time"
-                                                        value={corrOut}
-                                                        onChange={(e) => setCorrOut(e.target.value)}
-                                                        required={corrMethod === 'reset'}
-                                                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCorrMethod('reset')}
+                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                                                    >
+                                                        Reset Day
+                                                    </button>
                                                 </div>
                                             </div>
-                                        )}
 
-                                        {/* 2. ADD SESSION MODE */}
-                                        {corrMethod === 'add_session' && (
-                                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Sessions</label>
-                                                {corrSessions.map((session, idx) => (
-                                                    <div key={idx} className="flex gap-2 items-center">
-                                                        <div className="grid grid-cols-2 gap-2 flex-1">
+                                            {corrMethod === 'reset' ? (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New In</label>
+                                                        <input
+                                                            type="time"
+                                                            value={corrIn}
+                                                            onChange={(e) => setCorrIn(e.target.value)}
+                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Out</label>
+                                                        <input
+                                                            type="time"
+                                                            value={corrOut}
+                                                            onChange={(e) => setCorrOut(e.target.value)}
+                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <label className="block text-xs font-bold text-slate-500 uppercase">Sessions</label>
+                                                    {corrSessions.map((session, index) => (
+                                                        <div key={index} className="flex gap-2">
                                                             <input
                                                                 type="time"
-                                                                placeholder="In"
                                                                 value={session.time_in}
                                                                 onChange={(e) => {
                                                                     const newSessions = [...corrSessions];
-                                                                    newSessions[idx].time_in = e.target.value;
+                                                                    newSessions[index].time_in = e.target.value;
                                                                     setCorrSessions(newSessions);
                                                                 }}
-                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                placeholder="In"
                                                             />
                                                             <input
                                                                 type="time"
-                                                                placeholder="Out"
                                                                 value={session.time_out}
                                                                 onChange={(e) => {
                                                                     const newSessions = [...corrSessions];
-                                                                    newSessions[idx].time_out = e.target.value;
+                                                                    newSessions[index].time_out = e.target.value;
                                                                     setCorrSessions(newSessions);
                                                                 }}
-                                                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                placeholder="Out"
                                                             />
+                                                            {index > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newSessions = corrSessions.filter((_, i) => i !== index);
+                                                                        setCorrSessions(newSessions);
+                                                                    }}
+                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                                >
+                                                                    <X size={16} />
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        {corrSessions.length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setCorrSessions(corrSessions.filter((_, i) => i !== idx));
-                                                                }}
-                                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                            >
-                                                                <X size={16} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
-                                                    className="w-full py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
-                                                >
-                                                    + Add Another Session
-                                                </button>
-                                            </div>
-                                        )}
-
-
-
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">Reason</label>
-                                            <textarea
-                                                required
-                                                rows="3"
-                                                value={corrReason}
-                                                onChange={(e) => setCorrReason(e.target.value)}
-                                                placeholder="Why is this correction needed?"
-                                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all resize-none"
-                                            ></textarea>
-                                        </div>
-
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmittingCorrection}
-                                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
-                                        >
-                                            {isSubmittingCorrection ? <RefreshCw className="animate-spin" size={20} /> : <Check size={20} />}
-                                            Submit Request
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-
-                            {/* RIGHT: HISTORY LIST */}
-                            <div className="lg:col-span-2">
-                                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full min-h-[500px]">
-                                    <div className="p-6 border-b border-slate-100 dark:border-slate-700">
-                                        <h3 className="font-bold text-slate-800 dark:text-white">Request History</h3>
-                                    </div>
-
-                                    <div className="overflow-y-auto flex-1 p-6 space-y-4">
-                                        {loading ? (
-                                            <div className="text-center py-10 text-slate-400">Loading history...</div>
-                                        ) : correctionHistory.length === 0 ? (
-                                            <div className="text-center py-10 text-slate-400">No correction requests found.</div>
-                                        ) : (
-                                            correctionHistory.map((req) => (
-                                                <div key={req.acr_id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                                                    <div>
-                                                        <div className="flex items-center gap-3 mb-1">
-                                                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                                                                req.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                                    'bg-amber-100 text-amber-700'
-                                                                }`}>
-                                                                {req.status}
-                                                            </span>
-                                                            <span className="text-xs text-slate-400 font-mono">
-                                                                {new Date(req.submitted_at).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
-                                                        <h4 className="font-bold text-slate-700 dark:text-white text-sm">
-                                                            {req.correction_type} for {new Date(req.request_date).toLocaleDateString()}
-                                                        </h4>
-                                                        <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{req.reason}"</p>
-                                                    </div>
-
-                                                    <div className="text-right text-xs">
-                                                        {req.requested_time_in && (
-                                                            <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
-                                                                <span className="font-bold text-slate-400">In:</span> {req.requested_time_in}
-                                                            </div>
-                                                        )}
-                                                        {req.requested_time_out && (
-                                                            <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
-                                                                <span className="font-bold text-slate-400">Out:</span> {req.requested_time_out}
-                                                            </div>
-                                                        )}
-                                                        {!req.requested_time_in && !req.requested_time_out && (
-                                                            <span className="text-slate-400 italic">No time change</span>
-                                                        )}
-                                                    </div>
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
+                                                        className="w-full py-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
+                                                    >
+                                                        + Add Another Session
+                                                    </button>
                                                 </div>
-                                            ))
-                                        )}
+                                            )}
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason</label>
+                                                <textarea
+                                                    value={corrReason}
+                                                    onChange={(e) => setCorrReason(e.target.value)}
+                                                    placeholder="Why is this correction needed?"
+                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white h-24 resize-none"
+                                                    required
+                                                ></textarea>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={isSubmittingCorrection}
+                                                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                                            >
+                                                {isSubmittingCorrection ? 'Submitting...' : 'Submit Request'}
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* History View (Simplified) */}
+                                    <div className="space-y-4">
+                                        <h3 className="font-bold text-slate-800 dark:text-white px-2">Request History</h3>
+                                        <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                                            {correctionHistory.length === 0 ? (
+                                                <p className="text-sm text-slate-500 dark:text-slate-400 italic px-2">No history found.</p>
+                                            ) : (
+                                                correctionHistory.map((req) => (
+                                                    <div
+                                                        key={req.acr_id}
+                                                        onClick={() => setSelectedRequest(req)}
+                                                        className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group"
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-center gap-3 mb-1">
+                                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                                                                    req.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                                                        'bg-amber-100 text-amber-700'
+                                                                    }`}>
+                                                                    {req.status}
+                                                                </span>
+                                                                <span className="text-xs text-slate-400 font-mono group-hover:text-indigo-500 transition-colors">
+                                                                    {req.submitted_at ? new Date(req.submitted_at).toLocaleDateString() : ''}
+                                                                </span>
+                                                            </div>
+                                                            <h4 className="font-bold text-slate-700 dark:text-white text-sm">
+                                                                {req.correction_type} for {req.request_date ? new Date(req.request_date).toLocaleDateString() : 'Unknown Date'}
+                                                            </h4>
+                                                            <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{req.reason}"</p>
+                                                        </div>
+
+                                                        <div className="text-right text-xs">
+                                                            {req.requested_time_in && (
+                                                                <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
+                                                                    <span className="font-bold text-slate-400">In:</span> {req.requested_time_in}
+                                                                </div>
+                                                            )}
+                                                            {req.requested_time_out && (
+                                                                <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
+                                                                    <span className="font-bold text-slate-400">Out:</span> {req.requested_time_out}
+                                                                </div>
+                                                            )}
+                                                            {!req.requested_time_in && !req.requested_time_out && (
+                                                                <span className="text-slate-400 italic group-hover:text-indigo-400 transition-colors">Added Sessions</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
 
+
+
+
+                {/* --- CORRECTION DETAILS MODAL --- */}
+                {selectedRequest && createPortal(
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
+                            {/* Header */}
+                            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Request Details</h3>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5">ID: #{selectedRequest.acr_id}</p>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedRequest(null)}
+                                    className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                                {/* Status Banner */}
+                                <div className={`flex items-center gap-3 p-3 rounded-xl border ${selectedRequest.status === 'approved'
+                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400'
+                                    : selectedRequest.status === 'rejected'
+                                        ? 'bg-red-50 border-red-100 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'
+                                        : 'bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400'
+                                    }`}>
+                                    {selectedRequest.status === 'approved' && <CheckCircle size={20} />}
+                                    {selectedRequest.status === 'rejected' && <XCircle size={20} />}
+                                    {selectedRequest.status === 'pending' && <Clock size={20} />}
+                                    <span className="font-bold uppercase tracking-wide text-sm">{selectedRequest.status}</span>
+                                </div>
+
+                                {/* Key Info Grid */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Date</label>
+                                        <p className="font-medium text-slate-700 dark:text-slate-200">
+                                            {selectedRequest.request_date ? formatDateDisplay(selectedRequest.request_date) : 'Invalid Date'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Type</label>
+                                        <p className="font-medium text-slate-700 dark:text-slate-200">{selectedRequest.correction_type}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Method</label>
+                                        <p className="font-medium text-slate-700 dark:text-slate-200 capitalize">
+                                            {selectedRequest.correction_method === 'add_session' ? 'Manual Correction' : selectedRequest.correction_method || 'Fix'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase">Submitted</label>
+                                        <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
+                                            {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleString() : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Reason */}
+                                <div>
+                                    <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Reason</label>
+                                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm text-slate-600 dark:text-slate-300 italic border border-slate-100 dark:border-slate-700">
+                                        "{selectedRequest.reason}"
+                                    </div>
+                                </div>
+
+                                {/* Sessions (if Manual Correction) */}
+                                {selectedRequest.correction_data && (
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-2">Requested Sessions</label>
+                                        <div className="space-y-2">
+                                            {(typeof selectedRequest.correction_data === 'string'
+                                                ? JSON.parse(selectedRequest.correction_data).sessions
+                                                : selectedRequest.correction_data.sessions || []
+                                            ).map((s, i) => (
+                                                <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700">
+                                                    <span className="font-mono text-slate-600 dark:text-slate-400">In: <span className="text-slate-800 dark:text-white font-bold">{s.time_in}</span></span>
+                                                    <span className="font-mono text-slate-600 dark:text-slate-400">Out: <span className="text-slate-800 dark:text-white font-bold">{s.time_out}</span></span>
+                                                </div>
+                                            ))}
+                                            {/* Handle Reset Mode Data display if needed */}
+                                            {(typeof selectedRequest.correction_data === 'string'
+                                                ? JSON.parse(selectedRequest.correction_data)
+                                                : selectedRequest.correction_data
+                                            ).time_in && (
+                                                    <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700">
+                                                        <span className="font-mono text-slate-600 dark:text-slate-400">In: <span className="text-slate-800 dark:text-white font-bold">
+                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in}
+                                                        </span></span>
+                                                        <span className="font-mono text-slate-600 dark:text-slate-400">Out: <span className="text-slate-800 dark:text-white font-bold">
+                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_out}
+                                                        </span></span>
+                                                    </div>
+                                                )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Admin Review */}
+                                {selectedRequest.status !== 'pending' && (
+                                    <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+                                        <h4 className="font-bold text-slate-800 dark:text-white text-sm mb-2">Reviewer Comments</h4>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            {selectedRequest.review_comments || "No comments provided."}
+                                        </p>
+                                        <div className="mt-2 text-xs text-slate-400">
+                                            Reviewed by Admin on {selectedRequest.reviewed_at ? new Date(selectedRequest.reviewed_at).toLocaleDateString() : '-'}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(

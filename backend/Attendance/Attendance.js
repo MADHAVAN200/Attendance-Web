@@ -434,6 +434,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
       "acr.request_date",
       "acr.correction_data",
       "acr.status",
+      "acr.reason",
       "acr.submitted_at",
       "u.user_id",
       "u.user_name",

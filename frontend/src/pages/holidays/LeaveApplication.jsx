@@ -23,7 +23,8 @@ import {
     Paperclip,
     ExternalLink,
     Download,
-    Image as ImageIcon
+    Image as ImageIcon,
+    ArrowLeft
 } from 'lucide-react';
 
 const AttachmentModal = ({ file, onClose }) => {
@@ -587,6 +588,14 @@ const LeaveApplication = () => {
                 <div className="w-full">
                     <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                         <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
+                            {isAdmin && (
+                                <button
+                                    onClick={() => setShowForm(false)}
+                                    className="mr-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    <ArrowLeft size={20} className="text-slate-500" />
+                                </button>
+                            )}
                             <Plus className="text-indigo-600 dark:text-indigo-400" size={20} />
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white">Apply for Leave</h3>
                         </div>

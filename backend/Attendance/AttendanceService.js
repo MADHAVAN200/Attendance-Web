@@ -108,7 +108,7 @@ export const AttendanceService = {
             time_in_lat: latitude,
             time_in_lng: longitude,
             time_in_address: address,
-            status: "OPEN", // Session is now open
+            status: "PRESENT", // Session is now open (Status: PRESENT)
             metadata: JSON.stringify(metadata),
             created_at: attendanceDB.fn.now(),
             updated_at: attendanceDB.fn.now(),
@@ -298,7 +298,7 @@ export const AttendanceService = {
                 time_out_lng: longitude,
                 time_out_address: address,
                 overtime_hours: totalHours > (rules.overtime?.threshold || 8) ? (totalHours - (rules.overtime?.threshold || 8)) : 0,
-                status: "CLOSED",
+                status: "PRESENT",
                 metadata: JSON.stringify(metadata),
                 updated_at: attendanceDB.fn.now(),
             });

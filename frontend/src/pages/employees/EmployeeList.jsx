@@ -172,7 +172,7 @@ const EmployeeList = () => {
                                         </td>
                                     </tr>
                                 ) : filteredEmployees.length > 0 ? (
-                                    filteredEmployees.map((employee) => (
+                                    currentItems.map((employee) => (
                                         <tr
                                             key={employee.id}
                                             onClick={() => navigate(`/employees/edit/${employee.id}`)}
