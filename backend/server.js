@@ -26,6 +26,7 @@ import ActivitiesAPI from './DAR/ActivitiesAPI.js';
 import RequestsAPI from './DAR/RequestsAPI.js';
 import SettingsAPI from './DAR/SettingsAPI.js';
 import ProfileRoutes from './Profile/ProfileRoutes.js';
+import RecruitRoutes from './Recruiting/Recruit.js';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -97,6 +98,7 @@ app.use('/dar/activities', ActivitiesAPI);
 app.use('/dar/requests', RequestsAPI);
 app.use('/dar/settings', SettingsAPI);
 app.use('/profile', ProfileRoutes);
+app.use('/recruiting', RecruitRoutes);
 
 // Payment Routes
 import PaymentRoutes from './Payment/paymentRoutes.js';
