@@ -97,8 +97,14 @@ const DARAdmin = ({ embedded = false }) => {
         }
     };
 
+
+
     // --- CHART DATA STATE ---
     const [categoryData, setCategoryData] = useState([]);
+    const [trendData, setTrendData] = useState([]); // New Trend Data State
+    const [chartKeys, setChartKeys] = useState([]); // Dynamic Keys for Area Chart
+    const [deptData, setDeptData] = useState([]); // New Dept Data State
+    const [consistencyData, setConsistencyData] = useState([]); // New Consistency Data State
     const [complianceData, setComplianceData] = useState([]);
     const [stats, setStats] = useState({
         submissionRate: 0,
@@ -107,6 +113,7 @@ const DARAdmin = ({ embedded = false }) => {
         topActivity: '-',
         topActivityPercent: 0
     });
+
 
     // Shift State
     const [shifts, setShifts] = useState([]);
@@ -277,6 +284,16 @@ const DARAdmin = ({ embedded = false }) => {
         return dayCount > 0 ? Math.round(totalIdleM / dayCount) : 0;
     };
 
+    // Helper to format hours into "Xh Ym"
+    const formatDuration = (hours) => {
+        if (!hours) return '0min';
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        if (h === 0) return `${m}min`;
+        if (m === 0) return `${h}h`;
+        return `${h}h ${m}m`;
+    };
+
     const fetchInsights = async () => {
         setLoadingData(true);
         try {
@@ -345,6 +362,25 @@ const DARAdmin = ({ embedded = false }) => {
         const activityHours = {}; // To calculate % of total time (and for Pie Chart)
         const activityFrequency = {}; // To find "Most Repeated"
 
+
+        // --- TREND DATA PREP ---
+        const trendMap = {}; // date -> { category: hours, ... }
+        const foundCategories = new Set();
+
+        // --- DEPT DATA PREP ---
+        const deptMap = {}; // dept -> { name: dept, category: hours, total: sum }
+
+        // Initialize user-selected date range for trend 
+        let d = new Date(filters.startDate);
+        const e = new Date(filters.endDate);
+        while (d <= e) {
+            const dateStr = d.toISOString().split('T')[0];
+            // Initialize with date for chart tooltip label
+            // Recharts needs consistent keys, so we will fill gaps.
+            trendMap[dateStr] = { date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) };
+            d.setDate(d.getDate() + 1);
+        }
+
         activities.forEach(a => {
             // Only count COMPLETED for strict metrics, or ALL for general workload? 
             // Usually workload includes everything logged. submission rate checks COMPLETED.
@@ -374,7 +410,50 @@ const DARAdmin = ({ embedded = false }) => {
             // Dept Logic
             const dept = a.user_dept || "Unknown";
             deptHours[dept] = (deptHours[dept] || 0) + hours;
+
+            // --- TREND AGGREGATION ---
+            const dateStr = a.activity_date.split('T')[0];
+            if (trendMap[dateStr]) { // Only if within range (api should return range, but safe check)
+                trendMap[dateStr][type] = (trendMap[dateStr][type] || 0) + hours;
+                foundCategories.add(type);
+            }
+
+
+            // --- DEPT AGGREGATION ---
+            if (!deptMap[dept]) deptMap[dept] = { name: dept, total: 0 };
+            // Round to 1 decimal place for cleaner UI
+            deptMap[dept][type] = (deptMap[dept][type] || 0) + hours;
+            deptMap[dept].total += hours;
         });
+
+        // Convert Trend Map to Array
+        const sortedTrendData = Object.keys(trendMap).map(key => {
+            const item = trendMap[key];
+            // Round all numeric values in trend data
+            Object.keys(item).forEach(k => {
+                if (typeof item[k] === 'number') {
+                    item[k] = Math.round(item[k] * 10) / 10;
+                }
+            });
+            return item;
+        }).sort((a, b) => new Date(a.date) - new Date(b.date)); // Ensure date sort
+
+        const keysList = Array.from(foundCategories);
+
+        setTrendData(sortedTrendData);
+        setChartKeys(keysList);
+
+        // Convert Dept Map to Array & Sort by Total
+        const sortedDeptData = Object.values(deptMap).map(d => {
+            // Round all numeric values in dept data
+            Object.keys(d).forEach(k => {
+                if (typeof d[k] === 'number') {
+                    d[k] = Math.round(d[k] * 10) / 10;
+                }
+            });
+            return d;
+        }).sort((a, b) => b.total - a.total);
+        setDeptData(sortedDeptData);
 
 
         // C. Top Activity (Most Repeated)
@@ -403,16 +482,53 @@ const DARAdmin = ({ embedded = false }) => {
             }
         });
 
+
         // Dynamic Employee Count for Submission Rate Denominator
         let dynamicTotalEmp = totalEmpCount;
+        let relevantUsers = allUsers;
         if (filters.dept !== 'All') {
-            dynamicTotalEmp = allUsers.filter(u => u.dept === filters.dept).length;
+            relevantUsers = allUsers.filter(u => u.dept === filters.dept);
+            dynamicTotalEmp = relevantUsers.length;
         }
-        // If searching, maybe narrow down further? Usually "Submission Rate" is per Dept context. 
-        // User asked: "when a filter is selected suppose "sales" then the filed should dynamically display the count of employess of that department only"
+
+        // --- EMPLOYEE CONSISTENCY LOGIC ---
+        // 1. Calculate Target Days (Working Days - exclude Sundays)
+        let targetDays = 0;
+        let loopDate = new Date(filters.startDate);
+        const loopEnd = new Date(filters.endDate);
+        while (loopDate <= loopEnd) {
+            if (loopDate.getDay() !== 0) { // 0 is Sunday
+                targetDays++;
+            }
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+        if (targetDays === 0) targetDays = 1; // Prevent division by zero
+
+        // 2. Map Users to Submission Counts
+        const consistencyList = relevantUsers.map(user => {
+            // Count unique days this user submitted COMPLETED DAR
+            const userActivities = activities.filter(a => a.user_id === user.userId && a.status === 'COMPLETED');
+            const uniqueDays = new Set(userActivities.map(a => a.activity_date.split('T')[0])).size;
+
+            return {
+                id: user.userId,
+                name: user.name,
+                role: user.role,
+                dept: user.dept,
+                dars: uniqueDays,
+                target: targetDays,
+                pct: (uniqueDays / targetDays) * 100
+            };
+        });
+
+        // 3. Sort by Lowest Consistency First (Actionable)
+        consistencyList.sort((a, b) => a.pct - b.pct);
+
+        setConsistencyData(consistencyList);
 
         // Submission Rate Recalculation (Daily Average)
         const { rate: subRate, count: subCount } = calculateSubmissionRate(activities, dynamicTotalEmp);
+
 
         // B. Avg Work Hrs (Restore)
         // Total Hours / Active Users (If 0 active, 0)
@@ -1579,44 +1695,65 @@ const DARAdmin = ({ embedded = false }) => {
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                                         <BarChart3 size={20} className="text-indigo-500" /> Organization Workload Trend
                                     </h3>
-                                    <div className="flex items-center gap-2">
-                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
-                                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div> Site Visit
-                                        </span>
-                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
-                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Office
-                                        </span>
-                                        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
-                                            <div className="w-2 h-2 rounded-full bg-amber-500"></div> Meeting
-                                        </span>
+                                    <div className="flex items-center gap-2 flex-wrap max-w-[50%] justify-end">
+                                        {chartKeys.map((key, i) => (
+                                            <span key={key} className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6] }}></div> {key}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="w-full h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={mockTrendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                                        <AreaChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                                             <defs>
-                                                <linearGradient id="colorSite" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                </linearGradient>
-                                                <linearGradient id="colorOffice" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                                </linearGradient>
-                                                <linearGradient id="colorMeeting" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                                                </linearGradient>
+                                                {chartKeys.map((key, i) => (
+                                                    <linearGradient key={key} id={`color${key}`} x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]} stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]} stopOpacity={0} />
+                                                    </linearGradient>
+                                                ))}
                                             </defs>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                                            <Tooltip
-                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                            <XAxis
+                                                dataKey="date"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                                                dy={10}
                                             />
-                                            <Area type="monotone" dataKey="Site Visit" stackId="1" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorSite)" />
-                                            <Area type="monotone" dataKey="Office" stackId="1" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorOffice)" />
-                                            <Area type="monotone" dataKey="Meeting" stackId="1" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorMeeting)" />
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                                            />
+
+
+
+
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                itemStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}
+                                                labelStyle={{ color: '#64748b', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}
+                                                formatter={(value, name) => [formatDuration(value), name]}
+                                            />
+
+                                            {chartKeys.map((key, i) => (
+                                                <Area
+                                                    key={key}
+                                                    type="monotone"
+                                                    dataKey={key}
+                                                    stackId="1"
+                                                    stroke={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]}
+                                                    fillOpacity={1}
+                                                    fill={`url(#color${key})`}
+                                                />
+                                            ))}
+                                            {chartKeys.length === 0 && (
+                                                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="14">
+                                                    No data for selected range
+                                                </text>
+                                            )}
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1629,24 +1766,40 @@ const DARAdmin = ({ embedded = false }) => {
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
                                         <Building size={20} className="text-orange-500" /> Department Focus
                                     </h3>
-                                    <div className="flex-1 w-full min-h-[300px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={mockDeptData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
-                                                <XAxis type="number" hide />
-                                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 13, fontWeight: 600, fill: '#475569' }} width={100} />
-                                                <Tooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                                {/* No Legend needed if labeled elsewhere, but keeping simpler look */}
-                                                <Bar dataKey="Development" stackId="a" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
-                                                <Bar dataKey="Meeting" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={20} />
-                                                <Bar dataKey="Calls" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} barSize={20} />
-                                                <Bar dataKey="Site Visit" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} barSize={20} />
-                                                <Bar dataKey="Admin" stackId="a" fill="#8b5cf6" radius={[0, 0, 0, 0]} barSize={20} />
-                                                <Bar dataKey="Inspection" stackId="a" fill="#ec4899" radius={[0, 4, 4, 0]} barSize={20} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                    <div className="flex-1 w-full min-h-[300px] max-h-[400px] overflow-y-auto custom-scrollbar">
+                                        <div style={{ height: Math.max(300, deptData.length * 60) }}>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={deptData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
+                                                    <XAxis type="number" hide />
+                                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 13, fontWeight: 600, fill: '#475569' }} width={100} />
+                                                    <Tooltip
+                                                        cursor={{ fill: '#F8FAFC' }}
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        formatter={(value, name) => [formatDuration(value), name]}
+                                                    />
+                                                    {chartKeys.map((key, i) => (
+                                                        <Bar
+                                                            key={key}
+
+                                                            dataKey={key}
+                                                            stackId="a"
+                                                            fill={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]}
+                                                            radius={[0, 4, 4, 0]}
+                                                            barSize={20}
+                                                        />
+                                                    ))}
+                                                    {deptData.length === 0 && (
+                                                        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="14">
+                                                            No department data
+                                                        </text>
+                                                    )}
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
                                     </div>
                                 </div>
+
 
                                 {/* Employee Consistency */}
                                 <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
@@ -1654,14 +1807,13 @@ const DARAdmin = ({ embedded = false }) => {
                                         <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                                             <FileText size={20} className="text-indigo-500" /> Employee Consistency
                                         </h3>
-                                        <select className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 outline-none text-slate-500">
-                                            <option>This Week</option>
-                                            <option>Last Week</option>
-                                        </select>
+                                        <div className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600">
+                                            Target: {consistencyData[0]?.target || 0} Reports
+                                        </div>
                                     </div>
                                     <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar max-h-[300px]">
-                                        {mockConsistencyData.map((user, i) => {
-                                            const pct = (user.dars / user.target) * 100;
+                                        {consistencyData.map((user, i) => {
+                                            const pct = user.pct;
                                             let barColor = 'bg-emerald-500';
                                             if (pct < 50) barColor = 'bg-red-500';
                                             else if (pct < 80) barColor = 'bg-amber-400';
@@ -1674,13 +1826,12 @@ const DARAdmin = ({ embedded = false }) => {
                                                             <div className="text-[10px] font-bold text-slate-400">{user.dars}/{user.target} Reports</div>
                                                         </div>
                                                         {/* Progress Bar */}
-                                                        <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}></div>
+                                                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${barColor} rounded-full`} style={{ width: `${Math.min(100, pct)}%` }}></div>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700">
-                                                        <div className="text-xs text-slate-400 font-bold uppercase">Total</div>
-                                                        <div className="text-sm font-black text-slate-800 dark:text-white">{user.hours}h</div>
+                                                    <div className={`text-xs font-black px-2 py-1 rounded-lg ${pct < 50 ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : pct < 80 ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'}`}>
+                                                        {Math.round(pct)}%
                                                     </div>
                                                 </div>
                                             );
@@ -1745,24 +1896,26 @@ const DARAdmin = ({ embedded = false }) => {
                                 </div>
                             </div>
 
-                        </div>
+                        </div >
                     )}
 
                     {/* Diff Modal */}
                     {/* Premium Diff Review Modal */}
                     {/* Diff Modal - Only show as modal if NOT in requests tab (where it is inline) */}
-                    {activeTab !== 'requests' && (
-                        <RequestReviewModal
-                            isOpen={!!selectedRequest}
-                            onClose={() => setSelectedRequest(null)}
-                            request={selectedRequest}
-                            onApprove={() => handleApproveRequest(selectedRequest?.id)}
-                            onReject={() => handleRejectRequest(selectedRequest?.id)}
-                        />
-                    )}
+                    {
+                        activeTab !== 'requests' && (
+                            <RequestReviewModal
+                                isOpen={!!selectedRequest}
+                                onClose={() => setSelectedRequest(null)}
+                                request={selectedRequest}
+                                onApprove={() => handleApproveRequest(selectedRequest?.id)}
+                                onReject={() => handleRejectRequest(selectedRequest?.id)}
+                            />
+                        )
+                    }
 
-                </div>
-            </div>
+                </div >
+            </div >
         </Wrapper >
     );
 };
