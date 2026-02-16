@@ -10,7 +10,7 @@ const router = express.Router();
 // POST /dar/requests/create
 // User submits a request to change past data
 router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
-    const { request_date, original_data, proposed_data } = req.body;
+    const { request_date, original_data, proposed_data, reason } = req.body;
     const { user_id, org_id } = req.user;
 
     // Basic Validation
@@ -53,6 +53,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
             .where({ request_id: existingRequest.request_id })
             .update({
                 proposed_data: JSON.stringify(proposed_data),
+                reason: reason || null, // Update reason
                 updated_at: attendanceDB.fn.now()
                 // We keep original_data as is, assuming the baseline hasn't changed. 
                 // Alternatively, we could update original_data too if passed.
@@ -66,6 +67,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
             request_date,
             original_data: JSON.stringify(original_data || []),
             proposed_data: JSON.stringify(proposed_data),
+            reason: reason || null, // Insert reason
             status: 'PENDING',
             created_at: attendanceDB.fn.now()
         });

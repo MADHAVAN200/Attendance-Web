@@ -292,13 +292,9 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                     <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-slate-800 h-fit">
                         <h3 className="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-300">Request Reason</h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400 italic">
-                            "I accidentally logged the wrong times for the site inspection because the client arrived late. Also forgot to add the material check."
+                            {data.reason || "No reason provided."}
                         </p>
                         <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-                            <div className="flex justify-between items-center text-xs text-slate-500 mb-2">
-                                <span>Original Log Time</span>
-                                <span>Yesterday, 18:30</span>
-                            </div>
                         </div>
                     </div>
                 </div>

@@ -941,61 +941,11 @@ const DARAdmin = ({ embedded = false }) => {
                     startTime: t.start_time || t.startTime,
                     endTime: t.end_time || t.endTime
                 })),
-                status: r.status
+                status: r.status,
+                reason: r.reason
             }));
-            // Mock Data for demonstration
-            const mockRequests = [
-                {
-                    id: 'mock-1',
-                    user: 'Rohan Sharma',
-                    date: '2024-02-02',
-                    changes: 3,
-                    employeeName: 'Rohan Sharma',
-                    originalTasks: [
-                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '11:00', category: 'SITE_VISIT' },
-                        { id: 't2', title: 'Material Handover', startTime: '11:30', endTime: '12:30', category: 'LOGISTICS' },
-                        { id: 't3', title: 'Client Call', startTime: '14:00', endTime: '15:00', category: 'MEETING' }
-                    ],
-                    proposedTasks: [
-                        { id: 't1', title: 'Site Inspection - Wing A', startTime: '09:00', endTime: '12:00', category: 'SITE_VISIT' }, // Extended
-                        { id: 't3', title: 'Client Call', startTime: '15:00', endTime: '16:00', category: 'MEETING' }, // Moved
-                        { id: 't4', title: 'Safety Briefing', startTime: '12:00', endTime: '12:30', category: 'MISC' } // New
-                    ],
-                    status: 'pending'
-                },
-                {
-                    id: 'mock-2',
-                    user: 'Priya Patel',
-                    date: '2024-02-01',
-                    changes: 1,
-                    employeeName: 'Priya Patel',
-                    originalTasks: [
-                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '13:00', category: 'OFFICE' }
-                    ],
-                    proposedTasks: [
-                        { id: 'p1', title: 'Documentation', startTime: '10:00', endTime: '14:00', category: 'OFFICE' } // Extended
-                    ],
-                    status: 'pending'
-                },
-                {
-                    id: 'mock-3', // The one "just rejected" - restored
-                    user: 'Amit Singh',
-                    date: '2024-02-03',
-                    changes: 2,
-                    employeeName: 'Amit Singh',
-                    originalTasks: [
-                        { id: 'a1', title: 'Morning Standup', startTime: '09:00', endTime: '09:30', category: 'MEETING' },
-                        { id: 'a2', title: 'Inventory Check', startTime: '10:00', endTime: '12:00', category: 'INVENTORY' }
-                    ],
-                    proposedTasks: [
-                        { id: 'a1', title: 'Morning Standup', startTime: '09:30', endTime: '10:00', category: 'MEETING' },
-                        // Inventory Check Deleted
-                    ],
-                    status: 'pending'
-                }
-            ];
 
-            setRequests([...mockRequests, ...mapped]);
+            setRequests([...mapped]);
         } catch (err) {
             console.error(err);
             toast.error("Failed to load requests");
