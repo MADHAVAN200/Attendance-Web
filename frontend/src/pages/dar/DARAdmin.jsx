@@ -24,7 +24,7 @@ import MinimalSelect from '../../components/MinimalSelect';
 import {
     PieChart, Pie, Cell,
     BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area, CartesianGrid
+    AreaChart, Area, CartesianGrid, ReferenceLine
 } from 'recharts';
 import RequestReviewModal from '../../components/dar/RequestReviewModal';
 import MiniCalendar from '../../components/dar/MiniCalendar';
@@ -152,7 +152,9 @@ const DARAdmin = ({ embedded = false }) => {
             try {
                 const res = await api.get('/admin/departments');
                 if (res.data.success) {
-                    setDepartments(res.data.departments.map(d => d.dept_name));
+                    // Ensure uniqueness to prevent duplicate keys
+                    const uniqueDepts = [...new Set(res.data.departments.map(d => d.dept_name))];
+                    setDepartments(uniqueDepts);
                 }
             } catch (e) { console.error("Failed to fetch departments", e); }
 
@@ -311,14 +313,25 @@ const DARAdmin = ({ embedded = false }) => {
             const pEndStr = prevEnd.toISOString().split('T')[0];
 
             // 2. Fetch BOTH periods in parallel
-            const [res, prevRes] = await Promise.all([
+            // Also fetch Holidays for accurate target calculation
+            const [res, prevRes, holRes] = await Promise.all([
                 api.get(`/dar/activities/admin/all?startDate=${filters.startDate}&endDate=${filters.endDate}`),
-                api.get(`/dar/activities/admin/all?startDate=${pStartStr}&endDate=${pEndStr}`)
+                api.get(`/dar/activities/admin/all?startDate=${pStartStr}&endDate=${pEndStr}`),
+                api.get('/holiday')
             ]);
 
             if (res.data.ok) {
                 let rawData = res.data.data;
                 let prevData = prevRes.data.ok ? prevRes.data.data : [];
+
+                // Process Holidays into a Set for fast lookup
+                const holidaySet = new Set();
+                if (holRes.data?.holidays) {
+                    holRes.data.holidays.forEach(h => {
+                        // Assuming h.holiday_date is YYYY-MM-DD
+                        holidaySet.add(h.holiday_date);
+                    });
+                }
 
                 // Apply Filters to BOTH
                 if (filters.dept !== 'All') {
@@ -334,7 +347,7 @@ const DARAdmin = ({ embedded = false }) => {
                 // Calculate Previous Avg for Comparison
                 const prevAvg = calculateAvgWorkHours(prevData);
 
-                processInsights(rawData, prevAvg);
+                processInsights(rawData, prevAvg, holidaySet);
             }
         } catch (err) {
             console.error(err);
@@ -345,7 +358,7 @@ const DARAdmin = ({ embedded = false }) => {
     };
 
 
-    const processInsights = (activities, prevAvg = 0) => {
+    const processInsights = (activities, prevAvg = 0, holidaySet = new Set()) => {
         // --- 1. KEY METRICS CALCULATION ---
         let totalH = 0;
         let activeUsers = new Set();
@@ -492,12 +505,16 @@ const DARAdmin = ({ embedded = false }) => {
         }
 
         // --- EMPLOYEE CONSISTENCY LOGIC ---
-        // 1. Calculate Target Days (Working Days - exclude Sundays)
+        // 1. Calculate Target Days (Working Days - exclude Sundays AND Holidays)
         let targetDays = 0;
         let loopDate = new Date(filters.startDate);
         const loopEnd = new Date(filters.endDate);
         while (loopDate <= loopEnd) {
-            if (loopDate.getDay() !== 0) { // 0 is Sunday
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const isSunday = loopDate.getDay() === 0;
+            const isHoliday = holidaySet.has(dateStr);
+
+            if (!isSunday && !isHoliday) {
                 targetDays++;
             }
             loopDate.setDate(loopDate.getDate() + 1);
@@ -525,6 +542,23 @@ const DARAdmin = ({ embedded = false }) => {
         consistencyList.sort((a, b) => a.pct - b.pct);
 
         setConsistencyData(consistencyList);
+
+        // --- SUBMISSION COMPLIANCE AGGREGATION (New) ---
+        // Aggregate the individual consistency data by Department
+        const deptCompMap = {};
+        consistencyList.forEach(user => {
+            if (!deptCompMap[user.dept]) deptCompMap[user.dept] = { name: user.dept, actual: 0, target: 0 };
+            deptCompMap[user.dept].actual += user.dars;
+            deptCompMap[user.dept].target += user.target;
+        });
+
+        const complianceChartData = Object.values(deptCompMap).map(d => ({
+            name: d.name,
+            value: d.target > 0 ? Math.round((d.actual / d.target) * 100) : 0
+        })).sort((a, b) => b.value - a.value); // Highest Compliance First
+
+        setComplianceData(complianceChartData);
+
 
         // Submission Rate Recalculation (Daily Average)
         const { rate: subRate, count: subCount } = calculateSubmissionRate(activities, dynamicTotalEmp);
@@ -572,10 +606,6 @@ const DARAdmin = ({ embedded = false }) => {
             color: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]
         })).sort((a, b) => b.value - a.value);
         setCategoryData(catChart);
-
-        // Compliance Data (Keep it as last 7 days always? Or match filter? Match filter is better but bar chart needs distinct labels. Let's keep it SIMPLE: Compliance Bar matches Filter Range buckets)
-        // For simplicity in this turn, I will leave Compliance Bar as Last 7 Days fixed or hidden if confusing, 
-        // BUT the user asked for the CARDS. I focused on cards above.
     };
 
     // Re-fetch when range changes (debounced search/filter effect)
@@ -1842,10 +1872,10 @@ const DARAdmin = ({ embedded = false }) => {
 
                             {/* Row 4: Category Pie & Compliance Bar (Existing, just moved down) */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Chart 3: Hours by Category (Donut) */}
+                                {/* Chart 3: Time Investment (Donut) */}
                                 <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <PieChartIcon size={20} className="text-purple-500" /> Hours by Category
+                                        <PieChartIcon size={20} className="text-purple-500" /> Time Investment
                                     </h3>
                                     <div className="flex-1 w-full min-h-[250px]">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -1865,6 +1895,7 @@ const DARAdmin = ({ embedded = false }) => {
                                                 </Pie>
                                                 <Tooltip
                                                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    formatter={(value) => [formatDuration(value), 'Hours']}
                                                 />
                                                 <Legend verticalAlign="bottom" height={36} iconType="circle" />
                                             </PieChart>
@@ -1877,21 +1908,26 @@ const DARAdmin = ({ embedded = false }) => {
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
                                         <Users size={20} className="text-emerald-500" /> Submission Compliance
                                     </h3>
-                                    <div className="flex-1 w-full min-h-[250px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                                                <Tooltip
-                                                    cursor={{ fill: '#F1F5F9' }}
-                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                                />
-                                                <Legend verticalAlign="top" height={36} iconType="circle" />
-                                                <Bar dataKey="submitted" name="Submitted" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} barSize={20} />
-                                                <Bar dataKey="pending" name="Pending" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={20} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                    <div className="flex-1 w-full min-h-[250px] overflow-x-auto custom-scrollbar pb-2">
+                                        <div style={{ width: `${Math.max(100, complianceData.length * 150)}px`, height: '100%', minWidth: '100%' }}>
+                                            <ResponsiveContainer width="100%" height={250}>
+                                                <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} dy={10} interval={0} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 'bold' }} domain={[0, 100]} />
+                                                    <Tooltip
+                                                        cursor={{ fill: '#F1F5F9' }}
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        formatter={(value) => [`${value}%`, 'Compliance']}
+                                                    />
+                                                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
+                                                        {complianceData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.value < 50 ? '#ef4444' : entry.value < 80 ? '#f59e0b' : '#10b981'} />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
