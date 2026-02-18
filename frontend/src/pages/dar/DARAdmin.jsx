@@ -165,8 +165,7 @@ const DARAdmin = ({ embedded = false }) => {
                     setShifts(res.data.shifts);
                     // Match current selected shift or default
                     if (res.data.shifts.length > 0) {
-                        const gen = res.data.shifts.find(s => s.shift_name === 'General');
-                        if (gen) setSelectedShiftObj(gen);
+                        setSelectedShiftObj(res.data.shifts[0]);
                     }
                 }
             } catch (e) { console.error("Failed to fetch shifts", e); }
@@ -828,7 +827,14 @@ const DARAdmin = ({ embedded = false }) => {
     };
 
     // Filters
-    const [selectedShift, setSelectedShift] = useState('General'); // Name of shift
+    const [selectedShift, setSelectedShift] = useState(''); // Name of shift
+
+    // Set default when shifts load
+    useEffect(() => {
+        if (!selectedShift && shifts.length > 0) {
+            setSelectedShift(shifts[0].shift_name);
+        }
+    }, [shifts, selectedShift]);
 
     // Update Timeline Range when Shift Changes
     useEffect(() => {
@@ -1017,7 +1023,7 @@ const DARAdmin = ({ embedded = false }) => {
 
         let targetShift = shifts.find(s => s.shift_name === selectedShift);
         // If not found (e.g. init), default to first or General
-        if (!targetShift) targetShift = shifts.find(s => s.shift_name === 'General') || shifts[0];
+        if (!targetShift) targetShift = shifts[0];
 
         if (targetShift) {
             try {
