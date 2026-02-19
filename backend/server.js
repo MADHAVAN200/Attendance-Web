@@ -1,9 +1,13 @@
 
 import { createServer } from 'http';
 import { Server as SocketIO } from 'socket.io';
-
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import requestIp from 'request-ip';
+
+// Routes
 import AuthRoutes from './AuthAPI/LoginAPI.js';
 import PasswordResetRoutes from './AuthAPI/PasswordReset.js';
 import AppError from './utils/AppError.js';
@@ -18,8 +22,6 @@ import FeedbackRoutes from './Feedback/FeedbackRoutes.js';
 import ReportRoutes from './Admin/ReportAPI.js';
 import LeaveRoutes from './Attendance/Leaves.js';
 import './config.js';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import EventsAPI from './DAR/EventsAPI.js';
 import ActivitiesAPI from './DAR/ActivitiesAPI.js';
@@ -27,6 +29,11 @@ import RequestsAPI from './DAR/RequestsAPI.js';
 import SettingsAPI from './DAR/SettingsAPI.js';
 import ProfileRoutes from './Profile/ProfileRoutes.js';
 import RecruitRoutes from './Recruiting/Recruit.js';
+import NotificationRoutes from './Notification/NotificationRoutes.js';
+import NotificationService from './services/NotificationService.js';
+import ActivityLogService from './services/ActivityLogService.js';
+import { initAttendanceProcessor } from './cron/AttendanceProcessor.js';
+import { initCleanupScheduler } from './cron/cleanupScheduler.js';
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -64,17 +71,10 @@ app.use(cors({
 }));
 
 app.use(helmet()); // Secure HTTP headers
+app.use(requestIp.mw());
 app.use(generalLimiter); // Global Rate Limiter
-
 app.use(express.json());
 
-// Routes
-import NotificationRoutes from './Notification/NotificationRoutes.js';
-import NotificationService from './services/NotificationService.js';
-import ActivityLogService from './services/ActivityLogService.js';
-// import './services/SecurityService.js';
-import { initAttendanceProcessor } from './cron/AttendanceProcessor.js';
-import { initCleanupScheduler } from './cron/cleanupScheduler.js';
 
 
 

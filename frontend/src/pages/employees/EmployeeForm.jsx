@@ -16,6 +16,8 @@ import {
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 
+import { useAuth } from '../../context/AuthContext';
+
 const QuickAddPopover = ({ title, onAdd, onClose, isOpen }) => {
     const [newValue, setNewValue] = useState("");
     const [loading, setLoading] = useState(false);
@@ -79,6 +81,7 @@ const QuickAddPopover = ({ title, onAdd, onClose, isOpen }) => {
 const EmployeeForm = () => {
     const navigate = useNavigate();
     const { id } = useParams();
+    const { user: currentUser } = useAuth();
     const isEditMode = !!id;
 
     const [formData, setFormData] = useState({
@@ -461,8 +464,12 @@ const EmployeeForm = () => {
                                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
                             >
                                 <option value="employee">Employee</option>
-                                <option value="admin">Admin</option>
-                                <option value="HR">HR</option>
+                                {currentUser?.user_type === 'admin' && (
+                                    <option value="hr">HR</option>
+                                )}
+                                {formData.user_type === 'admin' && (
+                                    <option value="admin">Admin</option>
+                                )}
                             </select>
                         </div>
 

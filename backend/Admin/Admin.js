@@ -228,6 +228,16 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
     desg_id, dept_id, shift_id, user_type
   } = req.body;
 
+  // RULE: No one can create an admin via this panel
+  if (user_type === 'admin') {
+    throw new AppError("Cannot create Admin users via the panel", 403);
+  }
+
+  // RULE: HR can only create employees
+  if (req.user.user_type === 'hr' && user_type !== 'employee') {
+    throw new AppError("HR can only create Employees", 403);
+  }
+
   if (!user_name || !user_password || !email) {
     throw new AppError("Missing required fields (Name, Password, Email)", 400);
   }
@@ -473,6 +483,20 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
       const password = getVal(row, "password") || `${name}-${req.user.org_id}`;
       const type = getVal(row, "type") || "employee";
 
+      // RULE: No one can create admin
+      if (type.toLowerCase() === 'admin') {
+        results.failure_count++;
+        results.errors.push(`Row ${rowNumber}: Cannot create Admin users`);
+        continue;
+      }
+
+      // RULE: HR can only create employees
+      if (req.user.user_type === 'hr' && type.toLowerCase() !== 'employee') {
+        results.failure_count++;
+        results.errors.push(`Row ${rowNumber}: HR can only create Employees`);
+        continue;
+      }
+
       if (!name || !email) {
         results.failure_count++;
         results.errors.push(`Row ${rowNumber}: Missing Name or Email`);
@@ -711,6 +735,39 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 
   const updates = {};
 
+  // Fetch target user permissions check
+  const targetUser = await attendanceDB("users")
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) {
+    throw new AppError("User not found", 404);
+  }
+
+  // RULE 1: Admin can only be edited by THEMSELVES
+  if (targetUser.user_type === 'admin') {
+    if (req.user.user_id !== targetUser.user_id) {
+      throw new AppError("Admins can only be edited by themselves", 403);
+    }
+  }
+
+  // RULE 2: HR Restrictions
+  if (req.user.user_type === 'hr') {
+    // HR cannot edit Admin or HR
+    if (targetUser.user_type === 'admin' || targetUser.user_type === 'hr') {
+      throw new AppError("HR can only edit Employees", 403);
+    }
+    // HR cannot promote/demote to non-employee
+    if (req.body.user_type && req.body.user_type !== 'employee') {
+      throw new AppError("HR cannot change user role to anything other than Employee", 403);
+    }
+  }
+
+  // RULE 3: No one can promote someone to Admin
+  if (req.body.user_type === 'admin' && targetUser.user_type !== 'admin') {
+    throw new AppError("Cannot promote user to Admin", 403);
+  }
+
   // Check forDuplicates if email or phone is being updated
   if (req.body.email) {
     const existing = await attendanceDB("users")
@@ -788,6 +845,25 @@ router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, nex
 
   if (parseInt(user_id) === req.user.user_id) {
     throw new AppError("You cannot delete your own account", 400);
+  }
+
+  // Fetch target user first for permission check
+  const targetUser = await attendanceDB('users')
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) {
+    throw new AppError("User not found", 404);
+  }
+
+  // RULE: Admin users cannot be deleted (safety)
+  if (targetUser.user_type === 'admin') {
+    throw new AppError("Cannot delete Admin users", 403);
+  }
+
+  // RULE: HR cannot delete HR
+  if (req.user.user_type === 'hr' && targetUser.user_type === 'hr') {
+    throw new AppError("HR cannot delete other HR users", 403);
   }
 
   const affected = await attendanceDB('users')
