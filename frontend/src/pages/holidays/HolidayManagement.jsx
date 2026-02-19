@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { holidayService } from '../../services/holidayService';
@@ -17,6 +18,14 @@ import LeaveApplication from './LeaveApplication';
 import HolidayCalendarView from '../../components/HolidayCalendarView';
 
 const HolidayManagement = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/holidays'); // Or default to /mobile-view if no specific holiday route
+        }
+    }, [navigate]);
+
     const { user } = useAuth();
     const [holidays, setHolidays] = useState([]);
     const [isLoading, setIsLoading] = useState(true);

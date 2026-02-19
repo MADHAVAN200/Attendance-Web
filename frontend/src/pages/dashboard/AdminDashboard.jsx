@@ -59,6 +59,12 @@ const AdminDashboard = () => {
     const dataCache = React.useRef({});
 
     React.useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view');
+        }
+    }, [navigate]);
+
+    React.useEffect(() => {
         if (viewMode === 'range') {
             fetchDashboardData(activeRange);
         } else {

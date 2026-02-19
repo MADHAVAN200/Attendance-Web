@@ -26,7 +26,18 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { Map, MapPin, Plus, Search, Navigation, Users, Settings, ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
+import { useNavigate } from 'react-router-dom';
+
 const GeoFencing = () => {
+  const navigate = useNavigate();
+
+  // Redirect to mobile view if on mobile
+  useEffect(() => {
+    if (window.innerWidth < 1024) {
+      navigate('/mobile-view/geofencing');
+    }
+  }, [navigate]);
+
   // --- STATE ---
   const { avatarTimestamp } = useAuth();
   const [locations, setLocations] = useState([]);

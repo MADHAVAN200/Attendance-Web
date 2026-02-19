@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -7,6 +8,14 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 
 const Profile = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/profile');
+        }
+    }, [navigate]);
+
     const { user: authUser, fetchUser } = useAuth();
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);

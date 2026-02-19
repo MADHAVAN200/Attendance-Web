@@ -30,6 +30,24 @@ import DailyActivity from "./pages/dar/DailyActivity"
 import DARAdmin from "./pages/dar/DARAdmin"
 import LeaveApplication from "./pages/holidays/LeaveApplication"
 
+// Mobile View Imports
+
+import MobileLogin from "./pages/user-auth/Login-mv";
+import MobileForgotPassword from "./pages/user-auth/ForgotPassword-mv";
+import MobileAdminDashboard from "./pages/dashboard/AdminDashboard-mv";
+import MobileEmployeeDashboard from "./pages/dashboard/EmployeeDashboard-mv";
+import MobileAttendance from "./pages/attendance/Attendance-mv";
+import MobileEmployeeList from "./pages/employees/EmployeeList-mv";
+import MobileEmployeeForm from "./pages/employees/EmployeeForm-mv";
+import MobileHolidayManagement from "./pages/holidays/HolidayManagement-mv";
+import MobileLeaveApplication from "./pages/holidays/LeaveApplication-mv";
+import MobileProfile from "./pages/profile/Profile-mv";
+import MobileAttendanceMonitoring from "./pages/attendance-monitoring/AttendanceMonitoring-mv";
+import MobileShiftManagement from "./pages/shift-management/ShiftManagement-mv";
+import MobileGeoFencing from "./pages/geofencing/GeoFencing-mv";
+import MobileReports from "./pages/reports/Reports-mv";
+
+
 
 
 import EmployeeDashboard from "./pages/dashboard/EmployeeDashboard";
@@ -42,6 +60,14 @@ const DashboardHandler = () => {
     return <EmployeeDashboard />;
   }
   return <AdminDashboard />;
+};
+
+const MobileDashboardHandler = () => {
+  const { user } = useAuth();
+  if (user?.user_type === 'employee') {
+    return <MobileEmployeeDashboard />;
+  }
+  return <MobileAdminDashboard />;
 };
 
 function App() {
@@ -92,6 +118,35 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
               <Route path="/subscription" element={<Subscription />} />
               <Route path="/dar-admin" element={<DARAdmin />} />
+            </Route>
+          </Route>
+
+          {/* Mobile View Routes */}
+          {/* Public Mobile Routes */}
+          <Route element={<PublicRoute />}>
+            <Route path="/mobile-view/login" element={<MobileLogin />} />
+            <Route path="/mobile-view/forgot-password" element={<MobileForgotPassword />} />
+          </Route>
+
+          <Route element={<ProtectedRoute />}>
+            <Route path="/mobile-view/unauthorized" element={<Unauthorized />} />
+
+            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee']} />}>
+              <Route path="/mobile-view" element={<MobileDashboardHandler />} />
+              <Route path="/mobile-view/attendance" element={<MobileAttendance />} />
+              <Route path="/mobile-view/holidays" element={<MobileHolidayManagement />} />
+              <Route path="/mobile-view/profile" element={<MobileProfile />} />
+              <Route path="/mobile-view/apply-leave" element={<MobileLeaveApplication />} />
+
+              {/* Admin/HR Specific Mobile Pages */}
+              <Route path="/mobile-view/employees" element={<MobileEmployeeList />} />
+              <Route path="/mobile-view/employees/add" element={<MobileEmployeeForm />} />
+              <Route path="/mobile-view/employees/edit/:id" element={<MobileEmployeeForm />} />
+
+              <Route path="/mobile-view/attendance-monitoring" element={<MobileAttendanceMonitoring />} />
+              <Route path="/mobile-view/shifts" element={<MobileShiftManagement />} />
+              <Route path="/mobile-view/geofencing" element={<MobileGeoFencing />} />
+              <Route path="/mobile-view/reports" element={<MobileReports />} />
             </Route>
           </Route>
 

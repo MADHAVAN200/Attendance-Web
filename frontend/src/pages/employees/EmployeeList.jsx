@@ -21,6 +21,13 @@ import { useAuth } from '../../context/AuthContext';
 
 const EmployeeList = () => {
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/employees');
+        }
+    }, [navigate]);
+
     const { avatarTimestamp } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);

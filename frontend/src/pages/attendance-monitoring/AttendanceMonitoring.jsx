@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
@@ -37,6 +38,14 @@ import {
 } from 'recharts';
 
 const AttendanceMonitoring = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/attendance-monitoring');
+        }
+    }, [navigate]);
+
     const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'

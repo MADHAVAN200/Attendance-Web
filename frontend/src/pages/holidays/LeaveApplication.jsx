@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import DatePicker from '../../components/DatePicker';
@@ -76,6 +77,14 @@ const AttachmentModal = ({ file, onClose }) => {
 };
 
 const LeaveApplication = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/apply-leave');
+        }
+    }, [navigate]);
+
     const { user } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
