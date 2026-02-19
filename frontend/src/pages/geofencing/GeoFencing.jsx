@@ -502,6 +502,7 @@ const GeoFencing = () => {
               ]}
               zoom={15}
               className="h-full w-full rounded-xl"
+              attributionControl={false}
             >
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -723,6 +724,7 @@ const GeoFencing = () => {
                   }
                   zoom={5}
                   className="h-full w-full"
+                  attributionControl={false}
                 >
                   <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                   {mapPickEnabled && <MapClickHandler />}
