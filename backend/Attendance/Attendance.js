@@ -56,7 +56,7 @@ router.post("/timein", authenticateJWT, upload.single("image"),
       localTime: tz.localTime,
       address,
       timezone: tz.tzName,
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       user_agent: req.get('User-Agent'),
       event_source: getEventSource(req)
     });
@@ -104,7 +104,7 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
       localTime: tz.localTime,
       address,
       timezone: tz.tzName,
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       user_agent: req.get('User-Agent'),
       event_source: getEventSource(req)
     });
@@ -161,7 +161,7 @@ router.post("/simulate/timein", authenticateJWT, upload.single("image"),
       localTime: simulated_time,
       address: simulated_address,
       timezone: "Simulated Timezone",
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       user_agent: "Simulation/" + req.get('User-Agent'),
       event_source: "SIMULATION"
     });
@@ -212,7 +212,7 @@ router.post("/simulate/timeout", authenticateJWT, upload.single("image"),
       localTime: simulated_time,
       address: simulated_address,
       timezone: "Simulated Timezone",
-      ip: req.ip,
+      ip: req.clientIp || req.ip,
       user_agent: "Simulation/" + req.get('User-Agent'),
       event_source: "SIMULATION"
     });

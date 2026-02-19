@@ -66,7 +66,7 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
 
   // 4. Generate & Save Refresh Token (Opaque)
   const refreshToken = TokenService.generateRefreshToken();
-  const ipAddress = req.ip || req.connection.remoteAddress;
+  const ipAddress = req.clientIp || req.ip;
   const userAgent = req.get('User-Agent') || 'Unknown';
 
   await TokenService.saveRefreshToken(user.user_id, refreshToken, ipAddress, userAgent);
@@ -89,7 +89,7 @@ router.post("/login", authLimiter, catchAsync(async (req, res) => {
     object_type: "USER",
     object_id: user.user_id,
     description: "User logged in successfully",
-    request_ip: req.ip,
+    request_ip: req.clientIp || req.ip,
     user_agent: req.get('User-Agent')
   });
 
@@ -146,7 +146,7 @@ router.post("/refresh", async (req, res) => {
     } else {
       // Rotate Token: Revoke old, Issue new
       newRefreshToken = TokenService.generateRefreshToken();
-      const ipAddress = req.ip;
+      const ipAddress = req.clientIp || req.ip;
       const userAgent = req.get('User-Agent');
 
       await TokenService.revokeRefreshToken(refreshToken, newRefreshToken);

@@ -313,7 +313,7 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
         object_type: "USER",
         object_id: newUserId,
         description: `Created user ${user_name} (${user_type || "employee"})`,
-        request_ip: req.ip,
+        request_ip: req.clientIp || req.ip,
         user_agent: req.get("User-Agent")
       });
     } catch (logErr) {
