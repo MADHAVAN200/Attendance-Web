@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
     Search,
@@ -105,21 +106,52 @@ const AttendanceMonitoring = () => {
                     // Process all sessions
                     sessions = userRecords.map(r => {
                         const inTime = new Date(r.time_in);
-                        // ... (existing code for session mapping) ...
+                        // Format Time HH:MM AM/PM
+                        const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                        const inStr = formatTime(inTime);
+                        let outStr = '-';
+                        let isActive = true;
+
+                        if (r.time_out) {
+                            const outTime = new Date(r.time_out);
+                            outStr = formatTime(outTime);
+                            isActive = false;
+                        }
+
+                        // Locations
+                        const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
+                        const outLoc = r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : null);
+
                         return {
-                            // ... (existing return object) ...
+                            rawIn: inTime,
+                            rawOut: r.time_out ? new Date(r.time_out) : null,
+                            in: inStr,
+                            out: outStr,
+                            date: inTime.toLocaleDateString(),
+                            isActive,
+                            inLocation: inLoc,
+                            outLocation: outLoc,
+                            lateMinutes: r.late_minutes || 0,
+                            isLate: (r.late_minutes || 0) > 0,
+                            lateReason: r.late_reason,
+                            inImage: r.time_in_image,
+                            outImage: r.time_out_image
                         };
                     });
 
                     // Determine overall status
-                    const latest = userRecords[0];
+                    const latest = userRecords[0]; // records are typically ordered DESC by time_in in backend
                     lastLocation = latest.time_in_address || (latest.time_in_lat ? `${latest.time_in_lat}, ${latest.time_in_lng}` : '-');
 
-                    // Extract late reason
+                    // Extract late reason - prioritize the latest session if active, or just the latest record
                     const lateReason = latest.late_reason || '';
 
-                    if (sessions.some(s => s.isActive)) {
-                        status = latest.late_minutes > 0 ? 'Late Active' : 'Active';
+                    // Check if *currently* active
+                    const isCurrentlyActive = sessions.some(s => s.isActive);
+                    
+                    if (isCurrentlyActive) {
+                        status = (latest.late_minutes > 0) ? 'Late Active' : 'Active';
                     } else {
                         status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
                     }
@@ -128,11 +160,11 @@ const AttendanceMonitoring = () => {
                         id: user.user_id,
                         name: user.user_name || 'Unknown',
                         role: user.desg_name || user.designation_title || 'Employee',
-                        avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
+                        avatar: (user.profile_image_url && user.profile_image_url.trim() !== '') ? user.profile_image_url : (user.user_name ? user.user_name.trim().charAt(0).toUpperCase() : 'U') || 'U',
                         department: user.dept_name || user.department_title || 'General',
                         sessions,
                         status,
-                        totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
+                        totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-', // totalMin calculation usually happens in backend or needs simple diff sum here
                         location: lastLocation,
                         lateReason // Add to object
                     };
@@ -1357,6 +1389,8 @@ const AttendanceMonitoring = () => {
 // --- Sub-components ---
 
 const UserAttendanceDetailsModal = ({ user, onClose }) => {
+    const [previewImage, setPreviewImage] = useState(null);
+
     if (!user) return null;
 
     return (
@@ -1381,8 +1415,9 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 <span>•</span>
                                 <span>{user.department}</span>
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded textxs font-bold uppercase tracking-wider border shadow-sm ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                            
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border shadow-sm ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
                                     user.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                         user.status.includes('Late') ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                             'bg-slate-50 text-slate-500 border-slate-200'
@@ -1393,12 +1428,16 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                                     {user.totalHours} Hrs Total
                                 </span>
-                                {user.lateReason && (
-                                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30">
-                                        {user.lateReason}
-                                    </span>
-                                )}
                             </div>
+
+                            {user.lateReason && (
+                                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg max-w-[300px]">
+                                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed break-words">
+                                        <span className="font-bold uppercase text-[10px] opacity-75 block mb-0.5">Late Reason</span>
+                                        {user.lateReason}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <button
@@ -1451,16 +1490,43 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-50 dark:border-slate-700/50">
-                                            <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-emerald-500" />
-                                                <span className="line-clamp-2">{session.inLocation}</span>
-                                            </div>
-                                            {session.outLocation && (
+                                            <div className="space-y-2">
                                                 <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                    <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-red-500" />
-                                                    <span className="line-clamp-2">{session.outLocation}</span>
+                                                    <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-emerald-500" />
+                                                    <span className="line-clamp-2">{session.inLocation}</span>
                                                 </div>
-                                            )}
+                                                {session.inImage && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
+                                                        <button 
+                                                            onClick={() => setPreviewImage(session.inImage)}
+                                                            className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        >
+                                                            <img src={session.inImage} alt="In Selfie" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {session.outLocation && (
+                                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                        <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-red-500" />
+                                                        <span className="line-clamp-2">{session.outLocation}</span>
+                                                    </div>
+                                                )}
+                                                {session.outImage && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
+                                                        <button 
+                                                            onClick={() => setPreviewImage(session.outImage)}
+                                                            className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        >
+                                                            <img src={session.outImage} alt="Out Selfie" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1479,6 +1545,28 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                     </button>
                 </div>
             </div>
+
+            {/* Image Preview Lightbox */}
+            {previewImage && createPortal(
+                <div 
+                    className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setPreviewImage(null)}
+                >
+                    <button 
+                        className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                        onClick={() => setPreviewImage(null)}
+                    >
+                        <XCircle size={32} />
+                    </button>
+                    <img 
+                        src={previewImage} 
+                        alt="Selfie Preview" 
+                        className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()} 
+                    />
+                </div>,
+                document.body
+            )}
         </div>
     );
 };
