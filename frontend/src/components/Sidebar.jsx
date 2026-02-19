@@ -121,7 +121,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                     </button>
 
                     <div className="text-[10px] text-center text-slate-400 dark:text-slate-600 font-mono pt-2">
-                        beta v1.5.1
+                        beta v1.5.2
                     </div>
                 </div>
             </aside>
