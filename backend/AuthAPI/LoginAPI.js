@@ -6,8 +6,9 @@ import EventBus from "../utils/EventBus.js";
 import { getEventSource } from "../utils/clientInfo.js";
 import catchAsync from "../utils/catchAsync.js";
 import { verifyCaptcha, generateCaptcha } from "../middleware/verifyCaptcha.js";
-import { authLimiter } from "../middleware/rateLimiter.js";
 import * as TokenService from "../services/tokenService.js";
+import { authenticateJWT } from "../middleware/auth.js";
+import { authLimiter, loginIpLimiter } from '../middleware/rateLimiter.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 Days
@@ -17,12 +18,14 @@ const router = express.Router();
 // Generate Captcha route
 router.get("/captcha/generate", generateCaptcha);
 
-import { authenticateJWT } from "../middleware/auth.js";
 
 
-// Login route
-router.post("/login", authLimiter, catchAsync(async (req, res) => {
-  const { user_input, user_password } = req.body;
+// Login Route
+// Double-Layer Protection:
+// 1. IP Fail-Safe: Stops bots from trying 100+ different accounts from one IP.
+// 2. Auth Limiter: Stops anyone from brute-forcing a specific account (8 tries).
+router.post('/login', loginIpLimiter, authLimiter, catchAsync(async (req, res) => {
+  const { user_input, user_password, captchaToken } = req.body;
 
   if (!user_input || !user_password) {
     return res.status(400).json({ message: "Username and password are required." });
