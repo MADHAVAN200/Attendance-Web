@@ -267,7 +267,7 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
         const { url } = await getFileUrl({ key: row.time_in_image_key });
         timeInUrl = url;
       }
-      if (row.time_in_image_key) {
+      if (row.time_out_image_key) {
         const { url } = await getFileUrl({ key: row.time_out_image_key });
         timeOutUrl = url;
       }
