@@ -51,6 +51,103 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
     const today = new Date().toISOString().split('T')[0];
     const isPastDate = date < today;
 
+    const [showReasonModal, setShowReasonModal] = useState(false);
+    const [reason, setReason] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSaveClick = async () => {
+        // Filter for unsaved OR (Today + Planned) tasks
+        // This logic forces 'PLANNED' tasks to be re-submitted for validation when execution day arrives
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isToday = date === todayStr;
+
+        const tasksToSave = inputs.filter(t =>
+            !t.isSaved || (isToday && t.status === 'PLANNED')
+        );
+
+        if (tasksToSave.length === 0) {
+            onClose();
+            return;
+        }
+
+        if (isPastDate) {
+            setShowReasonModal(true);
+            return;
+        }
+
+        // Submit sequentially (Normal Flow)
+        for (const task of tasksToSave) {
+            try {
+                const payload = {
+                    title: task.title || "Untitled Task",
+                    description: task.description,
+                    start_time: task.startTime,
+                    end_time: task.endTime,
+                    activity_date: date, // Use selected date
+                    activity_type: (task.category || 'General').toUpperCase(),
+                    // Status Logic:
+                    // If Future -> Backend sets PLANNED
+                    // If Today -> Send COMPLETED to enforce validation (convert Plan to Record)
+                    status: date > todayStr ? 'PLANNED' : 'COMPLETED'
+                };
+
+                // Check if it's an existing task (numeric ID or ID string not starting with 'new-')
+                const isExisting = task.id && !String(task.id).startsWith('new-');
+
+                if (isExisting) {
+                    await api.put(`/dar/activities/update/${task.id}`, payload);
+                } else {
+                    await api.post('/dar/activities/create', payload);
+                }
+
+                // visual success feedback could go here
+            } catch (err) {
+                alert(`Failed to save "${task.title}": ${err.response?.data?.message}`);
+                return; // Stop on error
+            }
+        }
+
+        // If all success
+        onClose();
+    };
+
+    const handleSubmitRequest = async () => {
+        setIsSubmitting(true);
+        try {
+            const response = await api.post('/dar/requests/create', {
+                request_date: date,
+                original_data: (await api.get(`/dar/activities/list?date=${date}`)).data.data.map(a => ({
+                    id: a.activity_id,
+                    title: a.title,
+                    description: a.description,
+                    start_time: a.start_time,
+                    end_time: a.end_time,
+                    activity_type: a.activity_type
+                })),
+                proposed_data: inputs.map(t => ({
+                    id: t.id && !t.id.toString().startsWith('new-') ? t.id : undefined,
+                    title: t.title,
+                    description: t.description,
+                    start_time: t.startTime,
+                    end_time: t.endTime,
+                    activity_type: (t.category || 'General').toUpperCase()
+                })),
+                reason: reason // Send reason
+            });
+
+            if (response.data.ok) {
+                toast.success("Request submitted to Admin!");
+                setShowReasonModal(false);
+                onClose();
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to submit request: " + (err.response?.data?.message || err.message));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // Reset scroll flag when highlighting a new task
     useEffect(() => {
         setHasScrolled(false);
@@ -218,7 +315,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -20, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col"
+            className="w-full h-full bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 flex flex-col relative"
         >
 
             <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex flex-col gap-4 bg-white dark:bg-dark-card relative z-20 rounded-t-2xl">
@@ -459,98 +556,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                     className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 ${isPastDate
                         ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
                         : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
-                    onClick={async () => {
-                        // Filter for unsaved OR (Today + Planned) tasks
-                        // This logic forces 'PLANNED' tasks to be re-submitted for validation when execution day arrives
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const isToday = date === todayStr;
-
-                        const tasksToSave = inputs.filter(t =>
-                            !t.isSaved || (isToday && t.status === 'PLANNED')
-                        );
-
-                        if (tasksToSave.length === 0) {
-                            onClose();
-                            return;
-                        }
-
-                        // MOCK REQUEST FLOW -> REAL API CALL
-                        if (isPastDate) {
-                            try {
-                                const response = await api.post('/dar/requests/create', {
-                                    request_date: date,
-                                    // ideally we should store original state on load, but for now we can just send empty if unknown, 
-                                    // or fetch it here. But simpler: The Admin Diff view will fetch the 'current execution' from DB as 'Original' anyway?
-                                    // Wait, if we send 'original_data' here, we capture the state BEFORE the user made these edits in the UI? 
-                                    // The `inputs` are already modified. 
-                                    // We need to fetch the DB state again to be sure what is "Original"
-
-                                    // Better approach: Let the backend fetch 'original' or we fetch it here.
-                                    // Let's fetch current DB state here to be accurate.
-                                    original_data: (await api.get(`/dar/activities/list?date=${date}`)).data.data.map(a => ({
-                                        id: a.activity_id, // Critical for diff
-                                        title: a.title,
-                                        description: a.description,
-                                        start_time: a.start_time,
-                                        end_time: a.end_time,
-                                        activity_type: a.activity_type
-                                    })),
-                                    proposed_data: inputs.map(t => ({
-                                        id: t.id && !t.id.toString().startsWith('new-') ? t.id : undefined, // Send ID if existing
-                                        title: t.title,
-                                        description: t.description,
-                                        start_time: t.startTime,
-                                        end_time: t.endTime,
-                                        activity_type: (t.category || 'General').toUpperCase()
-                                    }))
-                                });
-
-                                if (response.data.ok) {
-                                    toast.success("Request submitted to Admin!");
-                                    onClose();
-                                }
-                            } catch (err) {
-                                console.error(err);
-                                alert("Failed to submit request: " + (err.response?.data?.message || err.message));
-                            }
-                            return;
-                        }
-
-                        // Submit sequentially
-                        for (const task of tasksToSave) {
-                            try {
-                                const payload = {
-                                    title: task.title || "Untitled Task",
-                                    description: task.description,
-                                    start_time: task.startTime,
-                                    end_time: task.endTime,
-                                    activity_date: date, // Use selected date
-                                    activity_type: (task.category || 'General').toUpperCase(),
-                                    // Status Logic:
-                                    // If Future -> Backend sets PLANNED
-                                    // If Today -> Send COMPLETED to enforce validation (convert Plan to Record)
-                                    status: date > todayStr ? 'PLANNED' : 'COMPLETED'
-                                };
-
-                                // Check if it's an existing task (numeric ID or ID string not starting with 'new-')
-                                const isExisting = task.id && !String(task.id).startsWith('new-');
-
-                                if (isExisting) {
-                                    await api.put(`/dar/activities/update/${task.id}`, payload);
-                                } else {
-                                    await api.post('/dar/activities/create', payload);
-                                }
-
-                                // visual success feedback could go here
-                            } catch (err) {
-                                alert(`Failed to save "${task.title}": ${err.response?.data?.message}`);
-                                return; // Stop on error
-                            }
-                        }
-
-                        // If all success
-                        onClose();
-                    }}
+                    onClick={handleSaveClick}
                 >
                     {isPastDate ? (
                         <>
@@ -562,6 +568,46 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                     )}
                 </button>
             </div>
+
+            {/* REASON MODAL */}
+            {showReasonModal && createPortal(
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white dark:bg-[#13151f] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+                    >
+                        <div className="p-6">
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Request Reason</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                                Please explain why you are modifying a past record. This will be visible to the admin.
+                            </p>
+                            <textarea
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                                className="w-full h-32 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none mb-4"
+                                placeholder="E.g., Forgot to log the client meeting..."
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowReasonModal(false)}
+                                    className="flex-1 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSubmitRequest}
+                                    disabled={!reason.trim() || isSubmitting}
+                                    className="flex-1 py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isSubmitting ? 'Submitting...' : 'Submit Request'}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>,
+                document.body
+            )}
 
         </motion.div >
     );

@@ -1,9 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from '../utils/catchAsync.js';
-import { uploadCompressedImage, getFileUrl } from '../s3/s3Service.js';
+import { uploadCompressedImage, getFileUrl, deleteFile } from '../s3/s3Service.js';
 
 const router = express.Router();
 const upload = multer();
@@ -17,7 +17,7 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     }
 
     // 1. Fetch user_code for naming
-    const user = await knexDB('users').where({ user_id }).select('user_code').first();
+    const user = await attendanceDB('users').where({ user_id }).select('user_code').first();
     const userCode = user?.user_code || `user_${user_id}`;
 
     // 2. Upload to S3 with compression
@@ -31,17 +31,59 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
     console.log(uploadResult);
 
     // 3. Update database
-    await knexDB('users')
+    await attendanceDB('users')
         .where({ user_id })
         .update({
             profile_image_url: uploadResult.url, // Storing full URL instead of key
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     res.json({
         ok: true,
         message: 'Profile picture updated successfully',
-        avatar_url: uploadResult.url
+        profile_image_url: uploadResult.url
+    });
+}));
+
+router.delete('/', authenticateJWT, catchAsync(async (req, res) => {
+    const { user_id } = req.user;
+
+    // 1. Fetch user data to get user_code and current profile_image_url
+    const user = await attendanceDB('users').where({ user_id }).select('user_code', 'profile_image_url').first();
+
+    if (!user) {
+        return res.status(404).json({ ok: false, message: 'User not found' });
+    }
+
+    // 2. If user has a profile picture, delete it from S3
+    if (user.profile_image_url) {
+        const userCode = user.user_code || `user_${user_id}`;
+        // The file is always stored as .webp in northern-star upload logic
+        const key = `${userCode}.webp`;
+
+        try {
+            await deleteFile({
+                key: key,
+                directory: "public/profile_pics"
+            });
+        } catch (error) {
+            console.error('Error deleting file from S3:', error);
+            // We continue even if S3 delete fails, or we could choose to fail here.
+            // Usually, it's safer to proceed with DB update if the intent is to "remove" it.
+        }
+    }
+
+    // 3. Update database to remove profile_image_url
+    await attendanceDB('users')
+        .where({ user_id })
+        .update({
+            profile_image_url: null,
+            updated_at: attendanceDB.fn.now()
+        });
+
+    res.json({
+        ok: true,
+        message: 'Profile picture removed successfully'
     });
 }));
 
@@ -49,7 +91,7 @@ router.post('/', authenticateJWT, upload.single('avatar'), catchAsync(async (req
 router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
     const { user_id } = req.user;
 
-    const user = await knexDB('users as u')
+    const user = await attendanceDB('users as u')
         .leftJoin('designations as d', 'u.desg_id', 'd.desg_id')
         .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
         .select(
@@ -73,7 +115,7 @@ router.get('/me', authenticateJWT, catchAsync(async (req, res) => {
         ok: true,
         user: {
             ...user,
-            avatar_url: user.profile_image_url
+            profile_image_url: user.profile_image_url
         }
     });
 }));

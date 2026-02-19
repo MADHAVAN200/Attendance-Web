@@ -10,24 +10,28 @@ import {
     Trash2,
     Save,
     Search,
+    Filter,
     Calendar,
     Users,
     X,
     Building, // Import building icon
-    Clock // Import Clock icon for Shifts
+    Clock, // Import Clock icon for Shifts
+    Edit, // Import Edit icon
+    PieChart as PieChartIcon, // Import PieChart icon aliased
+    RefreshCw,
 } from 'lucide-react';
 import MinimalSelect from '../../components/MinimalSelect';
 import {
     PieChart, Pie, Cell,
     BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area, CartesianGrid
+    AreaChart, Area, CartesianGrid, ReferenceLine
 } from 'recharts';
 import RequestReviewModal from '../../components/dar/RequestReviewModal';
 import MiniCalendar from '../../components/dar/MiniCalendar';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
-const DARAdmin = () => {
+const DARAdmin = ({ embedded = false }) => {
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'settings' | 'data'
 
     // --- SETTINGS STATE ---
@@ -35,6 +39,34 @@ const DARAdmin = () => {
     const [newCat, setNewCat] = useState("");
     const [bufferTime, setBufferTime] = useState(30);
     const [loadingSettings, setLoadingSettings] = useState(false);
+
+
+    // --- STATIC MOCK DATA (TEMPORARY) ---
+    const mockTrendData = [
+        { date: 'Mon', 'Site Visit': 80, 'Office': 40, 'Meeting': 25, total: 145 },
+        { date: 'Tue', 'Site Visit': 120, 'Office': 50, 'Meeting': 40, total: 210 },
+        { date: 'Wed', 'Site Visit': 90, 'Office': 60, 'Meeting': 30, total: 180 },
+        { date: 'Thu', 'Site Visit': 140, 'Office': 70, 'Meeting': 30, total: 240 },
+        { date: 'Fri', 'Site Visit': 100, 'Office': 60, 'Meeting': 35, total: 195 },
+        { date: 'Sat', 'Site Visit': 60, 'Office': 40, 'Meeting': 20, total: 120 },
+        { date: 'Sun', 'Site Visit': 30, 'Office': 20, 'Meeting': 10, total: 60 },
+    ];
+
+    const mockDeptData = [
+        { name: 'Engineering', Development: 120, Meeting: 40, Break: 10 },
+        { name: 'Sales', Calls: 80, Meeting: 50, Travel: 30 },
+        { name: 'HR', Admin: 60, Meeting: 30, Break: 5 },
+        { name: 'Site Ops', Inspection: 150, Travel: 40, Report: 20 },
+    ];
+
+    const mockConsistencyData = [
+        { id: 1, name: 'Rohan Sharma', role: 'Site Engineer', dars: 6, target: 6, hours: 48 },
+        { id: 2, name: 'Priya Patel', role: 'Architect', dars: 5, target: 6, hours: 45 },
+        { id: 3, name: 'Amit Singh', role: 'Supervisor', dars: 6, target: 6, hours: 42 },
+        { id: 4, name: 'Sneha Gupta', role: 'HR Manager', dars: 4, target: 6, hours: 32 },
+        { id: 5, name: 'Vikram Malhotra', role: 'Sales Lead', dars: 2, target: 6, hours: 15 },
+    ];
+    // -------------------------------------
 
     // Fetch Settings
     const fetchSettings = async () => {
@@ -65,8 +97,14 @@ const DARAdmin = () => {
         }
     };
 
+
+
     // --- CHART DATA STATE ---
     const [categoryData, setCategoryData] = useState([]);
+    const [trendData, setTrendData] = useState([]); // New Trend Data State
+    const [chartKeys, setChartKeys] = useState([]); // Dynamic Keys for Area Chart
+    const [deptData, setDeptData] = useState([]); // New Dept Data State
+    const [consistencyData, setConsistencyData] = useState([]); // New Consistency Data State
     const [complianceData, setComplianceData] = useState([]);
     const [stats, setStats] = useState({
         submissionRate: 0,
@@ -75,6 +113,7 @@ const DARAdmin = () => {
         topActivity: '-',
         topActivityPercent: 0
     });
+
 
     // Shift State
     const [shifts, setShifts] = useState([]);
@@ -113,7 +152,9 @@ const DARAdmin = () => {
             try {
                 const res = await api.get('/admin/departments');
                 if (res.data.success) {
-                    setDepartments(res.data.departments.map(d => d.dept_name));
+                    // Ensure uniqueness to prevent duplicate keys
+                    const uniqueDepts = [...new Set(res.data.departments.map(d => d.dept_name))];
+                    setDepartments(uniqueDepts);
                 }
             } catch (e) { console.error("Failed to fetch departments", e); }
 
@@ -124,8 +165,7 @@ const DARAdmin = () => {
                     setShifts(res.data.shifts);
                     // Match current selected shift or default
                     if (res.data.shifts.length > 0) {
-                        const gen = res.data.shifts.find(s => s.shift_name === 'General');
-                        if (gen) setSelectedShiftObj(gen);
+                        setSelectedShiftObj(res.data.shifts[0]);
                     }
                 }
             } catch (e) { console.error("Failed to fetch shifts", e); }
@@ -134,19 +174,179 @@ const DARAdmin = () => {
         fetchDeptsAndShifts();
     }, []);
 
+
+
+    // --- ENHANCED FILTER STATE ---
+    const [filters, setFilters] = useState({
+        startDate: new Date(new Date().setDate(new Date().getDate() - 6)).toISOString().split('T')[0], // Last 7 days
+        endDate: new Date().toISOString().split('T')[0],
+        dept: 'All',
+        search: ''
+    });
+
+    // Helper: Reset to presets
+    const applyPreset = (days) => {
+        const end = new Date();
+        const start = new Date();
+        if (days === 0) {
+            // Today
+        } else {
+            start.setDate(end.getDate() - days);
+        }
+        setFilters(prev => ({
+            ...prev,
+            startDate: start.toISOString().split('T')[0],
+            endDate: end.toISOString().split('T')[0]
+        }));
+    };
+
+    // Helper for Average Calculation
+    const calculateAvgWorkHours = (acts) => {
+        let totalH = 0;
+        let activeUsers = new Set();
+        acts.forEach(a => {
+            if (a.status === 'COMPLETED') activeUsers.add(a.user_id);
+            if (!a.start_time || !a.end_time) return;
+            const parts = a.start_time.split(':');
+            const startM = (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
+            const partsEnd = a.end_time.split(':');
+            let endM = (parseInt(partsEnd[0]) * 60) + (parseInt(partsEnd[1]) || 0);
+            if (endM < startM) endM += (24 * 60);
+            totalH += Math.max(0, (endM - startM) / 60);
+        });
+        return activeUsers.size > 0 ? (totalH / activeUsers.size) : 0;
+    };
+
+    // Helper for Submission Rate Calculation (Daily Average)
+    const calculateSubmissionRate = (acts, totalEmps) => {
+        if (totalEmps === 0) return { rate: 0, count: 0 };
+
+        // 1. Group by Date
+        const dateMap = {};
+        acts.forEach(a => {
+            const d = a.activity_date.split('T')[0];
+            if (!dateMap[d]) dateMap[d] = new Set();
+            // Only count if COMPLETED? Assuming "Submission" means at least one completed task.
+            if (a.status === 'COMPLETED') dateMap[d].add(a.user_id);
+        });
+
+        // 2. Average Count Calculation
+        let totalCount = 0;
+        Object.values(dateMap).forEach(usersSet => {
+            totalCount += usersSet.size;
+        });
+
+        const start = new Date(filters.startDate);
+        const end = new Date(filters.endDate);
+        const duration = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (duration <= 0) return { rate: 0, count: 0 };
+
+        const avgCount = totalCount / duration; // Keep decimal precision
+        const rate = Math.round((avgCount / totalEmps) * 100);
+
+        return { rate, count: avgCount };
+    };
+
+    // Helper for Idle Time Calculation
+    const calculateIdleTime = (acts) => {
+        // Group by User -> Date
+        const userDayMap = {};
+        acts.forEach(a => {
+            if (!a.start_time || !a.end_time) return;
+            const key = `${a.user_id}_${a.activity_date.split('T')[0]}`;
+            if (!userDayMap[key]) userDayMap[key] = [];
+
+            const parts = a.start_time.split(':');
+            const startM = (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
+            const partsEnd = a.end_time.split(':');
+            let endM = (parseInt(partsEnd[0]) * 60) + (parseInt(partsEnd[1]) || 0);
+            if (endM < startM) endM += (24 * 60);
+
+            userDayMap[key].push({ start: startM, end: endM });
+        });
+
+        let totalIdleM = 0;
+        let dayCount = 0;
+
+        Object.values(userDayMap).forEach(dayActs => {
+            dayCount++;
+            // Sort by start time
+            dayActs.sort((a, b) => a.start - b.start);
+
+            // Calculate gaps between activities
+            for (let i = 0; i < dayActs.length - 1; i++) {
+                const gap = dayActs[i + 1].start - dayActs[i].end;
+                if (gap > 0) totalIdleM += gap;
+            }
+        });
+
+        // Avg Idle Minutes per Person-Day
+        return dayCount > 0 ? Math.round(totalIdleM / dayCount) : 0;
+    };
+
+    // Helper to format hours into "Xh Ym"
+    const formatDuration = (hours) => {
+        if (!hours) return '0min';
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        if (h === 0) return `${m}min`;
+        if (m === 0) return `${h}h`;
+        return `${h}h ${m}m`;
+    };
+
     const fetchInsights = async () => {
         setLoadingData(true);
         try {
-            // Last 7 days
-            const end = new Date();
-            const start = new Date();
-            start.setDate(end.getDate() - 6);
-            const sStr = start.toISOString().split('T')[0];
-            const eStr = end.toISOString().split('T')[0];
+            // 1. Calculate Previous Period Range
+            const start = new Date(filters.startDate);
+            const end = new Date(filters.endDate);
+            const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1; // Inclusive days
 
-            const res = await api.get(`/dar/activities/admin/all?startDate=${sStr}&endDate=${eStr}`);
+            const prevEnd = new Date(start);
+            prevEnd.setDate(prevEnd.getDate() - 1);
+            const prevStart = new Date(prevEnd);
+            prevStart.setDate(prevStart.getDate() - (dayDiff - 1));
+
+            const pStartStr = prevStart.toISOString().split('T')[0];
+            const pEndStr = prevEnd.toISOString().split('T')[0];
+
+            // 2. Fetch BOTH periods in parallel
+            // Also fetch Holidays for accurate target calculation
+            const [res, prevRes, holRes] = await Promise.all([
+                api.get(`/dar/activities/admin/all?startDate=${filters.startDate}&endDate=${filters.endDate}`),
+                api.get(`/dar/activities/admin/all?startDate=${pStartStr}&endDate=${pEndStr}`),
+                api.get('/holiday')
+            ]);
+
             if (res.data.ok) {
-                processInsights(res.data.data, sStr, eStr);
+                let rawData = res.data.data;
+                let prevData = prevRes.data.ok ? prevRes.data.data : [];
+
+                // Process Holidays into a Set for fast lookup
+                const holidaySet = new Set();
+                if (holRes.data?.holidays) {
+                    holRes.data.holidays.forEach(h => {
+                        // Assuming h.holiday_date is YYYY-MM-DD
+                        holidaySet.add(h.holiday_date);
+                    });
+                }
+
+                // Apply Filters to BOTH
+                if (filters.dept !== 'All') {
+                    rawData = rawData.filter(a => a.user_dept === filters.dept);
+                    prevData = prevData.filter(a => a.user_dept === filters.dept);
+                }
+                if (filters.search.trim()) {
+                    const q = filters.search.toLowerCase();
+                    rawData = rawData.filter(a => a.user_name?.toLowerCase().includes(q));
+                    prevData = prevData.filter(a => a.user_name?.toLowerCase().includes(q));
+                }
+
+                // Calculate Previous Avg for Comparison
+                const prevAvg = calculateAvgWorkHours(prevData);
+
+                processInsights(rawData, prevAvg, holidaySet);
             }
         } catch (err) {
             console.error(err);
@@ -156,81 +356,267 @@ const DARAdmin = () => {
         }
     };
 
-    const processInsights = (activities, startStr, endStr) => {
-        // 1. Category Data (Pie)
-        const catMap = {};
-        let totalHours = 0;
+
+    const processInsights = (activities, prevAvg = 0, holidaySet = new Set()) => {
+        // --- 1. KEY METRICS CALCULATION ---
+        let totalH = 0;
+        let activeUsers = new Set();
+        const activityCounts = {};
+        const deptHours = {};
+
+        // Helper
+        const parseMinutes = (t) => {
+            if (!t) return 0;
+            const parts = t.split(':');
+            return (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
+        };
+
+        const activityHours = {}; // To calculate % of total time (and for Pie Chart)
+        const activityFrequency = {}; // To find "Most Repeated"
+
+
+        // --- TREND DATA PREP ---
+        const trendMap = {}; // date -> { category: hours, ... }
+        const foundCategories = new Set();
+
+        // --- DEPT DATA PREP ---
+        const deptMap = {}; // dept -> { name: dept, category: hours, total: sum }
+
+        // Initialize user-selected date range for trend 
+        let d = new Date(filters.startDate);
+        const e = new Date(filters.endDate);
+        while (d <= e) {
+            const dateStr = d.toISOString().split('T')[0];
+            // Initialize with date for chart tooltip label
+            // Recharts needs consistent keys, so we will fill gaps.
+            trendMap[dateStr] = { date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) };
+            d.setDate(d.getDate() + 1);
+        }
+
         activities.forEach(a => {
-            const h = (new Date(`1970-01-01T${a.end_time}`) - new Date(`1970-01-01T${a.start_time}`)) / 3600000;
-            const hours = Math.max(0, h);
-            catMap[a.activity_type] = (catMap[a.activity_type] || 0) + hours;
-            totalHours += hours;
+            // Only count COMPLETED for strict metrics, or ALL for general workload? 
+            // Usually workload includes everything logged. submission rate checks COMPLETED.
+
+            if (a.status === 'COMPLETED') {
+                activeUsers.add(a.user_id);
+            }
+
+            if (!a.start_time || !a.end_time) return;
+
+            let startM = parseMinutes(a.start_time);
+            let endM = parseMinutes(a.end_time);
+            if (endM < startM) endM += (24 * 60); // Overnight
+
+            const hours = Math.max(0, (endM - startM) / 60);
+            totalH += hours;
+
+            // Top Activity Logic
+            const type = a.activity_type || "Uncategorized";
+
+            // 1. Track Hours (for % calculation and Pie Chart)
+            activityHours[type] = (activityHours[type] || 0) + hours;
+
+            // 2. Track Frequency (for indentifying "most repeated")
+            activityFrequency[type] = (activityFrequency[type] || 0) + 1;
+
+            // Dept Logic
+            const dept = a.user_dept || "Unknown";
+            deptHours[dept] = (deptHours[dept] || 0) + hours;
+
+            // --- TREND AGGREGATION ---
+            const dateStr = a.activity_date.split('T')[0];
+            if (trendMap[dateStr]) { // Only if within range (api should return range, but safe check)
+                trendMap[dateStr][type] = (trendMap[dateStr][type] || 0) + hours;
+                foundCategories.add(type);
+            }
+
+
+            // --- DEPT AGGREGATION ---
+            if (!deptMap[dept]) deptMap[dept] = { name: dept, total: 0 };
+            // Round to 1 decimal place for cleaner UI
+            deptMap[dept][type] = (deptMap[dept][type] || 0) + hours;
+            deptMap[dept].total += hours;
         });
 
-        const catChart = Object.entries(catMap).map(([name, value], i) => ({
+        // Convert Trend Map to Array
+        const sortedTrendData = Object.keys(trendMap).map(key => {
+            const item = trendMap[key];
+            // Round all numeric values in trend data
+            Object.keys(item).forEach(k => {
+                if (typeof item[k] === 'number') {
+                    item[k] = Math.round(item[k] * 10) / 10;
+                }
+            });
+            return item;
+        }).sort((a, b) => new Date(a.date) - new Date(b.date)); // Ensure date sort
+
+        const keysList = Array.from(foundCategories);
+
+        setTrendData(sortedTrendData);
+        setChartKeys(keysList);
+
+        // Convert Dept Map to Array & Sort by Total
+        const sortedDeptData = Object.values(deptMap).map(d => {
+            // Round all numeric values in dept data
+            Object.keys(d).forEach(k => {
+                if (typeof d[k] === 'number') {
+                    d[k] = Math.round(d[k] * 10) / 10;
+                }
+            });
+            return d;
+        }).sort((a, b) => b.total - a.total);
+        setDeptData(sortedDeptData);
+
+
+        // C. Top Activity (Most Repeated)
+        let topAct = '-';
+        let maxFreq = 0;
+        Object.entries(activityFrequency).forEach(([act, freq]) => {
+            if (freq > maxFreq) {
+                topAct = act;
+                maxFreq = freq;
+            }
+        });
+
+        // Calculate % of Total Time for this Top Activity
+        // (Hours for Top Activity / Total Hours) * 100
+        const topActHours = activityHours[topAct] || 0;
+        const topActPercent = totalH > 0 ? Math.round((topActHours / totalH) * 100) : 0;
+
+
+        // D. Active Department
+        let topDept = '-';
+        let topDeptVal = 0;
+        Object.entries(deptHours).forEach(([d, val]) => {
+            if (val > topDeptVal) {
+                topDept = d;
+                topDeptVal = val;
+            }
+        });
+
+
+        // Dynamic Employee Count for Submission Rate Denominator
+        let dynamicTotalEmp = totalEmpCount;
+        let relevantUsers = allUsers;
+        if (filters.dept !== 'All') {
+            relevantUsers = allUsers.filter(u => u.dept === filters.dept);
+            dynamicTotalEmp = relevantUsers.length;
+        }
+
+        // --- EMPLOYEE CONSISTENCY LOGIC ---
+        // 1. Calculate Target Days (Working Days - exclude Sundays AND Holidays)
+        let targetDays = 0;
+        let loopDate = new Date(filters.startDate);
+        const loopEnd = new Date(filters.endDate);
+        while (loopDate <= loopEnd) {
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const isSunday = loopDate.getDay() === 0;
+            const isHoliday = holidaySet.has(dateStr);
+
+            if (!isSunday && !isHoliday) {
+                targetDays++;
+            }
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+        if (targetDays === 0) targetDays = 1; // Prevent division by zero
+
+        // 2. Map Users to Submission Counts
+        const consistencyList = relevantUsers.map(user => {
+            // Count unique days this user submitted COMPLETED DAR
+            const userActivities = activities.filter(a => a.user_id === user.userId && a.status === 'COMPLETED');
+            const uniqueDays = new Set(userActivities.map(a => a.activity_date.split('T')[0])).size;
+
+            return {
+                id: user.userId,
+                name: user.name,
+                role: user.role,
+                dept: user.dept,
+                dars: uniqueDays,
+                target: targetDays,
+                pct: (uniqueDays / targetDays) * 100
+            };
+        });
+
+        // 3. Sort by Lowest Consistency First (Actionable)
+        consistencyList.sort((a, b) => a.pct - b.pct);
+
+        setConsistencyData(consistencyList);
+
+        // --- SUBMISSION COMPLIANCE AGGREGATION (New) ---
+        // Aggregate the individual consistency data by Department
+        const deptCompMap = {};
+        consistencyList.forEach(user => {
+            if (!deptCompMap[user.dept]) deptCompMap[user.dept] = { name: user.dept, actual: 0, target: 0 };
+            deptCompMap[user.dept].actual += user.dars;
+            deptCompMap[user.dept].target += user.target;
+        });
+
+        const complianceChartData = Object.values(deptCompMap).map(d => ({
+            name: d.name,
+            value: d.target > 0 ? Math.round((d.actual / d.target) * 100) : 0
+        })).sort((a, b) => b.value - a.value); // Highest Compliance First
+
+        setComplianceData(complianceChartData);
+
+
+        // Submission Rate Recalculation (Daily Average)
+        const { rate: subRate, count: subCount } = calculateSubmissionRate(activities, dynamicTotalEmp);
+
+
+        // B. Avg Work Hrs (Restore)
+        // Total Hours / Active Users (If 0 active, 0)
+        const avgHrs = activeUsers.size > 0 ? Math.round((totalH / activeUsers.size) * 10) / 10 : 0;
+
+        // Comparison Logic
+        let avgDiff = 0;
+        let avgTrend = 'neutral'; // 'up', 'down', 'neutral'
+        if (prevAvg > 0) {
+            avgDiff = Math.round(((avgHrs - prevAvg) / prevAvg) * 100);
+            if (avgDiff > 0) avgTrend = 'up';
+            else if (avgDiff < 0) avgTrend = 'down';
+        } else if (avgHrs > 0) {
+            avgDiff = 100; // 0 to something
+            avgTrend = 'up';
+        }
+
+        // Idle Time Calculation
+        const avgIdleM = calculateIdleTime(activities);
+        const avgIdleH = Math.round((avgIdleM / 60) * 10) / 10;
+
+        setStats({
+            submissionRate: subRate,
+            submittedCount: subCount, // Use Average Daily Count
+            totalEmployees: dynamicTotalEmp,
+            topActivity: topAct,
+            topActivityPercent: topActPercent,
+            avgHours: avgHrs,
+            avgDiff: Math.abs(avgDiff),
+            avgTrend: avgTrend,
+            avgIdle: avgIdleH,
+            activeDepartment: topDept
+        });
+
+
+        // --- 2. EXISTING CHART PROCESSING (Updated) ---
+        // Reuse logic for Category Pie
+        const catChart = Object.entries(activityHours).map(([name, value], i) => ({
             name,
             value: Math.round(value * 10) / 10,
             color: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]
         })).sort((a, b) => b.value - a.value);
         setCategoryData(catChart);
-
-        // 2. Top Activity
-        if (catChart.length > 0) {
-            setStats(prev => ({
-                ...prev,
-                topActivity: catChart[0].name,
-                topActivityPercent: totalHours > 0 ? Math.round((catChart[0].value / totalHours) * 100) : 0
-            }));
-        }
-
-        // Helper to get local YYYY-MM-DD
-        const getLocalDate = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        // 3. Compliance Data (Bar - Last 7 days)
-        const days = [];
-        for (let i = 0; i < 7; i++) {
-            const d = new Date();
-            d.setDate(d.getDate() - (6 - i));
-            days.push(getLocalDate(d));
-        }
-
-        const compChart = days.map(dayStr => {
-            const submittedUsers = new Set(
-                activities.filter(a => {
-                    const localActDate = getLocalDate(new Date(a.activity_date));
-                    return localActDate === dayStr;
-                }).map(a => a.user_id)
-            );
-            const submitted = submittedUsers.size;
-            const pending = Math.max(0, totalEmpCount - submitted);
-            const dateObj = new Date(dayStr);
-            return {
-                day: dateObj.toLocaleDateString('en-US', { weekday: 'short' }),
-                fullDate: dayStr,
-                submitted,
-                pending
-            };
-        });
-        setComplianceData(compChart);
-
-        // 4. Rate (Today)
-        const todayStr = getLocalDate(new Date());
-        const todayStats = compChart.find(c => c.fullDate === todayStr);
-        if (todayStats) {
-            const rate = Math.round((todayStats.submitted / totalEmpCount) * 100);
-            setStats(prev => ({
-                ...prev,
-                submissionRate: rate,
-                submittedCount: todayStats.submitted,
-                totalEmployees: totalEmpCount
-            }));
-        }
     };
+
+    // Re-fetch when range changes (debounced search/filter effect)
+    useEffect(() => {
+        if (activeTab === 'insights') {
+            const timer = setTimeout(() => {
+                fetchInsights();
+            }, 500); // 500ms debounce
+            return () => clearTimeout(timer);
+        }
+    }, [filters, activeTab]);
+
 
     const fetchMasterData = async () => {
         setLoadingData(true);
@@ -441,7 +827,14 @@ const DARAdmin = () => {
     };
 
     // Filters
-    const [selectedShift, setSelectedShift] = useState('General'); // Name of shift
+    const [selectedShift, setSelectedShift] = useState(''); // Name of shift
+
+    // Set default when shifts load
+    useEffect(() => {
+        if (!selectedShift && shifts.length > 0) {
+            setSelectedShift(shifts[0].shift_name);
+        }
+    }, [shifts, selectedShift]);
 
     // Update Timeline Range when Shift Changes
     useEffect(() => {
@@ -497,6 +890,7 @@ const DARAdmin = () => {
     const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
     const [requests, setRequests] = useState([]);
     const [loadingRequests, setLoadingRequests] = useState(false);
+    const [requestSearch, setRequestSearch] = useState("");
 
     const [employeesList, setEmployeesList] = useState([]);
     const [selectedEmployee, setSelectedEmployee] = useState("All Employees");
@@ -553,9 +947,11 @@ const DARAdmin = () => {
                     startTime: t.start_time || t.startTime,
                     endTime: t.end_time || t.endTime
                 })),
-                status: r.status
+                status: r.status,
+                reason: r.reason
             }));
-            setRequests(mapped);
+
+            setRequests([...mapped]);
         } catch (err) {
             console.error(err);
             toast.error("Failed to load requests");
@@ -566,8 +962,9 @@ const DARAdmin = () => {
 
     useEffect(() => {
         if (activeTab === 'insights') {
-            fetchRequests();
             fetchInsights();
+        } else if (activeTab === 'requests') {
+            fetchRequests();
         } else if (activeTab === 'settings') {
             fetchSettings();
         } else if (activeTab === 'data') {
@@ -600,7 +997,7 @@ const DARAdmin = () => {
     const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
     const buttonRef = useRef(null);
 
-    const [showSettings, setShowSettings] = useState(false);
+
 
     const toggleCalendar = () => {
         if (!showCalendar && buttonRef.current) {
@@ -626,7 +1023,7 @@ const DARAdmin = () => {
 
         let targetShift = shifts.find(s => s.shift_name === selectedShift);
         // If not found (e.g. init), default to first or General
-        if (!targetShift) targetShift = shifts.find(s => s.shift_name === 'General') || shifts[0];
+        if (!targetShift) targetShift = shifts[0];
 
         if (targetShift) {
             try {
@@ -666,16 +1063,37 @@ const DARAdmin = () => {
     }
 
     // --- HANDLERS ---
-    const handleAddCategory = () => {
+    const handleAddCategory = async () => {
         if (newCat.trim()) {
-            setCategories([...categories, newCat.trim()]);
+            const updated = [...categories, newCat.trim()];
+            setCategories(updated);
             setNewCat("");
+            try {
+                await api.post('/dar/settings/update', {
+                    buffer_minutes: parseInt(bufferTime),
+                    categories: updated
+                });
+                toast.success("Category added");
+            } catch (err) {
+                toast.error("Failed to add category");
+            }
         }
     };
 
-    const handleRemoveCategory = (cat) => {
-        setCategories(categories.filter(c => c !== cat));
+    const handleRemoveCategory = async (cat) => {
+        const updated = categories.filter(c => c !== cat);
+        setCategories(updated);
+        try {
+            await api.post('/dar/settings/update', {
+                buffer_minutes: parseInt(bufferTime),
+                categories: updated
+            });
+            toast.success("Category removed");
+        } catch (err) {
+            toast.error("Failed to remove category");
+        }
     };
+
 
     const formatTime = (val) => {
         const normalized = val >= 24 ? val - 24 : val;
@@ -686,26 +1104,38 @@ const DARAdmin = () => {
         return `${h12}${m > 0 ? ':' + m : ''} ${ampm}`;
     };
 
+    const Wrapper = embedded ? React.Fragment : DashboardLayout;
+
     return (
-        <DashboardLayout title="DAR Admin Panel">
+        <Wrapper {...(embedded ? {} : { title: "DAR Admin Panel" })}>
             <div className="flex flex-col h-[calc(100vh-140px)] gap-6">
 
-                {/* Tabs Header */}
-                <div className="flex items-center gap-1 bg-white dark:bg-dark-card p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-fit">
+                {/* Tabs Header - Styled like Attendance.jsx */}
+                <div className="border-b border-slate-200 dark:border-slate-700 flex gap-12 px-2">
                     {[
-                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Insights' },
-                        { id: 'data', icon: <FileText size={16} />, label: 'Master Data' },
-                        { id: 'settings', icon: <Settings size={16} />, label: 'Configuration' },
+                        { id: 'insights', icon: <BarChart3 size={16} />, label: 'Live Dashboard', type: 'tab' },
+                        { id: 'requests', icon: <Edit size={16} />, label: 'Edit Requests', type: 'tab' },
+                        { id: 'data', icon: <FileText size={16} />, label: 'Master Data', type: 'tab' },
+                        { id: 'settings', icon: <Settings size={16} />, label: 'Configurations', type: 'tab' },
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === tab.id
-                                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            onClick={() => {
+                                setActiveTab(tab.id);
+                                setSelectedRequest(null);
+                            }}
+                            className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tab.id
+                                ? 'text-indigo-600 dark:text-indigo-400'
+                                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                 }`}
                         >
-                            {tab.icon} {tab.label}
+                            <div className="flex items-center gap-2">
+                                {tab.icon}
+                                {tab.label}
+                            </div>
+                            {activeTab === tab.id && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></div>
+                            )}
                         </button>
                     ))}
                 </div>
@@ -713,79 +1143,100 @@ const DARAdmin = () => {
                 {/* Content Area */}
                 <div className="flex-1 overflow-hidden">
 
-                    {/* --- CONFIGURATION TAB --- */}
+                    {/* --- CONFIGURATIONS TAB --- */}
                     {activeTab === 'settings' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full overflow-y-auto pb-10">
-                            {/* Category Manager */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Activity Categories</h3>
-                                <p className="text-sm text-slate-500 mb-6">Define the list of activities users can select. This will appear in their dropdown.</p>
-
-                                <div className="flex gap-2 mb-6">
-                                    <input
-                                        type="text"
-                                        value={newCat}
-                                        onChange={(e) => setNewCat(e.target.value)}
-                                        placeholder="Enter new category (e.g. 'Safety Check')"
-                                        className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                                    />
-                                    <button
-                                        onClick={handleAddCategory}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors"
-                                    >
-                                        <Plus size={20} />
-                                    </button>
+                        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 dark:border-slate-700">
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <Settings size={22} className="text-indigo-600" />
+                                        Configurations
+                                    </h2>
+                                    <p className="text-sm text-slate-500 mt-1">Manage system-wide settings and master lists.</p>
                                 </div>
-
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                                    {categories.map((cat, i) => (
-                                        <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-100 transition-colors">
-                                            <span className="font-semibold text-slate-700 dark:text-slate-200">{cat}</span>
-                                            <button
-                                                onClick={() => handleRemoveCategory(cat)}
-                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
+                                <button
+                                    onClick={handleSaveSettings}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+                                >
+                                    <Save size={18} />
+                                    Save Changes
+                                </button>
                             </div>
 
-                            {/* General Settings */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 h-fit">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">General Configuration</h3>
+                            {/* Body */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 flex flex-col gap-8">
 
-                                <div className="space-y-6">
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                                            DAR Buffer Time (Minutes)
-                                        </label>
-                                        <p className="text-xs text-slate-500 mb-3">
-                                            Grace period allowing users to log tasks into the near future.
-                                        </p>
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="number"
-                                                value={bufferTime}
-                                                onChange={(e) => setBufferTime(e.target.value)}
-                                                className="w-24 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold text-center"
-                                            />
-                                            <span className="text-sm font-medium text-slate-500">minutes</span>
-                                        </div>
-                                    </div>
+                                {/* Section 1: Categories */}
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Activity Categories</h3>
+                                    <p className="text-sm text-slate-500 mb-6">Manage standard activities available for employees to select properly.</p>
 
-                                    <div className="pt-6 border-t border-slate-100 dark:border-slate-700">
+                                    <div className="flex gap-3 mb-6">
+                                        <input
+                                            type="text"
+                                            value={newCat}
+                                            onChange={(e) => setNewCat(e.target.value)}
+                                            placeholder="Enter new category..."
+                                            className="flex-1 px-5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                        />
                                         <button
-                                            onClick={handleSaveSettings}
-                                            className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:translate-y-[-2px] transition-transform"
+                                            type="button"
+                                            onClick={handleAddCategory}
+                                            className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors shadow-md shadow-indigo-100 dark:shadow-none"
                                         >
-                                            <Save size={18} />
-                                            Save Changes
+                                            <Plus size={20} />
                                         </button>
                                     </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {categories.map((cat, i) => (
+                                            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl group hover:border-indigo-200 dark:hover:border-indigo-900 transition-all shadow-sm">
+                                                <span className="font-semibold text-slate-700 dark:text-slate-200 truncate pr-2" title={cat}>{cat}</span>
+                                                <button
+                                                    onClick={() => handleRemoveCategory(cat)}
+                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {categories.length === 0 && (
+                                            <div className="col-span-full flex flex-col items-center justify-center p-10 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 italic">
+                                                <Settings size={32} className="mb-2 opacity-20" />
+                                                No categories defined. Add one above.
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+
+                                <div className="w-full h-[1px] bg-slate-100 dark:bg-slate-700"></div>
+
+                                {/* Section 2: Buffer Time */}
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Grace Period Buffer</h3>
+                                        <p className="text-sm text-slate-500 max-w-md">
+                                            Time in minutes allowed after the current time for 'Execution Mode' tasks.
+                                            Tasks logged after this buffer will be marked as future planning.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <button
+                                            onClick={() => setBufferTime(Math.max(0, bufferTime - 5))}
+                                            className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all font-bold text-lg"
+                                        >-</button>
+                                        <div className="w-16 text-center font-bold text-lg text-slate-700 dark:text-white">
+                                            {bufferTime}m
+                                        </div>
+                                        <button
+                                            onClick={() => setBufferTime(bufferTime + 5)}
+                                            className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all font-bold text-lg"
+                                        >+</button>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     )}
@@ -1047,136 +1498,417 @@ const DARAdmin = () => {
                     )}
 
 
-                    {/* --- INSIGHTS TAB --- */}
-                    {/* --- INSIGHTS TAB --- */}
-                    {activeTab === 'insights' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto pb-10 custom-scrollbar">
-
-                            {/* Row 1: Key Metrics (Condensed) */}
-                            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                                    <div>
-                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
-                                        <div className="text-3xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
-                                        <div className="text-xs text-emerald-500 font-bold mt-1">{stats.submittedCount}/{stats.totalEmployees} Employees</div>
+                    {/* --- REQUESTS TAB --- */}
+                    {activeTab === 'requests' && (
+                        <div className="flex h-full gap-6 pb-6">
+                            {/* Left: List */}
+                            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 dark:border-slate-700 space-y-3 bg-white dark:bg-dark-card z-10">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-bold text-slate-800 dark:text-white">Requests</h3>
+                                        <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-bold">{requests.length} Total</span>
                                     </div>
-                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-full">
-                                        <FileText size={24} className="text-emerald-500" />
-                                    </div>
-                                </div>
-                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                                    <div>
-                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Top Activity</div>
-                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate">{stats.topActivity}</div>
-                                        <div className="text-xs text-slate-400 font-bold mt-1">{stats.topActivityPercent}% of total time</div>
-                                    </div>
-                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-full">
-                                        <BarChart3 size={24} className="text-indigo-500" />
+                                    <div className="relative">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            value={requestSearch}
+                                            onChange={(e) => setRequestSearch(e.target.value)}
+                                            placeholder="Search by employee name..."
+                                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                        />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Chart 1: Hours by Category (Donut) */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <PieChart size={20} className="text-indigo-500" /> Hours by Category
-                                </h3>
-                                <div className="flex-1 w-full min-h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={categoryData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                            >
-                                                {categoryData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip
-                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                            />
-                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            {/* Chart 2: Daily Submission Compliance (Bar) */}
-                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <Users size={20} className="text-emerald-500" /> Submission Compliance
-                                </h3>
-                                <div className="flex-1 w-full min-h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                                            <Tooltip
-                                                cursor={{ fill: '#F1F5F9' }}
-                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                            />
-                                            <Legend verticalAlign="top" height={36} iconType="circle" />
-                                            <Bar dataKey="submitted" name="Submitted" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} barSize={30} />
-                                            <Bar dataKey="pending" name="Pending" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={30} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            {/* Chart 3: Pending DAR Edit Requests */}
-                            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                                    <FileText size={20} className="text-amber-500" /> Pending Edit Requests
-                                </h3>
-
-                                <div className="flex-1 w-full flex flex-col gap-3">
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                                     {loadingRequests ? (
                                         <div className="text-center py-10 text-slate-400">Loading requests...</div>
                                     ) : requests.length === 0 ? (
-                                        <div className="text-center py-10 text-slate-400 italic bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                                            No pending requests found.
-                                        </div>
+                                        <div className="text-center py-10 text-slate-400 italic">No requests found.</div>
                                     ) : (
-                                        requests.map(req => (
-                                            <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-800 dark:text-white">{req.user}</span>
-                                                    <span className="text-xs text-slate-500">Requested for <span className="font-mono">{req.date}</span> • {req.changes} items</span>
+                                        requests.filter(req => req.user.toLowerCase().includes(requestSearch.toLowerCase())).map(req => (
+                                            <div
+                                                key={req.id}
+                                                onClick={() => setSelectedRequest(req)}
+                                                className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${selectedRequest?.id === req.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200'}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>{req.user}</span>
+                                                    <span className="text-[10px] text-slate-400 font-mono">{req.date}</span>
                                                 </div>
-                                                <button
-                                                    onClick={() => setSelectedRequest(req)}
-                                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition"
-                                                >
-                                                    Review Changes
-                                                </button>
+                                                <div className="text-xs text-slate-500 mb-2">{req.changes} changes proposed</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{req.status}</span>
+                                                </div>
                                             </div>
                                         ))
                                     )}
                                 </div>
                             </div>
 
+                            {/* Right: Details */}
+                            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col relative">
+                                {selectedRequest ? (
+                                    <RequestReviewModal
+                                        isOpen={true}
+                                        onClose={() => setSelectedRequest(null)}
+                                        request={selectedRequest}
+                                        onApprove={() => handleApproveRequest(selectedRequest.id)}
+                                        onReject={() => handleRejectRequest(selectedRequest.id)}
+                                        inline={true}
+                                    />
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
+                                        <FileText size={48} className="mb-4 opacity-50" />
+                                        <span className="text-lg font-medium">Select a request to view details</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                    )}
+
+                    {/* --- INSIGHTS TAB --- */}
+                    {activeTab === 'insights' && (
+                        <div className="flex flex-col gap-6 h-full overflow-y-auto pb-10 custom-scrollbar pr-2">
+
+                            {/* --- Enhanced Filter Bar (Real-time Monitoring Card) --- */}
+                            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-0 z-30">
+                                <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Real-time Monitoring</h2>
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                            Live
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        <div className="relative">
+                                            <select
+                                                value={filters.dept}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, dept: e.target.value }))}
+                                                className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                                            >
+                                                <option value="All">All Depts</option>
+                                                {departments.map(d => (
+                                                    <option key={d} value={d}>{d}</option>
+                                                ))}
+                                            </select>
+                                            <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                                        </div>
+
+                                        {/* Preserved Controls */}
+                                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 hidden md:flex">
+                                            <input
+                                                type="date"
+                                                value={filters.startDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                className="bg-transparent text-xs font-bold text-slate-600 dark:text-slate-300 outline-none w-[90px]"
+                                            />
+                                            <span className="text-slate-400 font-bold">-</span>
+                                            <input
+                                                type="date"
+                                                value={filters.endDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                className="bg-transparent text-xs font-bold text-slate-600 dark:text-slate-300 outline-none w-[90px]"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={fetchInsights}
+                                            className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all shadow-sm active:scale-95"
+                                            title="Refresh Data"
+                                        >
+                                            <RefreshCw size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
+                                        <div className="text-2xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
+                                        <div className="text-[10px] text-emerald-500 font-bold mt-1">
+                                            {Math.round(stats.submittedCount)}/{stats.totalEmployees} Employees
+                                        </div>
+                                    </div>
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-full">
+                                        <FileText size={20} className="text-emerald-500" />
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div className="min-w-0 flex-1 mr-3">
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Top Activity</div>
+                                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate" title={stats.topActivity}>{stats.topActivity}</div>
+                                        <div className="text-[10px] text-slate-400 font-bold mt-1 truncate">{stats.topActivityPercent}% of total time</div>
+                                    </div>
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-2.5 rounded-full flex-shrink-0">
+                                        <BarChart3 size={20} className="text-indigo-500" />
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Avg Work Hours</div>
+                                        <div className="text-2xl font-black text-purple-600 dark:text-purple-400">{stats.avgHours || 0}</div>
+                                        <div className="text-[10px] font-bold mt-1 flex items-center gap-1">
+                                            {stats.avgTrend === 'up' && <span className="text-emerald-500">↑ {stats.avgDiff}% vs last period</span>}
+                                            {stats.avgTrend === 'down' && <span className="text-red-500">↓ {stats.avgDiff}% vs last period</span>}
+                                            {stats.avgTrend === 'neutral' && <span className="text-slate-400">- 0% vs last period</span>}
+                                        </div>
+                                    </div>
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-full">
+                                        <Clock size={20} className="text-purple-500" />
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Avg Idle Time</div>
+                                        <div className="text-2xl font-black text-orange-500 dark:text-orange-400">{stats.avgIdle}h</div>
+                                        <div className="text-[10px] text-slate-400 font-bold mt-1">Inter-activity gaps</div>
+                                    </div>
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2.5 rounded-full">
+                                        <Clock size={20} className="text-orange-500" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Workload Trend (Area Chart) */}
+                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <BarChart3 size={20} className="text-indigo-500" /> Organization Workload Trend
+                                    </h3>
+                                    <div className="flex items-center gap-2 flex-wrap max-w-[50%] justify-end">
+                                        {chartKeys.map((key, i) => (
+                                            <span key={key} className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6] }}></div> {key}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="w-full h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                                            <defs>
+                                                {chartKeys.map((key, i) => (
+                                                    <linearGradient key={key} id={`color${key}`} x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]} stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]} stopOpacity={0} />
+                                                    </linearGradient>
+                                                ))}
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                            <XAxis
+                                                dataKey="date"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                                                dy={10}
+                                            />
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                                            />
+
+
+
+
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                itemStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}
+                                                labelStyle={{ color: '#64748b', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}
+                                                formatter={(value, name) => [formatDuration(value), name]}
+                                            />
+
+                                            {chartKeys.map((key, i) => (
+                                                <Area
+                                                    key={key}
+                                                    type="monotone"
+                                                    dataKey={key}
+                                                    stackId="1"
+                                                    stroke={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]}
+                                                    fillOpacity={1}
+                                                    fill={`url(#color${key})`}
+                                                />
+                                            ))}
+                                            {chartKeys.length === 0 && (
+                                                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="14">
+                                                    No data for selected range
+                                                </text>
+                                            )}
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Row 3: Department Breakdown & Capacity Alerts */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Department Activity Stacked Bar */}
+                                <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <Building size={20} className="text-orange-500" /> Department Focus
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[300px] max-h-[400px] overflow-y-auto custom-scrollbar">
+                                        <div style={{ height: Math.max(300, deptData.length * 60) }}>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={deptData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
+                                                    <XAxis type="number" hide />
+                                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 13, fontWeight: 600, fill: '#475569' }} width={100} />
+                                                    <Tooltip
+                                                        cursor={{ fill: '#F8FAFC' }}
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        formatter={(value, name) => [formatDuration(value), name]}
+                                                    />
+                                                    {chartKeys.map((key, i) => (
+                                                        <Bar
+                                                            key={key}
+
+                                                            dataKey={key}
+                                                            stackId="a"
+                                                            fill={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'][i % 6]}
+                                                            radius={[0, 4, 4, 0]}
+                                                            barSize={20}
+                                                        />
+                                                    ))}
+                                                    {deptData.length === 0 && (
+                                                        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="14">
+                                                            No department data
+                                                        </text>
+                                                    )}
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                                {/* Employee Consistency */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                            <FileText size={20} className="text-indigo-500" /> Employee Consistency
+                                        </h3>
+                                        <div className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600">
+                                            Target: {consistencyData[0]?.target || 0} Reports
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar max-h-[300px]">
+                                        {consistencyData.map((user, i) => {
+                                            const pct = user.pct;
+                                            let barColor = 'bg-emerald-500';
+                                            if (pct < 50) barColor = 'bg-red-500';
+                                            else if (pct < 80) barColor = 'bg-amber-400';
+
+                                            return (
+                                                <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                    <div className="flex-1 min-w-0 mr-4">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{user.name}</div>
+                                                            <div className="text-[10px] font-bold text-slate-400">{user.dars}/{user.target} Reports</div>
+                                                        </div>
+                                                        {/* Progress Bar */}
+                                                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${barColor} rounded-full`} style={{ width: `${Math.min(100, pct)}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                    <div className={`text-xs font-black px-2 py-1 rounded-lg ${pct < 50 ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : pct < 80 ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'}`}>
+                                                        {Math.round(pct)}%
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Row 4: Category Pie & Compliance Bar (Existing, just moved down) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Chart 3: Time Investment (Donut) */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <PieChartIcon size={20} className="text-purple-500" /> Time Investment
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[250px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={categoryData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={50}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {categoryData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip
+                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    formatter={(value) => [formatDuration(value), 'Hours']}
+                                                />
+                                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Chart 4: Daily Submission Compliance (Bar) */}
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                                        <Users size={20} className="text-emerald-500" /> Submission Compliance
+                                    </h3>
+                                    <div className="flex-1 w-full min-h-[250px] overflow-x-auto custom-scrollbar pb-2">
+                                        <div style={{ width: `${Math.max(100, complianceData.length * 150)}px`, height: '100%', minWidth: '100%' }}>
+                                            <ResponsiveContainer width="100%" height={250}>
+                                                <BarChart data={complianceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} dy={10} interval={0} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 'bold' }} domain={[0, 100]} />
+                                                    <Tooltip
+                                                        cursor={{ fill: '#F1F5F9' }}
+                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        formatter={(value) => [`${value}%`, 'Compliance']}
+                                                    />
+                                                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
+                                                        {complianceData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.value < 50 ? '#ef4444' : entry.value < 80 ? '#f59e0b' : '#10b981'} />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div >
                     )}
 
                     {/* Diff Modal */}
                     {/* Premium Diff Review Modal */}
-                    <RequestReviewModal
-                        isOpen={!!selectedRequest}
-                        onClose={() => setSelectedRequest(null)}
-                        request={selectedRequest}
-                        onApprove={() => handleApproveRequest(selectedRequest?.id)}
-                        onReject={() => handleRejectRequest(selectedRequest?.id)}
-                    />
+                    {/* Diff Modal - Only show as modal if NOT in requests tab (where it is inline) */}
+                    {
+                        activeTab !== 'requests' && (
+                            <RequestReviewModal
+                                isOpen={!!selectedRequest}
+                                onClose={() => setSelectedRequest(null)}
+                                request={selectedRequest}
+                                onApprove={() => handleApproveRequest(selectedRequest?.id)}
+                                onReject={() => handleRejectRequest(selectedRequest?.id)}
+                            />
+                        )
+                    }
 
-                </div>
-            </div>
-        </DashboardLayout>
+                </div >
+            </div >
+        </Wrapper >
     );
 };
 

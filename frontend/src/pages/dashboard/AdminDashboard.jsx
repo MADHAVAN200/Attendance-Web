@@ -34,6 +34,7 @@ import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
+    const { avatarTimestamp } = useAuth();
     const [stats, setStats] = React.useState({
         presentToday: 0,
         totalEmployees: 0,
@@ -374,8 +375,8 @@ const AdminDashboard = () => {
                                             activities.map((activity) => (
                                                 <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0">
                                                     <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-indigo-600 dark:text-indigo-400 overflow-hidden">
-                                                        {activity.avatar_url || activity.profile_image_url ? (
-                                                            <img src={activity.avatar_url || activity.profile_image_url} alt={activity.user} className="w-full h-full object-cover" />
+                                                        {activity.profile_image_url ? (
+                                                            <img src={`${activity.profile_image_url}?t=${avatarTimestamp}`} alt={activity.user} className="w-full h-full object-cover" />
                                                         ) : (
                                                             activity.user?.charAt(0) || '?'
                                                         )}

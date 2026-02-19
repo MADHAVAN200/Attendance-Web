@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 
 /**
  * Hourly Attendance Processor
@@ -10,7 +10,7 @@ export async function processHourlyAttendance() {
     console.log('⏰ Hourly Attendance Check Started...');
 
     // 1. Get all active users with their Shift Policy and Org Timezone
-    const users = await knexDB('users')
+    const users = await attendanceDB('users')
         .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
         .leftJoin('user_work_locations', 'users.user_id', 'user_work_locations.user_id')
         .leftJoin('work_locations', 'user_work_locations.location_id', 'work_locations.location_id')
@@ -20,6 +20,7 @@ export async function processHourlyAttendance() {
             'users.org_id',
             'users.shift_id',
             'shifts.policy_rules', // Fetch JSON rules instead of missing columns
+            'shifts.processing_time', // Configurable auto-close time (Default 02:00:00)
             'work_locations.timezone', // Location timezone (optional/unused priority)
             'organizations.timezone as org_timezone' // Fallback 2
         );
@@ -34,7 +35,7 @@ export async function processHourlyAttendance() {
             let timeZone = user.org_timezone || 'UTC';
 
             // Fetch last attendance record to see where they last checked in
-            const lastRecord = await knexDB('attendance_records')
+            const lastRecord = await attendanceDB('attendance_records')
                 .where({ user_id: user.user_id })
                 .orderBy('created_at', 'desc')
                 .limit(1)
@@ -54,14 +55,31 @@ export async function processHourlyAttendance() {
                 }
             }
 
+            // Validate timezone before usage
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone });
+            } catch (e) {
+                // If invalid (e.g. "Simulated Timezone"), fallback to UTC to prevent crash
+                timeZone = 'UTC';
+            }
+
             // Get Current Time in Target Timezone
             // We use 'en-US' locale hack to get params
             const nowInUserTZ = new Date(new Date().toLocaleString('en-US', { timeZone }));
             const currentHour = nowInUserTZ.getHours();
 
-            // 🎯 Target Window: 02:00 AM - 02:59 AM
-            // If it is 2 AM for the user, we process "Yesterday"
-            if (currentHour === 2) {
+            // 🎯 Target Window: Matching the Shift's Processing Time
+            // Default is 02:00:00. Night shifts might be 14:00:00 (2 PM).
+
+            let targetHour = 2; // Default
+            if (user.processing_time) {
+                // processing_time is likely a string "HH:mm:ss"
+                const [h] = user.processing_time.split(':');
+                targetHour = parseInt(h, 10);
+            }
+
+            // If it is the Target Processing Hour for the user, we process "Yesterday"
+            if (currentHour === targetHour) {
                 const yesterday = new Date(nowInUserTZ);
                 yesterday.setDate(yesterday.getDate() - 1);
                 const targetDate = yesterday.toISOString().split('T')[0];
@@ -79,7 +97,7 @@ export async function processHourlyAttendance() {
 
 async function processUserAttendanceForDate(user, dateStr) {
     // 1. Check if Record Exists
-    const record = await knexDB('daily_attendance')
+    const record = await attendanceDB('daily_attendance')
         .where({ user_id: user.user_id, date: dateStr })
         .first();
 
@@ -108,12 +126,12 @@ async function processUserAttendanceForDate(user, dateStr) {
             // Auto Checkout Logic (at shift end)
             const autoOutTime = `${dateStr} ${shiftEndTime}`;
 
-            await knexDB('daily_attendance')
+            await attendanceDB('daily_attendance')
                 .where({ attendance_id: record.attendance_id })
                 .update({
                     time_out: autoOutTime,
                     status: 'Present', // Or 'Incomplete'
-                    updated_at: knexDB.fn.now()
+                    updated_at: attendanceDB.fn.now()
                 });
         }
     } else {
@@ -122,7 +140,7 @@ async function processUserAttendanceForDate(user, dateStr) {
         let remarks = 'No show';
 
         // A. Check Holiday
-        const holiday = await knexDB('holidays')
+        const holiday = await attendanceDB('holidays')
             .where({ org_id: user.org_id, holiday_date: dateStr })
             .first();
 
@@ -132,7 +150,7 @@ async function processUserAttendanceForDate(user, dateStr) {
         }
         else {
             // B. Check Leave
-            const leave = await knexDB('leave_requests')
+            const leave = await attendanceDB('leave_requests')
                 .where({ user_id: user.user_id, status: 'Approved' })
                 .where('start_date', '<=', dateStr)
                 .where('end_date', '>=', dateStr)
@@ -165,13 +183,13 @@ async function processUserAttendanceForDate(user, dateStr) {
         }
 
         // Insert Missing Record
-        await knexDB('daily_attendance').insert({
+        await attendanceDB('daily_attendance').insert({
             user_id: user.user_id,
             org_id: user.org_id,
             date: dateStr,
             status: status,
-            created_at: knexDB.fn.now(),
-            updated_at: knexDB.fn.now()
+            created_at: attendanceDB.fn.now(),
+            updated_at: attendanceDB.fn.now()
         });
 
         console.log(`📝 Marked User ${user.user_id} as ${status} for ${dateStr}`);

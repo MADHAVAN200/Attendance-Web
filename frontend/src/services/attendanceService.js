@@ -79,10 +79,23 @@ export const attendanceService = {
         }
     },
 
+    // Get Specific User's Daily Records (Admin Correction Context)
+    async getUserDailyRecords(userId, date) {
+        if (!userId || !date) return [];
+        let url = `${API_BASE_URL}/records/admin?user_id=${userId}&date_from=${date}&date_to=${date}`;
+        try {
+            const res = await api.get(url);
+            return res.data; // Helper to return just data array
+        } catch (error) {
+            console.error("Failed to fetch user records", error);
+            return [];
+        }
+    },
+
     // Download My Monthly Report
     async downloadMyReport(month, format = "xlsx") {
         try {
-            const url = `${API_BASE_URL}/reports/download?month=${month}&type=attendance_detailed&format=${format}`;
+            const url = `${API_BASE_URL}/records/export?month=${month}&format=${format}`;
             const response = await api.get(url, { responseType: 'blob' });
             return response.data;
         } catch (error) {
@@ -123,11 +136,12 @@ export const attendanceService = {
     },
 
     // Update correction status (Admin only)
-    async updateCorrectionStatus(acr_id, status, review_comments) {
+    async updateCorrectionStatus(acr_id, status, review_comments, overrides = {}) {
         try {
             const res = await api.patch(`${API_BASE_URL}/correct-request/${acr_id}`, {
                 status,
-                review_comments
+                review_comments,
+                ...overrides
             });
             return res.data;
         } catch (error) {
@@ -144,3 +158,4 @@ export const attendanceService = {
         }
     },
 };
+    

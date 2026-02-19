@@ -20,7 +20,7 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const { logout, user } = useAuth();
+    const { logout, user, avatarTimestamp } = useAuth();
 
     // Initialize theme from localStorage or default to 'light'
     const [theme, setTheme] = useState(() => {
@@ -52,8 +52,8 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col relative w-full min-w-0">
-                {/* Header */}
-                <header className="h-16 bg-white dark:bg-dark-bg border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-10 z-10 shadow-sm shrink-0 transition-colors duration-300 sticky top-0">
+                {/* Header - Fixed */}
+                <header className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-white dark:bg-dark-bg border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-10 z-[1200] shadow-sm shrink-0 transition-colors duration-300">
                     <div className="flex items-center gap-4">
                         <button
                             className="md:hidden p-2 bg-slate-100 dark:bg-slate-800 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300"
@@ -105,9 +105,9 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                                     </p>
                                 </div>
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border-2 border-white dark:border-slate-700 shadow-sm text-sm sm:text-base cursor-pointer overflow-hidden">
-                                    {useAuth().user?.avatar_url || useAuth().user?.profile_image_url ? (
+                                    {useAuth().user?.profile_image_url ? (
                                         <img
-                                            src={useAuth().user?.avatar_url || useAuth().user?.profile_image_url}
+                                            src={`${useAuth().user?.profile_image_url}?t=${avatarTimestamp}`}
                                             alt="Profile"
                                             className="w-full h-full object-cover"
                                         />
@@ -159,7 +159,7 @@ const DashboardLayout = ({ children, title = "Dashboard" }) => {
                 </header>
 
                 {/* Scrollable Content Area */}
-                <main className="flex-1 p-4 sm:p-8 bg-slate-50/50 dark:bg-dark-bg transition-colors duration-300">
+                <main className="flex-1 p-4 sm:p-8 bg-slate-50/50 dark:bg-dark-bg transition-colors duration-300 mt-16">
                     {children}
                 </main>
             </div>

@@ -1,20 +1,17 @@
 import express from "express";
-import { knexDB } from "../database.js";
+import multer from "multer";
+import ExcelJS from "exceljs";
+import catchAsync from "../utils/catchAsync.js";
+import { attendanceDB } from "../database.js";
 import { authenticateJWT } from '../middleware/auth.js';
 import { fetchTimeStamp, coordsToAddress } from "../Google_API/Maps.js";
-import multer from "multer";
-import { uploadFile, getFileUrl, listFiles, uploadCompressedImage } from "../s3/s3Service.js";
-import EventBus from "../utils/EventBus.js";
+import { getFileUrl } from "../s3/s3Service.js";
 import { getEventSource } from "../utils/clientInfo.js";
-import catchAsync from "../utils/catchAsync.js";
-import { PolicyService } from "./PolicyEngine.js";
-import { verifyUserGeofence } from "./Geofencing.js";
+import { AttendanceService } from "./AttendanceService.js";
 
 const router = express.Router();
 const upload = multer(); // store files in memory
 
-
-import { AttendanceService } from "./AttendanceService.js";
 
 // Helper: Fetch User Shift (Moved to Service, but checking if still needed here)
 // It is not needed here if we delegate to Service.
@@ -72,6 +69,7 @@ router.post("/timein", authenticateJWT, upload.single("image"),
   })
 );
 
+
 // POST /attendance/checkout
 router.post("/timeout", authenticateJWT, upload.single("image"),
   catchAsync(async (req, res) => {
@@ -118,6 +116,7 @@ router.post("/timeout", authenticateJWT, upload.single("image"),
     return res.json(result);
   })
 );
+
 
 // --- SIMULATION ENDPOINTS ---
 
@@ -226,24 +225,25 @@ router.post("/simulate/timeout", authenticateJWT, upload.single("image"),
   })
 );
 
+
 // Admin attendance records and images with admin role check
 router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
   // try removed
-  if (req.user.user_type !== "admin" && req.user.user_type !== "HR") {
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
     return res.status(403).json({ ok: false, message: "Access denied" });
   }
 
   const { user_id, date_from, date_to, limit = 50 } = req.query;
 
-  let query = knexDB("attendance_records")
+  let query = attendanceDB("attendance_records")
     .join("users", "attendance_records.user_id", "users.user_id")
     .leftJoin("designations", "users.desg_id", "designations.desg_id")
     .select(
       "attendance_records.*",
-      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts"),
       "users.user_name",
       "users.email",
       "designations.desg_name as designation"
@@ -293,19 +293,20 @@ router.get("/records/admin", authenticateJWT, catchAsync(async (req, res) => {
   res.json({ ok: true, data: withUrls });
 }));
 
+
 // Normal user fetch their own records with optional limit and date filter
 router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
   const userId = req.user.user_id;
   const { date_from, date_to, limit = 50 } = req.query;
 
-  let query = knexDB("attendance_records")
+  let query = attendanceDB("attendance_records")
     .where("user_id", userId)
     .select(
       "attendance_records.*",
-      knexDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
-      knexDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
     )
     .orderBy("time_in", "desc")
     .limit(Math.min(parseInt(limit), 100)); // max limit 100
@@ -353,309 +354,410 @@ router.get("/records", authenticateJWT, catchAsync(async (req, res) => {
   res.json({ ok: true, data: withUrls });
 }));
 
-router.post("/correction-request", authenticateJWT, async (req, res) => {
-  try {
-    const {
-      attendance_id,
-      correction_type,
-      request_date,
-      requested_time_in,
-      requested_time_out,
-      location_id,
-      reason
-    } = req.body;
 
-    const user_id = req.user.user_id;
-    const org_id = req.user.org_id;
+router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) => {
+  const {
+    correction_type,
+    request_date,
+    requested_time_in,
+    requested_time_out,
+    reason,
+    correction_method, // 'fix', 'add_session', 'reset'
+    sessions // Array for add_session
+  } = req.body;
 
-    if (!correction_type || !request_date || !reason) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+  const user_id = req.user.user_id;
+  const org_id = req.user.org_id;
 
-    if (!attendance_id && !location_id) {
-      return res.status(400).json({ error: "Location is required for missed punch requests" });
-    }
-
-    const [id] = await knexDB("attendance_correction_requests").insert({
-      org_id,
-      user_id,
-      attendance_id,
-      correction_type,
-      request_date,
-      requested_time_in,
-      requested_time_out,
-      location_id: location_id || null,
-      reason,
-      status: "pending",
-      audit_trail: JSON.stringify([
-        { action: "submitted", by: user_id, at: new Date() }
-      ])
-    });
-
-    res.status(201).json({
-      message: "Correction request submitted",
-      acr_id: id
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to submit correction" });
+  if (!correction_type || !request_date || !reason) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
-});
 
-router.get("/correction-requests", authenticateJWT, async (req, res) => {
-  try {
-    const { status, date, month, year, page = 1, limit = 10 } = req.query;
-    const org_id = req.user.org_id;
-    const user_id = req.user.user_id;
-    const user_type = req.user.user_type;
+  // Prepare metadata
+  const validMethods = ['fix', 'add_session', 'reset'];
+  const method = validMethods.includes(correction_method) ? correction_method : 'fix';
 
-    const offset = (page - 1) * limit;
+  const correctionData = {};
 
-    const data = await knexDB("attendance_correction_requests as acr")
-      .join("users as u", "u.user_id", "acr.user_id")
-      .where("acr.org_id", org_id)
-      .modify(qb => {
-        if (user_type !== "admin") qb.where("acr.user_id", user_id);
-        if (status) qb.where("acr.status", status);
-        if (date) qb.where("acr.request_date", date);
-        if (month) qb.whereRaw('MONTH(acr.request_date) = ?', [month]);
-        if (year) qb.whereRaw('YEAR(acr.request_date) = ?', [year]);
-      })
-      .select(
-        "acr.acr_id",
-        "acr.attendance_id",
-        "acr.correction_type",
-        "acr.request_date",
-        "acr.status",
-        "acr.submitted_at",
-        "u.user_id",
-        "u.user_name",
-        "u.desg_id"
-      )
-      .orderBy("acr.submitted_at", "desc")
-      .limit(limit)
-      .offset(offset);
-
-    const countResult = await knexDB("attendance_correction_requests")
-      .where("org_id", org_id)
-      .modify(qb => {
-        if (user_type !== "admin") qb.where("user_id", user_id);
-        if (status) qb.where("status", status);
-        if (date) qb.where("request_date", date);
-        if (month) qb.whereRaw('MONTH(request_date) = ?', [month]);
-        if (year) qb.whereRaw('YEAR(request_date) = ?', [year]);
-      })
-      .count("* as total")
-      .first();
-
-    res.json({
-      data,
-      count: Number(countResult.total)
-    });
-
-  } catch (err) {
-    console.error("ATTENDANCE CORRECTIONS ERROR →", err);
-    res.status(500).json({
-      error: "Failed to fetch corrections",
-      message: err.message
-    });
+  if (method === 'add_session' || method === 'fix') {
+    if (sessions && Array.isArray(sessions)) {
+      correctionData.sessions = sessions;
+    }
+  } else if (method === 'reset') {
+    correctionData.time_in = requested_time_in;
+    correctionData.time_out = requested_time_out;
   }
-});
 
-router.get(
-  "/correction-request/:acr_id",
-  authenticateJWT,
-  async (req, res) => {
-    try {
-      const { acr_id } = req.params;
-      const org_id = req.user.org_id;
-      const user_id = req.user.user_id;
-      const role = req.user.user_type;
+  const [id] = await attendanceDB("attendance_correction_requests").insert({
+    org_id,
+    user_id,
+    correction_type,
+    request_date,
+    correction_data: JSON.stringify(correctionData),
+    reason,
+    status: "pending",
+    correction_method: method,
+    audit_trail: JSON.stringify([
+      { action: "submitted", by: user_id, at: new Date() }
+    ])
+  });
 
-      let query = knexDB("attendance_correction_requests as acr")
-        .join("users as u", "u.user_id", "acr.user_id")
-        .leftJoin("designations as d", "d.desg_id", "u.desg_id")
-        .leftJoin("work_locations as wl", "wl.location_id", "acr.location_id")
-        .select(
-          "acr.acr_id",
-          "acr.attendance_id",
-          "acr.correction_type",
-          "acr.request_date",
-          "acr.requested_time_in",
-          "acr.requested_time_out",
-          "acr.reason",
-          "acr.status",
-          "acr.reviewed_by",
-          "acr.reviewed_at",
-          "acr.review_comments",
-          "acr.audit_trail",
-          "acr.submitted_at",
-          "u.user_id",
-          "u.user_name",
-          "d.desg_name as designation",
-          "wl.location_name"
-        )
-        .where("acr.acr_id", acr_id)
-        .andWhere("acr.org_id", org_id);
+  res.status(201).json({
+    message: "Correction request submitted",
+    acr_id: id
+  });
 
-      // 🔐 Access control
-      if (role !== "admin") {
-        query.andWhere("acr.user_id", user_id);
-      }
+}));
 
-      const correction = await query.first();
 
-      if (!correction) {
-        return res.status(404).json({ error: "Request not found" });
-      }
+router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) => {
+  const { status, date, month, year, page = 1, limit = 10 } = req.query;
+  const org_id = req.user.org_id;
+  const user_id = req.user.user_id;
+  const user_type = req.user.user_type;
 
-      if (correction.audit_trail) {
-        if (typeof correction.audit_trail === "string") {
-          try {
-            correction.audit_trail = JSON.parse(correction.audit_trail);
-          } catch {
-            correction.audit_trail = [];
-          }
-        }
-      } else {
+  const offset = (page - 1) * limit;
+
+  const data = await attendanceDB("attendance_correction_requests as acr")
+    .join("users as u", "u.user_id", "acr.user_id")
+    .where("acr.org_id", org_id)
+    .modify(qb => {
+      if (user_type !== "admin") qb.where("acr.user_id", user_id);
+      if (status) qb.where("acr.status", status);
+      if (date) qb.where("acr.request_date", date);
+      if (month) qb.whereRaw('MONTH(acr.request_date) = ?', [month]);
+      if (year) qb.whereRaw('YEAR(acr.request_date) = ?', [year]);
+    })
+    .select(
+      "acr.acr_id",
+      "acr.correction_type",
+      "acr.request_date",
+      "acr.correction_data",
+      "acr.status",
+      "acr.reason",
+      "acr.submitted_at",
+      "u.user_id",
+      "u.user_name",
+      "u.desg_id"
+    )
+    .orderBy("acr.submitted_at", "desc")
+    .limit(limit)
+    .offset(offset);
+
+  const countResult = await attendanceDB("attendance_correction_requests")
+    .where("org_id", org_id)
+    .modify(qb => {
+      if (user_type !== "admin") qb.where("user_id", user_id);
+      if (status) qb.where("status", status);
+      if (date) qb.where("request_date", date);
+      if (month) qb.whereRaw('MONTH(request_date) = ?', [month]);
+      if (year) qb.whereRaw('YEAR(request_date) = ?', [year]);
+    })
+    .count("* as total")
+    .first();
+
+  res.json({
+    data,
+    count: Number(countResult.total)
+  });
+
+}));
+
+
+router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req, res) => {
+  const { acr_id } = req.params;
+  const org_id = req.user.org_id;
+  const user_id = req.user.user_id;
+  const role = req.user.user_type;
+
+  let query = attendanceDB("attendance_correction_requests as acr")
+    .join("users as u", "u.user_id", "acr.user_id")
+    .leftJoin("designations as d", "d.desg_id", "u.desg_id")
+    .select(
+      "acr.acr_id",
+      "acr.correction_type",
+      "acr.request_date",
+      "acr.correction_data",
+      "acr.reason",
+      "acr.status",
+      "acr.reviewed_by",
+      "acr.reviewed_at",
+      "acr.review_comments",
+      "acr.audit_trail",
+      "acr.submitted_at",
+      "u.user_id",
+      "u.user_name",
+      "d.desg_name as designation",
+      "acr.correction_method"
+    )
+    .where("acr.acr_id", acr_id)
+    .andWhere("acr.org_id", org_id);
+
+  // 🔐 Access control
+  if (role !== "admin") {
+    query.andWhere("acr.user_id", user_id);
+  }
+
+  const correction = await query.first();
+
+  if (!correction) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+
+  if (correction.audit_trail) {
+    if (typeof correction.audit_trail === "string") {
+      try {
+        correction.audit_trail = JSON.parse(correction.audit_trail);
+      } catch {
         correction.audit_trail = [];
       }
-
-      res.json(correction);
-
-    } catch (err) {
-      console.error("FETCH CORRECTION ERROR →", err);
-      res.status(500).json({
-        error: "Failed to fetch correction",
-        message: err.message
-      });
     }
+  } else {
+    correction.audit_trail = [];
   }
+
+  res.json(correction);
+
+})
 );
 
-router.patch(
-  "/correct-request/:acr_id",
-  authenticateJWT,
-  async (req, res) => {
+
+router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req, res) => {
+  const { acr_id } = req.params;
+  const { status, review_comments } = req.body;
+
+  const org_id = req.user.org_id;
+  const reviewer_id = req.user.user_id;
+  const role = req.user.user_type;
+
+  if (role !== "admin") {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  const correction = await attendanceDB("attendance_correction_requests")
+    .where({ acr_id, org_id })
+    .first();
+
+  if (!correction) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+
+  let auditTrail = [];
+
+  if (correction.audit_trail) {
+    if (typeof correction.audit_trail === "string") {
+      try {
+        auditTrail = JSON.parse(correction.audit_trail);
+      } catch {
+        auditTrail = [];
+      }
+    } else {
+      auditTrail = correction.audit_trail;
+    }
+  }
+
+  auditTrail.push({
+    action: status,
+    by: reviewer_id,
+    at: new Date(),
+    comments: review_comments || null
+  });
+
+  await attendanceDB("attendance_correction_requests")
+    .where({ acr_id, org_id })
+    .update({
+      status,
+      reviewed_by: reviewer_id,
+      reviewed_at: new Date(),
+      review_comments: review_comments || null,
+      audit_trail: JSON.stringify(auditTrail)
+    });
+
+  // --- APPLY CORRECTION IF APPROVED ---
+  if (status === 'approved') {
+    // Allow Date Override from Body
+    // Allow Date Override from Body
+    const targetDate = req.body.request_date || correction.request_date;
+    // Fix for timezone issue: Create date from string or date object but reset to local YYYY-MM-DD
+    const d = new Date(targetDate);
+    const dateStr = d.toLocaleDateString('en-CA'); // fast way to get YYYY-MM-DD in local time if system locale is standard, or just build it manually to be safe
+    // Actually, to be safer and avoid server locale dependency:
+    // We can use the offset method.
+    const offset = d.getTimezoneOffset();
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+    const finalDateStr = localDate.toISOString().split('T')[0];
+
+    // Use params from Body (Admin Override) OR DB (User Request)
+    const correction_method = req.body.correction_method || correction.correction_method || 'fix';
+    console.log("DEBUG: Correction Method:", correction_method);
+
+    // Parse Correction Data
+    let correctionData = {};
     try {
-      const { acr_id } = req.params;
-      const { status, review_comments } = req.body;
+      correctionData = typeof correction.correction_data === 'string'
+        ? JSON.parse(correction.correction_data)
+        : correction.correction_data || {};
+    } catch (e) {
+      console.error("DEBUG: JSON Parse Error for correction_data", e);
+    }
 
-      const org_id = req.user.org_id;
-      const reviewer_id = req.user.user_id;
-      const role = req.user.user_type;
+    // Override logic (Frontend can send overrides in body)
+    // If overrides exist in body, use them. Else use DB data.
+    let sessions = req.body.sessions || correctionData.sessions || [];
+    const reset_time_in = req.body.reset_time_in || correctionData.time_in;
+    const reset_time_out = req.body.reset_time_out || correctionData.time_out;
 
-      if (role !== "admin") {
-        return res.status(403).json({ error: "Access denied" });
+    const manualUpdateBase = {
+      status: 'PRESENT',
+      is_manual_adjustment: true,
+      adjusted_by: reviewer_id,
+      updated_at: attendanceDB.fn.now()
+    };
+
+    // 1. ADD REQUESTED SESSIONS (Replaces 'Fix' and 'Add Session')
+    if (correction_method === 'fix' || correction_method === 'add_session') {
+      if (sessions && Array.isArray(sessions) && sessions.length > 0) {
+        const newRecords = sessions.map(s => ({
+          user_id: correction.user_id,
+          org_id,
+          time_in: `${finalDateStr} ${(s.time_in.length === 5 ? s.time_in + ':00' : s.time_in)}`,
+          time_out: `${finalDateStr} ${(s.time_out.length === 5 ? s.time_out + ':00' : s.time_out)}`,
+          status: 'CLOSED',
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
+          time_in_address: 'Manual Correction',
+          time_out_address: 'Manual Correction',
+          is_manual: true,
+          altered_by: reviewer_id
+        }));
+
+        await attendanceDB("attendance_records").insert(newRecords);
+
+        // Sync Daily Attendance
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
+          ...manualUpdateBase,
+          is_altered: true,
+          adjustment_reason: `Correction Request #${acr_id} (Manual Correction)`
+        });
       }
+    }
 
-      if (!["approved", "rejected"].includes(status)) {
-        return res.status(400).json({ error: "Invalid status" });
-      }
+    // 3. RESET DAY (Delete + Single Session + Sync)
+    else if (correction_method === 'reset') {
+      // Delete all records for the day
+      await attendanceDB("attendance_records")
+        .where({ user_id: correction.user_id })
+        .whereRaw("DATE(time_in) = ?", [finalDateStr])
+        .del();
 
-      const correction = await knexDB("attendance_correction_requests")
-        .where({ acr_id, org_id })
-        .first();
+      // Insert Single Session
+      const tIn = reset_time_in || correction.requested_time_in;
+      const tOut = reset_time_out || correction.requested_time_out;
 
-      if (!correction) {
-        return res.status(404).json({ error: "Request not found" });
-      }
-
-      let auditTrail = [];
-
-      if (correction.audit_trail) {
-        if (typeof correction.audit_trail === "string") {
-          try {
-            auditTrail = JSON.parse(correction.audit_trail);
-          } catch {
-            auditTrail = [];
-          }
-        } else {
-          auditTrail = correction.audit_trail;
-        }
-      }
-
-      auditTrail.push({
-        action: status,
-        by: reviewer_id,
-        at: new Date(),
-        comments: review_comments || null
-      });
-
-      await knexDB("attendance_correction_requests")
-        .where({ acr_id, org_id })
-        .update({
-          status,
-          reviewed_by: reviewer_id,
-          reviewed_at: new Date(),
-          review_comments: review_comments || null,
-          audit_trail: JSON.stringify(auditTrail)
+      if (tIn && tOut) {
+        await attendanceDB("attendance_records").insert({
+          user_id: correction.user_id,
+          org_id,
+          time_in: `${finalDateStr}T${tIn}`,
+          time_out: `${finalDateStr}T${tOut}`,
+          status: 'CLOSED',
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
+          time_in_address: 'Manual Reset',
+          time_out_address: 'Manual Reset'
         });
 
-      // --- APPLY CORRECTION IF APPROVED ---
-      if (status === 'approved') {
-        // Format date for DB
-        const dateStr = new Date(correction.request_date).toISOString().split('T')[0];
-
-        const updateData = {
-          status: 'PRESENT', // default to present if approved
-          is_manual_adjustment: true,
-          adjusted_by: reviewer_id,
-          adjustment_reason: `Correction Request #${acr_id} Approved`,
-          updated_at: knexDB.fn.now()
-        };
-
-        // If times provided, apply them
-        if (correction.requested_time_in) {
-          updateData.first_in = correction.requested_time_in;
-        }
-        if (correction.requested_time_out) {
-          updateData.last_out = correction.requested_time_out;
-        }
-
-        // Calculate hours if both exist (Simple diff)
-        if (correction.requested_time_in && correction.requested_time_out) {
-          const start = new Date(`1970-01-01T${correction.requested_time_in}`);
-          const end = new Date(`1970-01-01T${correction.requested_time_out}`);
-          const diff = (end - start) / (1000 * 60 * 60);
-          if (diff > 0) updateData.total_hours = diff.toFixed(2);
-        }
-
-        // Upsert into daily_attendance
-        const existing = await knexDB("daily_attendance")
-          .where({ user_id: correction.user_id, date: dateStr })
-          .first();
-
-        if (existing) {
-          await knexDB("daily_attendance")
-            .where({ daily_id: existing.daily_id })
-            .update(updateData);
-        } else {
-          await knexDB("daily_attendance").insert({
-            user_id: correction.user_id,
-            org_id: org_id,
-            date: dateStr,
-            // defaulting shift? we might skip shift_id or query it
-            ...updateData,
-            created_at: knexDB.fn.now()
-          });
-        }
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
+          ...manualUpdateBase,
+          adjustment_reason: `Correction Request #${acr_id} (Day Reset)`
+        });
       }
-      // ------------------------------------ --
-
-      res.json({
-        message: `Request ${status} successfully`
-      });
-
-    } catch (err) {
-      console.error("UPDATE CORRECTION STATUS ERROR →", err);
-      res.status(500).json({
-        error: "Failed to update status",
-        message: err.message
-      });
     }
   }
+  // --------------------------------------
+
+  res.json({
+    message: `Request ${status} successfully`
+  });
+
+})
 );
 
+
+router.get("/records/export", authenticateJWT, catchAsync(async (req, res) => {
+  const { month } = req.query;
+  const user_id = req.user.user_id;
+  const org_id = req.user.org_id;
+
+  if (!month) {
+    return res.status(400).json({ ok: false, message: "Month (YYYY-MM) is required" });
+  }
+
+  const [yearStr, monthStr] = month.split("-");
+  const year = parseInt(yearStr);
+  const monthNum = parseInt(monthStr);
+
+  if (isNaN(year) || isNaN(monthNum)) {
+    return res.status(400).json({ ok: false, message: "Invalid month format. Use YYYY-MM." });
+  }
+
+  const startDate = `${month}-01`;
+  const lastDay = new Date(year, monthNum, 0).getDate();
+  const endDate = `${year}-${String(monthNum).padStart(2, '0')}-${lastDay}`;
+
+  const records = await attendanceDB("attendance_records")
+    .where({ user_id, org_id })
+    .whereRaw("DATE(time_in) >= ?", [startDate])
+    .whereRaw("DATE(time_in) <= ?", [endDate])
+    .orderBy("time_in", "asc");
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("My Attendance");
+
+  worksheet.columns = [
+
+    { header: "Date", key: "date", width: 12 },
+    { header: "Time In", key: "time_in", width: 15 },
+    { header: "Time Out", key: "time_out", width: 15 },
+    { header: "Total Hours", key: "total_hours", width: 12 },
+    { header: "Status", key: "status", width: 15 },
+    { header: "Late (Mins)", key: "late_minutes", width: 12 },
+    { header: "Location (In)", key: "location", width: 40 },
+    { header: "Location (Out)", key: "location_out", width: 40 }
+  ];
+
+  records.forEach(r => {
+    let duration = "0.00";
+    if (r.time_in && r.time_out) {
+      const diffMs = new Date(r.time_out) - new Date(r.time_in);
+      if (diffMs > 0) duration = (diffMs / (1000 * 60 * 60)).toFixed(2);
+    }
+
+    worksheet.addRow({
+      date: new Date(r.time_in).toLocaleDateString(),
+      time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
+      time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
+      total_hours: duration,
+      status: r.late_minutes > 0 ? "Late" : "On Time",
+      late_minutes: r.late_minutes || 0,
+      location: r.time_in_address || "-",
+      location_out: r.time_out_address || "-"
+    });
+  });
+
+  // Style Header
+  worksheet.getRow(1).font = { bold: true };
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename=Attendance_${month}_${req.user.user_name.replace(/\s+/g, '_')}.xlsx`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+}));
+
 export default router;
+

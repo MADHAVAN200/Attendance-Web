@@ -9,7 +9,6 @@ import {
     CheckCircle,
     AlertCircle,
     DownloadCloud,
-    Filter,
     Eye,
     Table
 } from 'lucide-react';
@@ -263,9 +262,7 @@ const Reports = () => {
                                         <DownloadCloud className="text-slate-400" size={18} />
                                         Export History
                                     </h3>
-                                    <button className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                                        <Filter size={16} />
-                                    </button>
+
                                 </div>
 
                                 <div className="overflow-x-auto">

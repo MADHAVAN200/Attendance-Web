@@ -1,5 +1,5 @@
 import express from "express";
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import { authenticateJWT } from '../middleware/auth.js';
 import bcrypt from 'bcrypt';
 import AppError from "../utils/AppError.js";
@@ -32,7 +32,7 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
 
   const includeWorkLocation = req.query.workLocation === 'true';
 
-  let usersQuery = knexDB('users as u')
+  let usersQuery = attendanceDB('users as u')
     .leftJoin('designations as d', 'u.desg_id', 'd.desg_id')
     .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
     .leftJoin('shifts as s', 'u.shift_id', 's.shift_id')
@@ -56,7 +56,7 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
 
   let workLocationMap = {};
   if (includeWorkLocation) {
-    const workLocationsData = await knexDB('user_work_locations as uwl')
+    const workLocationsData = await attendanceDB('user_work_locations as uwl')
       .join('work_locations as wl', 'uwl.location_id', 'wl.location_id')
       .select(
         'uwl.user_id',
@@ -105,7 +105,7 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 
   const { user_id } = req.params;
 
-  const user = await knexDB('users as u')
+  const user = await attendanceDB('users as u')
     .leftJoin('designations as d', 'u.desg_id', 'd.desg_id')
     .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
     .leftJoin('shifts as s', 'u.shift_id', 's.shift_id')
@@ -133,7 +133,7 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
   }
 
   // Get work locations for this user
-  const workLocations = await knexDB('user_work_locations as uwl')
+  const workLocations = await attendanceDB('user_work_locations as uwl')
     .join('work_locations as wl', 'uwl.location_id', 'wl.location_id')
     .select(
       'wl.location_id',
@@ -154,39 +154,39 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 
 // GET all departments
 router.get("/departments", authenticateJWT, catchAsync(async (req, res) => {
-  const data = await knexDB("departments").where('org_id', req.user.org_id).select("*");
+  const data = await attendanceDB("departments").where('org_id', req.user.org_id).select("*");
   res.json({ success: true, departments: data });
 }));
 
 // GET all designations
 router.get("/designations", authenticateJWT, catchAsync(async (req, res) => {
-  const data = await knexDB("designations").where('org_id', req.user.org_id).select("*");
+  const data = await attendanceDB("designations").where('org_id', req.user.org_id).select("*");
   res.json({ success: true, designations: data });
 }));
 
 // GET all shifts
 router.get("/shifts", authenticateJWT, catchAsync(async (req, res) => {
-  const data = await knexDB("shifts").where('org_id', req.user.org_id).select("*");
+  const data = await attendanceDB("shifts").where('org_id', req.user.org_id).select("*");
   res.json({ success: true, shifts: data });
 }));
 
 
 // CREATE new department
 router.post("/departments", authenticateJWT, catchAsync(async (req, res) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can create departments", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can create departments", 403);
   }
   const { dept_name } = req.body;
   if (!dept_name) throw new AppError("Department name is required", 400);
 
   // Check duplicate
-  const existing = await knexDB("departments")
+  const existing = await attendanceDB("departments")
     .where({ dept_name, org_id: req.user.org_id })
     .first();
 
   if (existing) throw new AppError("Department already exists", 400);
 
-  const [newId] = await knexDB("departments").insert({
+  const [newId] = await attendanceDB("departments").insert({
     dept_name,
     org_id: req.user.org_id
   });
@@ -196,19 +196,19 @@ router.post("/departments", authenticateJWT, catchAsync(async (req, res) => {
 
 // CREATE new designation
 router.post("/designations", authenticateJWT, catchAsync(async (req, res) => {
-  if (req.user.user_type !== "admin") {
-    throw new AppError("Only admin can create designations", 403);
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can create designations", 403);
   }
   const { desg_name } = req.body;
   if (!desg_name) throw new AppError("Designation name is required", 400);
 
-  const existing = await knexDB("designations")
+  const existing = await attendanceDB("designations")
     .where({ desg_name, org_id: req.user.org_id })
     .first();
 
   if (existing) throw new AppError("Designation already exists", 400);
 
-  const [newId] = await knexDB("designations").insert({
+  const [newId] = await attendanceDB("designations").insert({
     desg_name,
     org_id: req.user.org_id
   });
@@ -228,12 +228,22 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
     desg_id, dept_id, shift_id, user_type
   } = req.body;
 
+  // RULE: No one can create an admin via this panel
+  if (user_type === 'admin') {
+    throw new AppError("Cannot create Admin users via the panel", 403);
+  }
+
+  // RULE: HR can only create employees
+  if (req.user.user_type === 'hr' && user_type !== 'employee') {
+    throw new AppError("HR can only create Employees", 403);
+  }
+
   if (!user_name || !user_password || !email) {
     throw new AppError("Missing required fields (Name, Password, Email)", 400);
   }
 
   // 0. Check Duplicates (Email is mandatory, Phone is optional but unique if provided)
-  const existingEmail = await knexDB("users").where({ email }).first();
+  const existingEmail = await attendanceDB("users").where({ email }).first();
   if (existingEmail) {
     throw new AppError("Email is already taken", 400);
   }
@@ -241,7 +251,7 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
   const phoneToSave = phone_no && phone_no.trim() !== "" ? phone_no.trim() : null;
 
   if (phoneToSave) {
-    const existingPhone = await knexDB("users").where({ phone_no: phoneToSave }).first();
+    const existingPhone = await attendanceDB("users").where({ phone_no: phoneToSave }).first();
     if (existingPhone) {
       throw new AppError("Mobile number is already taken", 400);
     }
@@ -251,7 +261,7 @@ router.post("/user", authenticateJWT, catchAsync(async (req, res, next) => {
   const hashedPassword = await bcrypt.hash(user_password, 12);
   let newUserId;
 
-  await knexDB.transaction(async (trx) => {
+  await attendanceDB.transaction(async (trx) => {
     // 2. Lock Organization Row
     const org = await trx("organizations")
       .where({ org_id: req.user.org_id })
@@ -395,7 +405,7 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
   const desgMap = {}; // Name -> ID
   const shiftMap = {}; // Name -> ID
 
-  await knexDB.transaction(async (trx) => {
+  await attendanceDB.transaction(async (trx) => {
 
     // ================= OUR PART (START) =================
 
@@ -472,6 +482,20 @@ router.post("/users/bulk", authenticateJWT, upload.single("file"), catchAsync(as
 
       const password = getVal(row, "password") || `${name}-${req.user.org_id}`;
       const type = getVal(row, "type") || "employee";
+
+      // RULE: No one can create admin
+      if (type.toLowerCase() === 'admin') {
+        results.failure_count++;
+        results.errors.push(`Row ${rowNumber}: Cannot create Admin users`);
+        continue;
+      }
+
+      // RULE: HR can only create employees
+      if (req.user.user_type === 'hr' && type.toLowerCase() !== 'employee') {
+        results.failure_count++;
+        results.errors.push(`Row ${rowNumber}: HR can only create Employees`);
+        continue;
+      }
 
       if (!name || !email) {
         results.failure_count++;
@@ -600,22 +624,22 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
     activities
   ] = await Promise.all([
     // 1. Total Employees
-    knexDB("users").where("org_id", org_id).where("user_type", "employee").count("user_id as count").first(),
+    attendanceDB("users").where("org_id", org_id).where("user_type", "employee").count("user_id as count").first(),
 
     // 2. Present Today
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [today]).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [today]).countDistinct("user_id as count").first(),
 
     // 3. Late Check-ins Today
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [today]).where("late_minutes", ">", 0).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [today]).where("late_minutes", ">", 0).countDistinct("user_id as count").first(),
 
     // Period Stats
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ?", [currentStartStr, currentEndStr]).countDistinct("user_id as count").first(),
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ?", [prevStartStr, prevEndStr]).countDistinct("user_id as count").first(),
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ? AND late_minutes > 0", [currentStartStr, currentEndStr]).countDistinct("user_id as count").first(),
-    knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ? AND late_minutes > 0", [prevStartStr, prevEndStr]).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ?", [currentStartStr, currentEndStr]).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ?", [prevStartStr, prevEndStr]).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ? AND late_minutes > 0", [currentStartStr, currentEndStr]).countDistinct("user_id as count").first(),
+    attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) >= ? AND DATE(time_in) <= ? AND late_minutes > 0", [prevStartStr, prevEndStr]).countDistinct("user_id as count").first(),
 
     // 5. Activity Log
-    knexDB("user_activity_logs as al")
+    attendanceDB("user_activity_logs as al")
       .leftJoin("users as u", "al.user_id", "u.user_id")
       .leftJoin("designations as d", "u.desg_id", "d.desg_id")
       .select("al.activity_id as id", "u.user_name as user", "d.desg_name as role", "al.description as action", "al.occurred_at as time", "u.profile_image_url")
@@ -670,8 +694,8 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
   const chartDataPromises = chartDays.map(async (dayStr) => {
     const dayName = new Date(dayStr).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
     const [pRes, lRes] = await Promise.all([
-      knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [dayStr]).countDistinct("user_id as count").first(),
-      knexDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [dayStr]).where("late_minutes", ">", 0).countDistinct("user_id as count").first()
+      attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [dayStr]).countDistinct("user_id as count").first(),
+      attendanceDB("attendance_records").where("org_id", org_id).whereRaw("DATE(time_in) = ?", [dayStr]).where("late_minutes", ">", 0).countDistinct("user_id as count").first()
     ]);
     const present = Number(pRes.count || 0);
     const late = Number(lRes.count || 0);
@@ -711,9 +735,42 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 
   const updates = {};
 
+  // Fetch target user permissions check
+  const targetUser = await attendanceDB("users")
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) {
+    throw new AppError("User not found", 404);
+  }
+
+  // RULE 1: Admin can only be edited by THEMSELVES
+  if (targetUser.user_type === 'admin') {
+    if (req.user.user_id !== targetUser.user_id) {
+      throw new AppError("Admins can only be edited by themselves", 403);
+    }
+  }
+
+  // RULE 2: HR Restrictions
+  if (req.user.user_type === 'hr') {
+    // HR cannot edit Admin or HR
+    if (targetUser.user_type === 'admin' || targetUser.user_type === 'hr') {
+      throw new AppError("HR can only edit Employees", 403);
+    }
+    // HR cannot promote/demote to non-employee
+    if (req.body.user_type && req.body.user_type !== 'employee') {
+      throw new AppError("HR cannot change user role to anything other than Employee", 403);
+    }
+  }
+
+  // RULE 3: No one can promote someone to Admin
+  if (req.body.user_type === 'admin' && targetUser.user_type !== 'admin') {
+    throw new AppError("Cannot promote user to Admin", 403);
+  }
+
   // Check forDuplicates if email or phone is being updated
   if (req.body.email) {
-    const existing = await knexDB("users")
+    const existing = await attendanceDB("users")
       .where({ email: req.body.email })
       .andWhereNot({ user_id })
       .first();
@@ -721,7 +778,7 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
   }
 
   if (req.body.phone_no && req.body.phone_no.trim() !== "") {
-    const existing = await knexDB("users")
+    const existing = await attendanceDB("users")
       .where({ phone_no: req.body.phone_no.trim() })
       .andWhereNot({ user_id })
       .first();
@@ -754,7 +811,7 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
   }
 
   // Transaction for atomic updates (User data + Task Controls)
-  await knexDB.transaction(async (trx) => {
+  await attendanceDB.transaction(async (trx) => {
     // 1. Update User Table
     if (Object.keys(updates).length > 0) {
       const affected = await trx('users')
@@ -790,7 +847,26 @@ router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, nex
     throw new AppError("You cannot delete your own account", 400);
   }
 
-  const affected = await knexDB('users')
+  // Fetch target user first for permission check
+  const targetUser = await attendanceDB('users')
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) {
+    throw new AppError("User not found", 404);
+  }
+
+  // RULE: Admin users cannot be deleted (safety)
+  if (targetUser.user_type === 'admin') {
+    throw new AppError("Cannot delete Admin users", 403);
+  }
+
+  // RULE: HR cannot delete HR
+  if (req.user.user_type === 'hr' && targetUser.user_type === 'hr') {
+    throw new AppError("HR cannot delete other HR users", 403);
+  }
+
+  const affected = await attendanceDB('users')
     .where('user_id', user_id)
     .andWhere('org_id', req.user.org_id)
     .del();
@@ -844,7 +920,7 @@ router.post("/users/bulk-validate", authenticateJWT, catchAsync(async (req, res,
 
   // Check Existing Emails
   if (inputEmails.size > 0) {
-    const existingUsers = await knexDB("users")
+    const existingUsers = await attendanceDB("users")
       .whereIn('email', Array.from(inputEmails))
       .select('email', 'user_id');
 
@@ -853,7 +929,7 @@ router.post("/users/bulk-validate", authenticateJWT, catchAsync(async (req, res,
     // Check Existing Phones
     let existingPhoneSet = new Set();
     if (inputPhones.size > 0) {
-      const existingPhones = await knexDB("users")
+      const existingPhones = await attendanceDB("users")
         .whereIn('phone_no', Array.from(inputPhones))
         .select('phone_no');
       existingPhoneSet = new Set(existingPhones.map(u => u.phone_no));
@@ -883,9 +959,9 @@ router.post("/users/bulk-validate", authenticateJWT, catchAsync(async (req, res,
 
   // Check Departments (Find which ones are NEW)
   if (inputDepts.size > 0) {
-    const existingDepts = await knexDB("departments")
+    const existingDepts = await attendanceDB("departments")
       .where('org_id', req.user.org_id)
-      .whereIn(knexDB.raw('LOWER(dept_name)'), Array.from(inputDepts))
+      .whereIn(attendanceDB.raw('LOWER(dept_name)'), Array.from(inputDepts))
       .select('dept_name');
 
     const existingDeptSet = new Set(existingDepts.map(d => d.dept_name.toLowerCase()));
@@ -903,9 +979,9 @@ router.post("/users/bulk-validate", authenticateJWT, catchAsync(async (req, res,
 
   // Check Designations (Find which ones are NEW)
   if (inputDesgs.size > 0) {
-    const existingDesgs = await knexDB("designations")
+    const existingDesgs = await attendanceDB("designations")
       .where('org_id', req.user.org_id)
-      .whereIn(knexDB.raw('LOWER(desg_name)'), Array.from(inputDesgs))
+      .whereIn(attendanceDB.raw('LOWER(desg_name)'), Array.from(inputDesgs))
       .select('desg_name');
 
     const existingDesgSet = new Set(existingDesgs.map(d => d.desg_name.toLowerCase()));
@@ -960,7 +1036,7 @@ router.post("/users/bulk-json", authenticateJWT, catchAsync(async (req, res, nex
   const desgMap = {}; // Name -> ID
   const shiftMap = {}; // Name -> ID
 
-  await knexDB.transaction(async (trx) => {
+  await attendanceDB.transaction(async (trx) => {
     // A. Resolve Departments
     for (const deptName of uniqueDepts) {
       if (!deptName) continue;

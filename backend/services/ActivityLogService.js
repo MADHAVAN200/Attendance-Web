@@ -1,5 +1,5 @@
 import EventBus from '../utils/EventBus.js';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 
 class ActivityLogService {
     constructor() {
@@ -28,7 +28,7 @@ class ActivityLogService {
                 metadata
             } = payload;
 
-            await knexDB('user_activity_logs').insert({
+            await attendanceDB('user_activity_logs').insert({
                 user_id,
                 org_id,
                 event_type,
@@ -64,7 +64,7 @@ class ActivityLogService {
                 extra_context
             } = payload;
 
-            await knexDB('application_error_logs').insert({
+            await attendanceDB('application_error_logs').insert({
                 level,
                 service_name,
                 user_id,

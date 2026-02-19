@@ -1,4 +1,7 @@
 import rateLimit from 'express-rate-limit';
+import requestIp from 'request-ip';
+
+
 
 // Global Limiter - General API usage
 // 15 minutes, 300 requests per IP (Approx 1 request every 3 seconds on average)
@@ -7,6 +10,9 @@ export const generalLimiter = rateLimit({
     max: 300,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+        return requestIp.getClientIp(req);
+    },
     message: {
         ok: false,
         message: 'Too many requests from this IP, please try again after 15 minutes',
@@ -20,6 +26,9 @@ export const authLimiter = rateLimit({
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+        return requestIp.getClientIp(req);
+    },
     message: {
         ok: false,
         message: 'Too many login attempts, please try again after 15 minutes',
