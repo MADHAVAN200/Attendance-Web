@@ -78,7 +78,7 @@ export const AttendanceService = {
             return {
                 ok: false,
                 status: 400,
-                message: `You are ${minutesLate} minutes late. A 'late_reason' is required to check in.`
+                message: `You are ${minutesLate} minutes late. Please provide a reason to check in.`
             };
         }
 

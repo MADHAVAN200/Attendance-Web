@@ -112,6 +112,11 @@ const Attendance = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
+    // Late Reason Context
+    const [requireLateReason, setRequireLateReason] = useState(false);
+    const [lateReasonMessage, setLateReasonMessage] = useState("");
+    const [lateReasonText, setLateReasonText] = useState("");
+
     // Correction Request State
     const [correctionHistory, setCorrectionHistory] = useState([]);
     const [corrDate, setCorrDate] = useState('');
@@ -228,6 +233,9 @@ const Attendance = () => {
     const openCamera = (mode) => {
         setCameraMode(mode);
         setImgSrc(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
         setShowCamera(true);
     };
 
@@ -235,6 +243,9 @@ const Attendance = () => {
         setShowCamera(false);
         setImgSrc(null);
         setCameraMode(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
     };
 
     const capture = useCallback(() => {
@@ -272,7 +283,11 @@ const Attendance = () => {
                 // if (accuracy > MAX_ALLOWED_ACCURACY) ... (Strict check disabled for dev flexibility if needed, but keeping generally)
 
                 const imageBlob = dataURLtoBlob(imgSrc);
-                const payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+                let payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+
+                if (requireLateReason && lateReasonText.trim()) {
+                    payload.late_reason = lateReasonText;
+                }
 
                 let res;
                 if (cameraMode === 'IN') {
@@ -287,7 +302,18 @@ const Attendance = () => {
                 fetchDailyRecords();
             } catch (error) {
                 console.error(error);
-                toast.error(error.message || "Attendance failed");
+
+                // Intercept Late Reason missing error
+                const errorMsg = error.message || "Attendance failed";
+                const errorLower = errorMsg.toLowerCase();
+
+                if (cameraMode === 'IN' && errorLower.includes("late") && errorLower.includes("reason")) {
+                    setRequireLateReason(true);
+                    setLateReasonMessage(errorMsg);
+                    toast.warning(errorMsg);
+                } else {
+                    toast.error(errorMsg);
+                }
             } finally {
                 setIsSubmitting(false);
             }
@@ -1194,7 +1220,7 @@ const Attendance = () => {
 
                 {/* --- CORRECTION DETAILS MODAL --- */}
                 {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
@@ -1311,7 +1337,7 @@ const Attendance = () => {
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
                         <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-center px-4">
                                 <h3 className="text-2xl font-bold text-white tracking-tight">
@@ -1338,6 +1364,25 @@ const Attendance = () => {
                                     />
                                 )}
                             </div>
+
+                            {requireLateReason && imgSrc && (
+                                <div className="space-y-3 px-2 w-full max-w-lg mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-2 text-amber-300 bg-amber-900/40 border border-amber-500/30 p-3 rounded-xl mb-4 text-sm font-medium">
+                                        <AlertCircle size={18} className="shrink-0" />
+                                        <p>{lateReasonMessage}</p>
+                                    </div>
+                                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                                        Please provide a reason
+                                    </label>
+                                    <textarea
+                                        value={lateReasonText}
+                                        onChange={(e) => setLateReasonText(e.target.value)}
+                                        placeholder="I got held up in traffic..."
+                                        className="w-full px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-white placeholder-slate-400 h-24 resize-none backdrop-blur-md"
+                                        required
+                                    ></textarea>
+                                </div>
+                            )}
 
                             <div className="flex justify-center gap-6 pt-2">
                                 {!imgSrc ? (
