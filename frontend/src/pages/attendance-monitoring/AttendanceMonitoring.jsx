@@ -90,7 +90,7 @@ const AttendanceMonitoring = () => {
                 attendanceService.getRealTimeAttendance(selectedDate)
             ]);
 
-            const users = usersRes.users || [];
+            const users = (usersRes.users || []).filter(u => u.is_active && !u.is_deleted);
             const records = attendanceRes.data || [];
 
             // 2. Merge Data

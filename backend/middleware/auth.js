@@ -31,6 +31,15 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
             return res.status(403).json({ message: "Forbidden: Invalid token user" });
         }
 
+        // STRICT SECURITY CHECK: Block Inactive or Deleted Users
+        if (!user.is_active) {
+            return res.status(403).json({ message: "Access Denied: Your account is inactive. Please contact HR for more information." });
+        }
+
+        if (user.is_deleted) {
+            return res.status(403).json({ message: "Access Denied: Your account has been deleted. Please contact HR for more information." });
+        }
+
         // Standardize req.user
         req.user = {
             ...decoded,

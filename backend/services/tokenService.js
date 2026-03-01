@@ -80,6 +80,13 @@ export async function verifyRefreshToken(token) {
 
     // Token is valid, return user details
     const user = await attendanceDB('users').where('user_id', refreshTokenRecord.user_id).first();
+
+    if (!user || !user.is_active || user.is_deleted) {
+        // Revoke if user is blocked
+        await revokeAllTokensForUser(refreshTokenRecord.user_id);
+        return { error: 'User Blocked or Deleted' };
+    }
+
     return { user, refreshTokenRecord };
 }
 

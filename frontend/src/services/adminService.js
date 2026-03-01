@@ -54,6 +54,36 @@ export const adminService = {
         }
     },
 
+    // Toggle Status
+    async toggleUserStatus(userId, isActive) {
+        try {
+            const res = await api.put(`${ADMIN_API_URL}/user/${userId}/status`, { is_active: isActive });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to update status");
+        }
+    },
+
+    // Restore User
+    async restoreUser(userId) {
+        try {
+            const res = await api.post(`${ADMIN_API_URL}/user/${userId}/restore`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to restore user");
+        }
+    },
+
+    // Force Delete User
+    async forceDeleteUser(userId) {
+        try {
+            const res = await api.delete(`${ADMIN_API_URL}/user/${userId}/force`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to permanently delete user");
+        }
+    },
+
     // Helpers
     async getDepartments() {
         try {

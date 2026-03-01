@@ -13,7 +13,11 @@ import {
     Download,
     ChevronLeft,
     ChevronRight,
-    Trash2
+    Trash2,
+    UserCheck,
+    UserX,
+    RotateCcw,
+    AlertTriangle
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
@@ -25,7 +29,7 @@ const EmployeeList = () => {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilter, setStatusFilter] = useState('Active');
 
     // Fetch Employees on Mount
     useEffect(() => {
@@ -42,14 +46,18 @@ const EmployeeList = () => {
                     id: u.user_id,
                     name: u.user_name,
                     email: u.email,
-                    role: u.desg_name || u.user_type,
+                    // Keep raw user_type for logic checks, role for display
+                    role: u.desg_name || u.user_type, 
+                    user_type: u.user_type, // Ensure this field exists for logic checks
                     department: u.dept_name || '-',
-                    status: 'Active', // Defaulting since backend doesn't provide status yet
+                    status: u.is_deleted ? 'Deleted' : (u.is_active ? 'Active' : 'Inactive'),
                     phone: u.phone_no || '-',
                     shift: u.shift_name || '-',
                     workLocations: u.work_locations || [],
                     joinDate: '-', // Not in API
-                    profile_image_url: u.profile_image_url
+                    profile_image_url: u.profile_image_url,
+                    is_active: u.is_active,
+                    is_deleted: u.is_deleted
                 }));
                 setEmployees(formatted);
             }
@@ -63,13 +71,51 @@ const EmployeeList = () => {
 
     const handleDelete = async (e, id) => {
         e.stopPropagation();
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
+        if (!window.confirm("Are you sure you want to move this user to trash?")) return;
         try {
             await adminService.deleteUser(id);
-            toast.success("User deleted successfully");
+            toast.success("User moved to trash");
+            fetchEmployees(); // Refresh to update lists
+        } catch (err) {
+            toast.error(err.message || "Failed to delete user");
+        }
+    };
+
+    const handleForceDelete = async (e, id) => {
+        e.stopPropagation();
+        if (!window.confirm("PERMANENT DELETE WARNING:\nThis will remove all user data, attendance records, and images.\nThis action CANNOT be undone.\n\nAre you sure?")) return;
+        try {
+            await adminService.forceDeleteUser(id);
+            toast.success("User permanently deleted");
             setEmployees(prev => prev.filter(e => e.id !== id));
         } catch (err) {
             toast.error(err.message || "Failed to delete user");
+        }
+    };
+
+    const handleRestore = async (e, id) => {
+        e.stopPropagation();
+        try {
+            await adminService.restoreUser(id);
+            toast.success("User restored (Status: Inactive)");
+            fetchEmployees();
+        } catch (err) {
+            toast.error(err.message || "Failed to restore user");
+        }
+    };
+
+    const handleToggleStatus = async (e, id, currentStatus) => {
+        e.stopPropagation();
+        const newStatus = !currentStatus;
+        const action = newStatus ? "activate" : "deactivate";
+        if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+
+        try {
+            await adminService.toggleUserStatus(id, newStatus);
+            toast.success(`User ${action}d successfully`);
+            fetchEmployees();
+        } catch (err) {
+            toast.error(err.message || `Failed to ${action} user`);
         }
     };
 
@@ -98,9 +144,9 @@ const EmployeeList = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Active': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-            case 'On Notice': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-            case 'Exited': return 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-400 border-slate-200 dark:border-slate-600';
-            default: return 'bg-slate-100 text-slate-700';
+            case 'Inactive': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800';
+            case 'Deleted': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800';
+            default: return 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-400 border-slate-200 dark:border-slate-600';
         }
     };
 
@@ -122,20 +168,22 @@ const EmployeeList = () => {
                                 className="pl-10 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-full sm:w-64 transition-all"
                             />
                         </div>
-                        {/* Filter */}
-                        {/* <div className="relative">
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="appearance-none pl-3 pr-8 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
-                            >
-                                <option value="All">All Status</option>
-                                <option value="Active">Active</option>
-                                <option value="On Notice">On Notice</option>
-                                <option value="Exited">Exited</option>
-                            </select>
-                            <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                        </div> */}
+                        {/* Filter Tabs */}
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                            {['Active', 'Inactive', 'Deleted'].map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => setStatusFilter(status)}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                        statusFilter === status
+                                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                    }`}
+                                >
+                                    {status === 'Deleted' ? 'Trash' : status}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -220,21 +268,64 @@ const EmployeeList = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Link
-                                                        to={`/employees/edit/${employee.id}`}
-                                                        title="Edit"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                                                    >
-                                                        <Edit2 size={16} />
-                                                    </Link>
-                                                    <button
-                                                        onClick={(e) => handleDelete(e, employee.id)}
-                                                        title="Delete"
-                                                        className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                    {employee.status === 'Deleted' ? (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => handleRestore(e, employee.id)}
+                                                                title="Restore User"
+                                                                className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                                                            >
+                                                                <RotateCcw size={18} />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => handleForceDelete(e, employee.id)}
+                                                                title="Delete Permanently"
+                                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => handleToggleStatus(e, employee.id, employee.is_active)}
+                                                                title={employee.is_active ? "Deactivate" : "Activate"}
+                                                                disabled={employee.user_type === 'admin'}
+                                                                className={`p-2 rounded-lg transition-colors ${
+                                                                    employee.user_type === 'admin'
+                                                                    ? 'opacity-50 cursor-not-allowed text-slate-400'
+                                                                    : employee.is_active 
+                                                                        ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' 
+                                                                        : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                                                                }`}
+                                                            >
+                                                                {employee.is_active ? <UserX size={18} /> : <UserCheck size={18} />}
+                                                            </button>
+                                                            
+                                                            <Link
+                                                                to={`/employees/edit/${employee.id}`}
+                                                                title="Edit"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                                            >
+                                                                <Edit2 size={18} />
+                                                            </Link>
+
+                                                            {/* Delete Button (Disabled for Admins) */}
+                                                            <button
+                                                                onClick={(e) => handleDelete(e, employee.id)}
+                                                                title={employee.user_type === 'admin' ? "Cannot delete Admin" : "Move to Trash"}
+                                                                disabled={employee.user_type === 'admin'}
+                                                                className={`p-2 rounded-lg transition-colors ${
+                                                                    employee.user_type === 'admin'
+                                                                    ? 'opacity-50 cursor-not-allowed text-slate-400'
+                                                                    : 'text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                                                }`}
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

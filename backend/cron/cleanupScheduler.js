@@ -96,12 +96,44 @@ async function cleanupAttendanceImages() {
 }
 
 /**
+ * Cleanup Soft Deleted Users
+ * Permanently deletes users who have been in trash for more than 30 days
+ */
+async function cleanupDeletedUsers() {
+    try {
+        console.log("Running cleanupDeletedUsers...");
+        const retentionDays = 30;
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+        // Find users to delete
+        const usersToDelete = await attendanceDB('users')
+            .where('is_deleted', true)
+            .andWhere('deleted_at', '<', cutoffDate)
+            .select('user_id');
+
+        console.log(`Found ${usersToDelete.length} users to permanently delete.`);
+
+        for (const user of usersToDelete) {
+            await UserCleanupService.permanentlyDeleteUser(user.user_id);
+        }
+
+        if (usersToDelete.length > 0) {
+            console.log("Cleanup of deleted users completed.");
+        }
+    } catch (error) {
+        console.error("Error cleaning up deleted users:", error);
+    }
+}
+
+/**
  * Run all cleanup tasks
  */
 export async function runCleanup() {
     console.log('🚀 Running scheduled cleanup tasks...');
     await cleanupRefreshTokens();
     await cleanupAttendanceImages();
+    await cleanupDeletedUsers();
     console.log('✅ All cleanup tasks completed.');
 }
 

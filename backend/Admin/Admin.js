@@ -9,6 +9,7 @@ import { getEventSource } from "../utils/clientInfo.js";
 import multer from "multer";
 import ExcelJS from "exceljs";
 import { PassThrough } from "stream";
+import UserCleanupService from '../services/UserCleanupService.js';
 
 const router = express.Router();
 const upload = multer(); // memory storage
@@ -48,7 +49,10 @@ router.get("/users", authenticateJWT, catchAsync(async (req, res, next) => {
       'dep.dept_id',
       's.shift_name',
       's.shift_id',
-      'u.profile_image_url'
+      'u.profile_image_url',
+      'u.is_active',
+      'u.is_deleted',
+      'u.deleted_at'
     )
     .where('u.org_id', req.user.org_id);
 
@@ -120,6 +124,9 @@ router.get("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
       'u.shift_id',
       'u.org_id',
       'u.profile_image_url',
+      'u.is_active',
+      'u.is_deleted',
+      'u.deleted_at',
       'd.desg_name',
       'dep.dept_name',
       's.shift_name'
@@ -831,7 +838,7 @@ router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) 
 }));
 
 
-// DELETE user by user_id
+// DELETE user by user_id (Soft Delete)
 router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) => {
   if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
     throw new AppError("Only admin and HR can delete users", 403);
@@ -866,16 +873,139 @@ router.delete("/user/:user_id", authenticateJWT, catchAsync(async (req, res, nex
     throw new AppError("HR cannot delete other HR users", 403);
   }
 
+  // Soft Delete
   const affected = await attendanceDB('users')
     .where('user_id', user_id)
     .andWhere('org_id', req.user.org_id)
-    .del();
+    .update({
+      is_deleted: true,
+      is_active: false,
+      deleted_at: attendanceDB.fn.now()
+    });
 
   if (affected === 0) {
     throw new AppError("User not found", 404);
   }
 
-  res.json({ message: "User deleted successfully" });
+  // Log activity
+  EventBus.emitActivityLog({
+    user_id: req.user.user_id,
+    org_id: req.user.org_id,
+    event_type: "DELETE",
+    event_source: getEventSource(req),
+    object_type: "USER",
+    object_id: user_id,
+    description: `Soft deleted user ${targetUser.user_name}`,
+    request_ip: req.clientIp || req.ip,
+    user_agent: req.get("User-Agent")
+  });
+
+  res.json({ message: "User moved to trash" });
+}));
+
+// FORCE DELETE User (Permanent) - Be careful!
+router.delete("/user/:user_id/force", authenticateJWT, catchAsync(async (req, res) => {
+  // Only Admin/HR
+  if (req.user.user_type !== 'admin' && req.user.user_type !== 'hr') {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  const { user_id } = req.params;
+
+  try {
+    await UserCleanupService.permanentlyDeleteUser(user_id);
+    res.status(200).json({ message: "User permanently deleted." });
+  } catch (err) {
+    console.error("Force delete failed:", err);
+    res.status(500).json({ message: "Failed to force delete user", error: err.message });
+  }
+}));
+
+
+// RESTORE user by user_id
+router.post("/user/:user_id/restore", authenticateJWT, catchAsync(async (req, res, next) => {
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can restore users", 403);
+  }
+
+  const { user_id } = req.params;
+
+  const targetUser = await attendanceDB('users')
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) throw new AppError("User not found", 404);
+
+  await attendanceDB('users')
+    .where('user_id', user_id)
+    .update({
+      is_deleted: false,
+      deleted_at: null,
+      is_active: false // Safety: restore as inactive
+    });
+
+  EventBus.emitActivityLog({
+    user_id: req.user.user_id,
+    org_id: req.user.org_id,
+    event_type: "UPDATE",
+    event_source: getEventSource(req),
+    object_type: "USER",
+    object_id: user_id,
+    description: `Restored user ${targetUser.user_name}`,
+    request_ip: req.clientIp || req.ip,
+    user_agent: req.get("User-Agent")
+  });
+
+  res.json({ message: "User restored successfully (set to inactive)" });
+}));
+
+// TOGGLE STATUS user by user_id
+router.put("/user/:user_id/status", authenticateJWT, catchAsync(async (req, res, next) => {
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can update user status", 403);
+  }
+
+  const { user_id } = req.params;
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    throw new AppError("Invalid status value", 400);
+  }
+
+  const targetUser = await attendanceDB('users')
+    .where({ user_id, org_id: req.user.org_id })
+    .select('user_type', 'user_name')
+    .first();
+
+  if (!targetUser) throw new AppError("User not found", 404);
+
+  // HR limits
+  if (req.user.user_type === 'hr' && (targetUser.user_type === 'admin' || targetUser.user_type === 'hr')) {
+    throw new AppError("HR cannot change status of Admin or other HR", 403);
+  }
+
+  // RULE: Admin users cannot be deactivated
+  if (targetUser.user_type === 'admin' && isActive === false) {
+    throw new AppError("Cannot deactivate Admin users", 403);
+  }
+
+  await attendanceDB('users')
+    .where('user_id', user_id)
+    .update({ is_active });
+
+  EventBus.emitActivityLog({
+    user_id: req.user.user_id,
+    org_id: req.user.org_id,
+    event_type: "UPDATE",
+    event_source: getEventSource(req),
+    object_type: "USER",
+    object_id: user_id,
+    description: `${is_active ? 'Activated' : 'Deactivated'} user ${targetUser.user_name}`,
+    request_ip: req.clientIp || req.ip,
+    user_agent: req.get("User-Agent")
+  });
+
+  res.json({ message: `User ${is_active ? 'activated' : 'deactivated'}` });
 }));
 
 
@@ -1166,4 +1296,3 @@ router.post("/users/bulk-json", authenticateJWT, catchAsync(async (req, res, nex
 
 
 export default router;
-

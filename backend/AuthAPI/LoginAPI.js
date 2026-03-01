@@ -38,7 +38,8 @@ router.post('/login', loginIpLimiter, authLimiter, catchAsync(async (req, res) =
     .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
     .select(
       'users.user_id', 'users.user_code', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
-      'users.profile_image_url', 'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
+      'users.profile_image_url', 'users.is_active', 'users.is_deleted',
+      'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
     )
     .where('users.email', user_input)
     .orWhere('users.phone_no', user_input)
@@ -47,6 +48,16 @@ router.post('/login', loginIpLimiter, authLimiter, catchAsync(async (req, res) =
 
   if (!user) {
     return res.status(401).json({ message: 'User not found' });
+  }
+
+  // Check if user is deleted
+  if (user.is_deleted) {
+    return res.status(403).json({ message: 'Your account has been deleted. Please contact support.' });
+  }
+
+  // Check if user is active
+  if (!user.is_active) {
+    return res.status(403).json({ message: 'Your account is inactive. Please contact HR.' });
   }
 
   // 2. Compare password
