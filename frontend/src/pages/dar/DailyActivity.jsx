@@ -23,6 +23,7 @@ const DailyActivity = () => {
     const [attendanceData, setAttendanceData] = useState({});
     const [holidays, setHolidays] = useState([]); // Store holidays
     const [loading, setLoading] = useState(true);
+    const [taskDrafts, setTaskDrafts] = useState({}); // Cache for unsaved tasks by date
 
 
     // Modal State
@@ -179,6 +180,9 @@ const DailyActivity = () => {
 
         if (partials.deleted) {
             setTasks(prev => prev.filter(t => t.id !== partials.id && t.id !== `act-${partials.id}`));
+            if (!partials.isDraftDelete) {
+                fetchRangeData(); // Immediately refresh timeline after DB delete
+            }
             return;
         }
 
@@ -313,12 +317,21 @@ const DailyActivity = () => {
                                             setSelectedTaskId(null);
                                             fetchRangeData(); // Refresh after save
                                         }}
-                                        onUpdate={handleTaskPreviewUpdate} // Optional: keep for live preview if logic supports
+                                        onUpdate={handleTaskPreviewUpdate}
                                         initialTimeIn={attendanceData[panelDate]?.timeIn || "09:00"}
                                         attendanceIntervals={attendanceData[panelDate]?.intervals || []}
                                         highlightTaskId={selectedTaskId}
                                         initialDate={panelDate}
                                         onDateChange={(d) => setPanelDate(d)}
+                                        draftTasks={taskDrafts[panelDate]}
+                                        onDraftUpdate={(drafts) => {
+                                            setTaskDrafts(prev => ({ ...prev, [panelDate]: drafts }));
+                                        }}
+                                        isAbsent={
+                                            panelDate < new Date().toISOString().split('T')[0] &&
+                                            !holidays[panelDate] &&
+                                            (!attendanceData[panelDate] || !attendanceData[panelDate].hasTimedIn)
+                                        }
                                     />
                                 ) : (
                                     <motion.div

@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import MiniCalendar from '../dar/MiniCalendar';
 
-const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attendanceIntervals = [], highlightTaskId, initialDate, onDateChange }) => {
+const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attendanceIntervals = [], highlightTaskId, initialDate, onDateChange, isAbsent = false, draftTasks, onDraftUpdate }) => {
 
 
     // Helper to add minutes to HH:MM time
@@ -108,6 +108,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
         }
 
         // If all success
+        if (onDraftUpdate) onDraftUpdate(null); // Clear drafts on successful save
         onClose();
     };
 
@@ -138,6 +139,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
             if (response.data.ok) {
                 toast.success("Request submitted to Admin!");
                 setShowReasonModal(false);
+                if (onDraftUpdate) onDraftUpdate(null); // Clear drafts
                 onClose();
             }
         } catch (err) {
@@ -202,17 +204,22 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                     isSaved: true
                 }));
 
-                setInputs(activities.length > 0 ? activities : [{
-                    id: `new-${Date.now()}`,
-                    title: '',
-                    description: '',
-                    startTime: initialTimeIn,
-                    endTime: addMinutes(initialTimeIn, 60),
-                    isValid: true,
-                    error: null,
-                    isSaved: false,
-                    status: 'PENDING'
-                }]);
+                // If we have cached drafts for this date, prefer those over fetched backend data
+                if (draftTasks && draftTasks.length > 0) {
+                    setInputs(draftTasks);
+                } else {
+                    setInputs(activities.length > 0 ? activities : [{
+                        id: `new-${Date.now()}`,
+                        title: '',
+                        description: '',
+                        startTime: initialTimeIn,
+                        endTime: addMinutes(initialTimeIn, 60),
+                        isValid: true,
+                        error: null,
+                        isSaved: false,
+                        status: 'PENDING'
+                    }]);
+                }
 
             } catch (err) {
                 console.error("Failed to fetch data", err);
@@ -238,6 +245,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
 
         newInputs[index] = task;
         setInputs(newInputs);
+        if (onDraftUpdate) onDraftUpdate(newInputs); // Sync draft to parent
 
         // Update Parent
         if (task.startTime && !task.error) {
@@ -285,6 +293,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
             type: 'task',
             date: date
         });
+        setInputs(newInputs);
+        if (onDraftUpdate) onDraftUpdate(newInputs); // Sync draft to parent
     };
 
     const handleDelete = async (index) => {
@@ -297,16 +307,18 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
         if (isExisting && !isPastDate) {
             try {
                 await api.delete(`/dar/activities/delete/${task.id}`);
-                // Notify parent to update preview
-                onUpdate({ id: task.id, deleted: true });
             } catch (err) {
                 alert("Failed to delete task: " + err.response?.data?.message);
                 return;
             }
         }
 
+        // Notify parent regardless of draft or DB delete
+        onUpdate({ id: task.id, deleted: true, isDraftDelete: isPastDate || !isExisting });
+
         const newInputs = inputs.filter((_, i) => i !== index);
         setInputs(newInputs);
+        if (onDraftUpdate) onDraftUpdate(newInputs); // Sync draft to parent
     };
 
     return (
@@ -423,150 +435,172 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                 </div>
             </div>
 
-            {/* Task List Form */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-
-                {inputs.map((task, i) => (
-                    <div id={`task-card-${task.id}`} key={task.id} className={`group relative bg-white dark:bg-slate-800 rounded-xl border transition-all p-3 flex flex-col gap-3 ${task.error ? 'border-red-200 ring-1 ring-red-100 dark:border-red-900/50 dark:ring-red-900/30' : 'border-gray-100 dark:border-slate-700 hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-sm'} ${highlightTaskId === task.id ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}`}>
-                        {/* Indicator Line */}
-                        <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${task.error ? 'bg-red-400' : 'bg-gray-200 group-hover:bg-indigo-500'}`}></div>
-
-                        {/* Top Row: TITLE & Category */}
-                        <div className="flex items-center justify-between relative border-b border-gray-50 pb-2 mb-1 gap-2">
-                            {/* TITLE INPUT */}
-                            <input
-                                type="text"
-                                placeholder={`TASK ${i + 1 < 10 ? '0' + (i + 1) : i + 1}`}
-                                value={task.title}
-                                onChange={(e) => handleInputChange(i, 'title', e.target.value)}
-                                className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
-                            />
-
-                            {/* PLANNED BADGE */}
-                            {task.status === 'PLANNED' && (
-                                <span className="text-[10px] font-bold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50 flex items-center gap-1">
-                                    <Clock size={10} /> Planned
-                                </span>
-                            )}
-
-                            {/* Category Pill Dropdown (Dynamic Width) */}
-                            <div className="relative flex-shrink-0">
-                                {/* Visual Layer (Dictates Layout) */}
-                                <div className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 transition-colors">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                                        {task.category || 'General'}
-                                    </span>
-                                    <div className="text-indigo-500">
-                                        <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                                        </svg>
-                                    </div>
-                                </div>
-
-                                {/* Input Layer (Invisible Overlay) */}
-                                <select
-                                    value={task.category || 'General'}
-                                    onChange={(e) => handleInputChange(i, 'category', e.target.value)}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
-                                >
-                                    {availableCategories.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            {/* DESCRIPTION INPUT */}
-                            <input
-                                type="text"
-                                placeholder="Add description..."
-                                value={task.description}
-                                onChange={(e) => handleInputChange(i, 'description', e.target.value)}
-                                className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-slate-500 placeholder:font-normal bg-transparent border-none p-0 focus:ring-0"
-                            />
-
-                            {/* Time Intervals */}
-                            {/* Time Intervals & Actions Row */}
-                            <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-100 dark:border-slate-700">
-                                {/* Time Group */}
-                                <div className="flex-1 flex items-center gap-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg p-1.5 border border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-800 transition-colors">
-                                    <Clock size={14} className={task.error ? "text-red-400 ml-1" : "text-gray-400 dark:text-slate-500 ml-1"} />
-
-                                    <div className="flex items-center gap-1 flex-1">
-                                        <input
-                                            type="time"
-                                            value={task.startTime}
-                                            onChange={(e) => handleInputChange(i, 'startTime', e.target.value)}
-                                            className={`w-full bg-transparent border-none p-0 text-xs font-medium focus:ring-0 text-center no-calendar-picker ${task.error ? 'text-red-600' : 'text-gray-600 dark:text-gray-300'}`}
-                                        />
-                                        <span className="text-gray-300 text-[10px]">•</span>
-                                        <input
-                                            type="time"
-                                            value={task.endTime}
-                                            onChange={(e) => handleInputChange(i, 'endTime', e.target.value)}
-                                            className="w-full bg-transparent border-none p-0 text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-0 text-center no-calendar-picker"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Delete Action */}
-                                <button
-                                    onClick={() => handleDelete(i)}
-                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                    title="Delete Task"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                            {task.error && (
-                                <span className="text-[10px] text-red-500 font-medium flex items-center gap-1 mt-1">
-                                    <AlertCircle size={10} /> {task.error}
-                                </span>
-                            )}
-                        </div>
+            {/* Main Content Area */}
+            {isAbsent ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-full">
+                        <AlertCircle size={40} className="text-red-500" />
                     </div>
-                ))}
-
-                {/* Unavailable Slot Placeholder */}
-                <div className="p-4 rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between opacity-70">
-                    <span className="text-xs font-bold text-gray-400 uppercase">
-                        End of Day
-                    </span>
-                    <div className="flex items-center gap-2 text-xs text-orange-500 font-medium">
-                        <AlertCircle size={14} />
-                        <span>Unavailable</span>
-                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Absent Day</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[250px]">
+                        You were absent on this day. Submission is not allowed.
+                    </p>
                 </div>
+            ) : (
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
 
-                {/* Add New */}
-                <button
-                    onClick={handleAddAnother}
-                    className="w-full py-4 border border-dashed border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center gap-2 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all text-sm font-bold"
-                >
-                    <Plus size={16} />
-                    Add Another Task
-                </button>
+                    {inputs.map((task, i) => (
+                        <div id={`task-card-${task.id}`} key={task.id} className={`group relative bg-white dark:bg-slate-800 rounded-xl border transition-all p-3 flex flex-col gap-3 ${task.error ? 'border-red-200 ring-1 ring-red-100 dark:border-red-900/50 dark:ring-red-900/30' : 'border-gray-100 dark:border-slate-700 hover:border-indigo-100 dark:hover:border-indigo-900 hover:shadow-sm'} ${highlightTaskId === task.id ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}`}>
+                            {/* Indicator Line */}
+                            <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${task.error ? 'bg-red-400' : 'bg-gray-200 group-hover:bg-indigo-500'}`}></div>
 
-            </div>
+                            {/* Top Row: TITLE & Category */}
+                            <div className="flex items-center justify-between relative border-b border-gray-50 pb-2 mb-1 gap-2">
+                                {/* TITLE INPUT */}
+                                <input
+                                    type="text"
+                                    placeholder={`TASK ${i + 1 < 10 ? '0' + (i + 1) : i + 1}`}
+                                    value={task.title}
+                                    onChange={(e) => handleInputChange(i, 'title', e.target.value)}
+                                    className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
+                                />
+
+                                {/* PLANNED BADGE */}
+                                {task.status === 'PLANNED' && (
+                                    <span className="text-[10px] font-bold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50 flex items-center gap-1">
+                                        <Clock size={10} /> Planned
+                                    </span>
+                                )}
+
+                                {/* Category Pill Dropdown (Dynamic Width) */}
+                                <div className="relative flex-shrink-0">
+                                    {/* Visual Layer (Dictates Layout) */}
+                                    <div className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 transition-colors">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                                            {task.category || 'General'}
+                                        </span>
+                                        <div className="text-indigo-500">
+                                            <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Input Layer (Invisible Overlay) */}
+                                    <select
+                                        value={task.category || 'General'}
+                                        onChange={(e) => handleInputChange(i, 'category', e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+                                    >
+                                        {availableCategories.map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* DESCRIPTION INPUT */}
+                                <input
+                                    type="text"
+                                    placeholder="Add description..."
+                                    value={task.description}
+                                    onChange={(e) => handleInputChange(i, 'description', e.target.value)}
+                                    className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-slate-500 placeholder:font-normal bg-transparent border-none p-0 focus:ring-0"
+                                />
+
+                                {/* Time Intervals */}
+                                {/* Time Intervals & Actions Row */}
+                                <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-100 dark:border-slate-700">
+                                    {/* Time Group */}
+                                    <div className="flex-1 flex items-center gap-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg p-1.5 border border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-800 transition-colors">
+                                        <Clock size={14} className={task.error ? "text-red-400 ml-1" : "text-gray-400 dark:text-slate-500 ml-1"} />
+
+                                        <div className="flex items-center gap-1 flex-1">
+                                            <input
+                                                type="time"
+                                                value={task.startTime}
+                                                onChange={(e) => handleInputChange(i, 'startTime', e.target.value)}
+                                                className={`w-full bg-transparent border-none p-0 text-xs font-medium focus:ring-0 text-center no-calendar-picker ${task.error ? 'text-red-600' : 'text-gray-600 dark:text-gray-300'}`}
+                                            />
+                                            <span className="text-gray-300 text-[10px]">•</span>
+                                            <input
+                                                type="time"
+                                                value={task.endTime}
+                                                onChange={(e) => handleInputChange(i, 'endTime', e.target.value)}
+                                                className="w-full bg-transparent border-none p-0 text-xs font-medium text-gray-600 dark:text-gray-300 focus:ring-0 text-center no-calendar-picker"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Delete Action */}
+                                    <button
+                                        onClick={() => handleDelete(i)}
+                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Delete Task"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                                {task.error && (
+                                    <span className="text-[10px] text-red-500 font-medium flex items-center gap-1 mt-1">
+                                        <AlertCircle size={10} /> {task.error}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Unavailable Slot Placeholder */}
+                    <div className="p-4 rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between opacity-70">
+                        <span className="text-xs font-bold text-gray-400 uppercase">
+                            End of Day
+                        </span>
+                        <div className="flex items-center gap-2 text-xs text-orange-500 font-medium">
+                            <AlertCircle size={14} />
+                            <span>Unavailable</span>
+                        </div>
+                    </div>
+
+                    {/* Add New */}
+                    <button
+                        onClick={handleAddAnother}
+                        className="w-full py-4 border border-dashed border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center gap-2 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all text-sm font-bold"
+                    >
+                        <Plus size={16} />
+                        Add Another Task
+                    </button>
+
+                </div>
+            )}
 
             {/* Footer */}
             <div className="p-6 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-dark-card rounded-b-2xl">
-                <button
-                    className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 ${isPastDate
-                        ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
-                        : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
-                    onClick={handleSaveClick}
-                >
-                    {isPastDate ? (
-                        <>
-                            <AlertCircle size={18} />
-                            Submit Request for Approval
-                        </>
-                    ) : (
-                        "Save & Continue"
-                    )}
-                </button>
+                {isAbsent ? (
+                    <button
+                        disabled
+                        className="w-full py-3.5 font-bold rounded-xl text-sm flex items-center justify-center gap-2 bg-red-100 dark:bg-red-900/30 text-red-400 dark:text-red-500 cursor-not-allowed"
+                    >
+                        <AlertCircle size={18} />
+                        Absent — Submission Blocked
+                    </button>
+                ) : (
+                    <button
+                        className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 ${isPastDate
+                            ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200/50 text-white'
+                            : 'bg-gray-900 hover:bg-black shadow-gray-200 dark:shadow-none text-white'}`}
+                        onClick={handleSaveClick}
+                    >
+                        {isPastDate ? (
+                            <>
+                                <AlertCircle size={18} />
+                                Submit Request for Approval
+                            </>
+                        ) : (
+                            "Save & Continue"
+                        )}
+                    </button>
+                )}
             </div>
 
             {/* REASON MODAL */}
