@@ -8,6 +8,7 @@ export const adminService = {
     async getAllUsers(includeWorkLocation = false) {
         try {
             const res = await api.get(`${ADMIN_API_URL}/users?workLocation=${includeWorkLocation}`);
+            console.log("fetched all users", res.data);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch users");
@@ -17,6 +18,7 @@ export const adminService = {
     // Get single user
     async getUserById(userId) {
         try {
+            console.log("fetching single user");
             const res = await api.get(`${ADMIN_API_URL}/user/${userId}`);
             return res.data;
         } catch (error) {
