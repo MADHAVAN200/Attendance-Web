@@ -4,9 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\" ",
-    "start2.0": "concurrently \"npm run server2.0\" \"npm run client\" ",
-    "server": "cd backend && npm run dev",
-    "server2.0": "cd \"backend 2.0\" && npm run dev",
+    "start:old": "concurrently \"npm run server:old\" \"npm run client\" ",
+    "server": "cd \"backend 2.0\" && npm run dev",
+    "server:old": "cd backend && npm run dev",
     "client": "cd frontend && npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -24,4 +24,5 @@
     "razorpay": "^2.9.6",
     "react-icons": "^5.5.0"
   }
+
 }
