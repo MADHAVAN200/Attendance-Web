@@ -388,6 +388,11 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
     correctionData.time_out = requested_time_out;
   }
 
+  // ENFORCE SINGLE REQUEST PER DAY: Delete any existing request for this date
+  await attendanceDB("attendance_correction_requests")
+    .where({ user_id, org_id, request_date })
+    .del();
+
   const [id] = await attendanceDB("attendance_correction_requests").insert({
     org_id,
     user_id,
