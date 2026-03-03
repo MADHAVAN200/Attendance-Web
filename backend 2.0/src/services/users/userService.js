@@ -1,8 +1,8 @@
-import { attendanceDB } from '../config/database.js';
+import { attendanceDB } from '../../config/database.js';
 import bcrypt from 'bcrypt';
-import AppError from '../utils/AppError.js';
-import EventBus from '../utils/EventBus.js';
-import { deleteFile } from '../../../backend/s3/s3Service.js';
+import AppError from '../../utils/AppError.js';
+import EventBus from '../../utils/EventBus.js';
+import { deleteFile } from '../../../../backend/s3/s3Service.js';
 import ExcelJS from 'exceljs';
 import { PassThrough } from 'stream';
 

@@ -1,6 +1,6 @@
-import catchAsync from '../utils/catchAsync.js';
-import * as authService from '../services/authService.js';
-import AppError from '../utils/AppError.js';
+import catchAsync from '../../utils/catchAsync.js';
+import * as authService from '../../services/auth/authService.js';
+import AppError from '../../utils/AppError.js';
 
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 Days
 const IS_PROD = process.env.NODE_ENV === 'production';

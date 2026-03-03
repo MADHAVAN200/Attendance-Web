@@ -20,6 +20,7 @@ import BulkUpload from "./pages/employees/BulkUpload"
 import AttendanceMonitoring from "./pages/attendance-monitoring/AttendanceMonitoring"
 import Reports from "./pages/reports/Reports"
 import HolidayManagement from "./pages/holidays/HolidayManagement"
+import BulkHolidayImport from "./pages/holidays/BulkHolidayImport"
 import PolicyBuilder from "./pages/policy-builder/PolicyBuilder"
 import GeoFencing from "./pages/geofencing/GeoFencing"
 import Profile from "./pages/profile/Profile"
@@ -86,6 +87,7 @@ function App() {
               <Route path="/employees/add" element={<EmployeeForm />} />
               <Route path="/employees/edit/:id" element={<EmployeeForm />} />
               <Route path="/employees/bulk" element={<BulkUpload />} />
+              <Route path="/holidays/bulk" element={<BulkHolidayImport />} />
             </Route>
 
             {/* Admin Only Routes */}

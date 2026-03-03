@@ -1,8 +1,8 @@
 import express from 'express';
-import * as authController from '../controllers/authController.js';
-import { authenticateJWT } from '../middleware/auth.js';
-import { generateCaptcha } from '../middleware/verifyCaptcha.js';
-import { authLimiter, loginIpLimiter } from '../middleware/rateLimiter.js';
+import * as authController from '../../controllers/auth/authController.js';
+import { authenticateJWT } from '../../middleware/auth.js';
+import { generateCaptcha } from '../../middleware/verifyCaptcha.js';
+import { authLimiter, loginIpLimiter } from '../../middleware/rateLimiter.js';
 
 const router = express.Router();
 

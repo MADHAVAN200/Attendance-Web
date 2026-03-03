@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { attendanceDB } from '../config/database.js';
+import { attendanceDB } from '../../config/database.js';
 
 /**
  * Generate a cryptographically strong random token
@@ -113,4 +113,3 @@ export async function revokeAllTokensForUser(userId) {
         .where('user_id', userId)
         .update({ revoked: true });
 }
-

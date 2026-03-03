@@ -1,8 +1,8 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { attendanceDB } from '../config/database.js';
-import EventBus from '../utils/EventBus.js';
-import AppError from '../utils/AppError.js';
+import { attendanceDB } from '../../config/database.js';
+import EventBus from '../../utils/EventBus.js';
+import AppError from '../../utils/AppError.js';
 import * as TokenService from './tokenService.js';
 import OtpService from './OtpService.js';
 import { sendEmail } from './emailService.js';

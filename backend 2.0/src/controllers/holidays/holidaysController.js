@@ -1,6 +1,6 @@
-import catchAsync from '../utils/catchAsync.js';
-import AppError from '../utils/AppError.js';
-import * as holidayService from '../services/holidayService.js';
+import catchAsync from '../../utils/catchAsync.js';
+import AppError from '../../utils/AppError.js';
+import * as holidayService from '../../services/holiday/holidayService.js';
 
 
 //Get all holidays
@@ -129,6 +129,43 @@ export const deleteHolidays = catchAsync(async (req, res, next) => {
 
     });
 
+});
+
+// Bulk validate holidays before import
+export const validateBulkHolidays = catchAsync(async (req, res, next) => {
+    const org_id = req.user.org_id;
+    const { holidays } = req.body;
+
+    if (!holidays || !Array.isArray(holidays)) {
+        throw new AppError('Invalid holidays list', 400);
+    }
+
+    const validation = await holidayService.validateBulkHolidays(org_id, holidays);
+    res.json({ ok: true, validation });
+});
+
+// Bulk create holidays from parsed JSON
+export const bulkCreateFromJson = catchAsync(async (req, res, next) => {
+    const org_id = req.user.org_id;
+    const { holidays } = req.body;
+
+    if (!holidays || !Array.isArray(holidays) || holidays.length === 0) {
+        throw new AppError('Invalid data provided', 400);
+    }
+
+    const report = await holidayService.bulkCreateFromJson(org_id, holidays);
+    res.json({ ok: true, report });
+});
+
+// Bulk upload holidays from CSV/Excel file
+export const bulkUploadFromFile = catchAsync(async (req, res, next) => {
+    if (!req.file) {
+        throw new AppError('Please upload a CSV or Excel file', 400);
+    }
+
+    const org_id = req.user.org_id;
+    const report = await holidayService.bulkUploadFromFile(org_id, req.file);
+    res.json({ ok: true, report });
 });
 
 

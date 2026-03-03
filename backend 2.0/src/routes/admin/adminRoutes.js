@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
-import { authenticateJWT } from '../middleware/auth.js';
-import * as adminController from '../controllers/adminController.js';
+import { authenticateJWT } from '../../middleware/auth.js';
+import * as adminController from '../../controllers/admin/adminController.js';
 
 const router = express.Router();
 const upload = multer(); // memory storage
