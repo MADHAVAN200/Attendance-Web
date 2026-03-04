@@ -1,0 +1,432 @@
+import catchAsync from '../../utils/catchAsync.js';
+import ExcelJS from "exceljs";
+import PDFDocument from "pdfkit";
+import * as reportsService from '../../services/reports/reportsServices.js';
+
+// Helper: Generate PDF using PDFKit with a professional grid/table design
+const generatePdf = (title, columns, rows) => {
+    const doc = new PDFDocument({
+        size: 'A4',
+        layout: columns.length > 7 ? 'landscape' : 'portrait',
+        margin: 40
+    });
+
+    const margin = 40;
+    const pageWidth = doc.page.width - (margin * 2);
+    const cellPadding = 5;
+    const headerHeight = 25;
+    const rowHeight = 20;
+
+    doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'center' });
+    doc.moveDown(1.5);
+
+    const colWidth = pageWidth / columns.length;
+    let currentY = doc.y;
+
+    const drawLine = (y) => {
+        doc.moveTo(margin, y).lineTo(margin + pageWidth, y).stroke('#cccccc');
+    };
+
+    const drawVerticalLines = (y, height) => {
+        for (let i = 0; i <= columns.length; i++) {
+            doc.moveTo(margin + (i * colWidth), y)
+                .lineTo(margin + (i * colWidth), y + height)
+                .stroke('#cccccc');
+        }
+    };
+
+    doc.rect(margin, currentY, pageWidth, headerHeight).fill('#f3f4f6');
+    doc.fillColor('#000000');
+
+    doc.fontSize(10).font('Helvetica-Bold');
+    columns.forEach((col, i) => {
+        doc.text(col, margin + (i * colWidth) + cellPadding, currentY + (headerHeight / 4), {
+            width: colWidth - (cellPadding * 2),
+            align: 'left'
+        });
+    });
+
+    drawLine(currentY);
+    drawLine(currentY + headerHeight);
+    drawVerticalLines(currentY, headerHeight);
+    currentY += headerHeight;
+
+    doc.fontSize(9).font('Helvetica');
+    rows.forEach((row) => {
+        if (currentY + rowHeight > doc.page.height - margin) {
+            doc.addPage();
+            currentY = margin;
+
+            doc.rect(margin, currentY, pageWidth, headerHeight).fill('#f3f4f6');
+            doc.fillColor('#000000');
+            doc.fontSize(10).font('Helvetica-Bold');
+            columns.forEach((col, i) => {
+                doc.text(col, margin + (i * colWidth) + cellPadding, currentY + (headerHeight / 4), {
+                    width: colWidth - (cellPadding * 2),
+                    align: 'left'
+                });
+            });
+            drawLine(currentY);
+            drawLine(currentY + headerHeight);
+            drawVerticalLines(currentY, headerHeight);
+            currentY += headerHeight;
+            doc.fontSize(9).font('Helvetica');
+        }
+
+        row.forEach((cell, i) => {
+            const cellText = cell?.toString() || "-";
+            doc.text(cellText, margin + (i * colWidth) + cellPadding, currentY + (rowHeight / 4), {
+                width: colWidth - (cellPadding * 2),
+                align: 'left',
+                lineBreak: false,
+                ellipsis: true
+            });
+        });
+
+        drawLine(currentY + rowHeight);
+        drawVerticalLines(currentY, rowHeight);
+        currentY += rowHeight;
+    });
+
+    return doc;
+};
+
+export const previewReport = catchAsync(async (req, res) => {
+    if (req.user.user_type !== "admin" && req.user.user_type !== "HR") {
+        return res.status(403).json({ ok: false, message: "Access denied" });
+    }
+
+    const { month, date, type } = req.query;
+    const org_id = req.user.org_id;
+
+    if (!type) {
+        return res.status(400).json({ ok: false, message: "Report type is required" });
+    }
+
+    if (["matrix_monthly", "attendance_summary", "attendance_detailed", "lateness_report"].includes(type) && !month) {
+        return res.status(400).json({ ok: false, message: "Month is required" });
+    }
+
+    if (["matrix_weekly", "matrix_daily"].includes(type) && !date) {
+        return res.status(400).json({ ok: false, message: "Date is required" });
+    }
+
+    const { startDate, endDate } = reportsService.resolveDateRange({ type, month, date });
+    const data = await reportsService.getPreviewData({ type, org_id, month, startDate, endDate });
+
+    res.json({ ok: true, data });
+});
+
+export const downloadReport = catchAsync(async (req, res) => {
+    const { month, date, type, format = "xlsx" } = req.query;
+    const org_id = req.user.org_id;
+    const isUserReport = req.originalUrl.includes("/attendance/");
+    const targetUserId = isUserReport ? req.user.user_id : req.query.user_id;
+
+    if (!type) {
+        return res.status(400).json({ ok: false, message: "Report Type is required" });
+    }
+
+    if (["matrix_monthly", "attendance_summary", "attendance_detailed", "lateness_report"].includes(type) && !month) {
+        return res.status(400).json({ ok: false, message: "Month is required" });
+    }
+
+    if (["matrix_weekly", "matrix_daily"].includes(type) && !date) {
+        return res.status(400).json({ ok: false, message: "Date is required" });
+    }
+
+    const { startDate, endDate } = reportsService.resolveDateRange({ type, month, date });
+
+    const users = await reportsService.getUsers({ org_id, targetUserId });
+    let records = [];
+    if (type !== "employee_master") {
+        records = await reportsService.getAttendanceRecords({ org_id, startDate, endDate });
+    }
+
+    if (format === "pdf") {
+        let pdfTitle = type === "employee_master" ? "Employee Master Data" : `Attendance Report - ${startDate} to ${endDate}`;
+        let pdfCols, pdfRows;
+
+        if (type === "attendance_detailed") {
+            const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate });
+            pdfCols = ["Date", "Name", "Dept", "Shift", "In Time", "Out Time", "Work Hrs", "Status", "In Location", "Out Location"];
+            pdfRows = detailedRecords.map(r => [
+                new Date(r.time_in).toLocaleDateString(),
+                r.user_name,
+                r.dept_name || "-",
+                r.shift_name || "-",
+                r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
+                r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
+                reportsService.calculateWorkHours(r.time_in, r.time_out),
+                reportsService.deriveStatus(r),
+                r.time_in_address || "-",
+                r.time_out_address || "-"
+            ]);
+        } else if (type === "matrix_daily") {
+            pdfCols = ["Name", "Dept", "In Time", "Out Time", "Work Hrs", "Status", "In Location", "Out Location"];
+            pdfRows = users.map(u => {
+                const rec = records.find(r => r.user_id === u.user_id);
+                return [
+                    u.user_name,
+                    u.dept_name || "-",
+                    rec?.time_in ? new Date(rec.time_in).toLocaleTimeString() : "-",
+                    rec?.time_out ? new Date(rec.time_out).toLocaleTimeString() : "-",
+                    reportsService.calculateWorkHours(rec?.time_in, rec?.time_out),
+                    rec?.status || "Absent",
+                    rec?.time_in_address || "-",
+                    rec?.time_out_address || "-"
+                ];
+            });
+        } else if (type === "lateness_report") {
+            const latenessRecords = await reportsService.getLatenessRecords({ org_id, startDate, endDate });
+            pdfCols = ["Date", "Employee", "Expected In", "Actual In", "Late By (Mins)", "Reason"];
+            pdfRows = latenessRecords.map(r => {
+                const rules = typeof r.policy_rules === 'string' ? JSON.parse(r.policy_rules) : (r.policy_rules || {});
+                const expectedIn = rules.shift_timing?.start_time || "-";
+                return [
+                    new Date(r.time_in).toLocaleDateString(),
+                    r.user_name,
+                    expectedIn,
+                    r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
+                    r.late_minutes || 0,
+                    r.late_reason || "-"
+                ];
+            });
+        } else if (type === "employee_master") {
+            pdfCols = ["Name", "Email", "Phone", "Dept", "Designation", "Role"];
+            pdfRows = users.map(u => [u.user_name, u.email || "-", u.phone_no || "-", u.dept_name || "-", u.desg_name || "-", u.user_type || "-"]);
+        } else {
+            pdfCols = ["Name", "Dept", "Total Days", "Present", "Absent", "Late", "Leaves", "Total Hrs"];
+            const [year, monthNum] = month.split("-").map(Number);
+            const totalDaysInMonth = new Date(year, monthNum, 0).getDate();
+            pdfRows = users.map(u => {
+                const userRecs = records.filter(r => r.user_id === u.user_id);
+                const presentDays = new Set(userRecs.map(r => new Date(r.time_in).toISOString().split('T')[0])).size;
+                const lateCount = userRecs.filter(r => r.late_minutes > 0).length;
+                const totalHrs = userRecs.reduce((sum, r) => {
+                    const start = new Date(r.time_in);
+                    const end = r.time_out ? new Date(r.time_out) : null;
+                    if (start && end) return sum + (end - start) / (1000 * 60 * 60);
+                    return sum;
+                }, 0);
+                const leaves = 0;
+                const absent = Math.max(0, totalDaysInMonth - (presentDays + leaves));
+                return [u.user_name, u.dept_name || "-", totalDaysInMonth, presentDays, absent, lateCount, leaves, totalHrs.toFixed(2)];
+            });
+        }
+
+        const pdfDoc = generatePdf(pdfTitle, pdfCols, pdfRows);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "attachment; filename=report.pdf");
+        pdfDoc.pipe(res);
+        pdfDoc.end();
+        return;
+    }
+
+    // Excel / CSV
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Report");
+
+    if (type === "matrix_daily") {
+        worksheet.columns = [
+            { header: "Name", key: "name", width: 25 },
+            { header: "Department", key: "dept", width: 20 },
+            { header: "Time In", key: "time_in", width: 15 },
+            { header: "Time Out", key: "time_out", width: 15 },
+            { header: "Work Hours", key: "work_hrs", width: 12 },
+            { header: "Status", key: "status", width: 15 },
+            { header: "In Location", key: "time_in_address", width: 40 },
+            { header: "Out Location", key: "time_out_address", width: 40 }
+        ];
+        users.forEach(u => {
+            const rec = records.find(r => r.user_id === u.user_id);
+            worksheet.addRow({
+                name: u.user_name,
+                dept: u.dept_name || "General",
+                time_in: rec?.time_in ? new Date(rec.time_in).toLocaleTimeString() : "-",
+                time_out: rec?.time_out ? new Date(rec.time_out).toLocaleTimeString() : "-",
+                work_hrs: reportsService.calculateWorkHours(rec?.time_in, rec?.time_out),
+                status: rec?.status || "Absent",
+                time_in_address: rec?.time_in_address || "-",
+                time_out_address: rec?.time_out_address || "-"
+            });
+        });
+    } else if (type === "attendance_detailed") {
+        worksheet.columns = [
+            { header: "Date", key: "date", width: 15 },
+            { header: "Name", key: "name", width: 25 },
+            { header: "Department", key: "dept", width: 20 },
+            { header: "Shift", key: "shift", width: 15 },
+            { header: "Time In", key: "time_in", width: 15 },
+            { header: "Time Out", key: "time_out", width: 15 },
+            { header: "Work Hrs", key: "work_hrs", width: 12 },
+            { header: "Status", key: "status", width: 15 },
+            { header: "In Location", key: "time_in_address", width: 40 },
+            { header: "Out Location", key: "time_out_address", width: 40 }
+        ];
+        const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate });
+        detailedRecords.forEach(r => {
+            worksheet.addRow({
+                date: new Date(r.time_in).toLocaleDateString(),
+                user_id: r.user_id,
+                name: r.user_name,
+                dept: r.dept_name || "-",
+                shift: r.shift_name || "-",
+                time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
+                time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString() : "-",
+                work_hrs: reportsService.calculateWorkHours(r.time_in, r.time_out),
+                status: reportsService.deriveStatus(r),
+                time_in_address: r.time_in_address || "-",
+                time_out_address: r.time_out_address || "-"
+            });
+        });
+    } else if (type === "attendance_summary") {
+        worksheet.columns = [
+            { header: "Name", key: "name", width: 25 },
+            { header: "Dept", key: "dept", width: 20 },
+            { header: "Total Days", key: "total_days", width: 12 },
+            { header: "Present", key: "present", width: 10 },
+            { header: "Absent", key: "absent", width: 10 },
+            { header: "Late", key: "late", width: 10 },
+            { header: "Leaves", key: "leaves", width: 10 },
+            { header: "Total Hrs", key: "total_hrs", width: 12 }
+        ];
+        const [year, monthNum] = month.split("-").map(Number);
+        const totalDaysInMonth = new Date(year, monthNum, 0).getDate();
+        users.forEach(u => {
+            const userRecs = records.filter(r => r.user_id === u.user_id);
+            const presentDays = new Set(userRecs.map(r => new Date(r.time_in).toISOString().split('T')[0])).size;
+            const lateCount = userRecs.filter(r => r.late_minutes > 0).length;
+            const totalHrs = userRecs.reduce((sum, r) => {
+                const start = new Date(r.time_in);
+                const end = r.time_out ? new Date(r.time_out) : null;
+                if (start && end) return sum + (end - start) / (1000 * 60 * 60);
+                return sum;
+            }, 0);
+            const leaves = 0;
+            const absent = Math.max(0, totalDaysInMonth - (presentDays + leaves));
+            worksheet.addRow({
+                id: u.user_id,
+                name: u.user_name,
+                dept: u.dept_name || "-",
+                total_days: totalDaysInMonth,
+                present: presentDays,
+                absent,
+                late: lateCount,
+                leaves,
+                total_hrs: totalHrs.toFixed(2)
+            });
+        });
+    } else if (type === "lateness_report") {
+        worksheet.columns = [
+            { header: "Date", key: "date", width: 15 },
+            { header: "Employee", key: "name", width: 25 },
+            { header: "Expected In", key: "expected_in", width: 15 },
+            { header: "Actual In", key: "actual_in", width: 15 },
+            { header: "Late By (Mins)", key: "late_mins", width: 15 },
+            { header: "Reason", key: "reason", width: 30 }
+        ];
+        const latenessRecords = await reportsService.getLatenessRecords({ org_id, startDate, endDate });
+        latenessRecords.forEach(r => {
+            const rules = typeof r.policy_rules === 'string' ? JSON.parse(r.policy_rules) : (r.policy_rules || {});
+            const expectedIn = rules.shift_timing?.start_time || "-";
+            worksheet.addRow({
+                date: new Date(r.time_in).toLocaleDateString(),
+                name: r.user_name,
+                expected_in: expectedIn,
+                actual_in: r.time_in ? new Date(r.time_in).toLocaleTimeString() : "-",
+                late_mins: r.late_minutes || 0,
+                reason: r.late_reason || "-"
+            });
+        });
+    } else if (type === "employee_master") {
+        worksheet.columns = [
+            { header: "Name", key: "name", width: 25 },
+            { header: "Email", key: "email", width: 30 },
+            { header: "Phone", key: "phone", width: 15 },
+            { header: "Department", key: "dept", width: 20 },
+            { header: "Designation", key: "desg", width: 20 },
+            { header: "Role", key: "user_type", width: 15 }
+        ];
+        users.forEach(u => {
+            worksheet.addRow({
+                name: u.user_name,
+                email: u.email || "-",
+                phone: u.phone_no || "-",
+                dept: u.dept_name || "-",
+                desg: u.desg_name || "-",
+                user_type: u.user_type
+            });
+        });
+    } else {
+        // Multi-day Matrix
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dateHeaders = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dateHeaders.push(new Date(d));
+        }
+
+        const baseHeaders = ["SR No.", "Name", "Position", "Dept"];
+        const timeHeaders = ["Time In", "Time Out", "Late Hours"];
+        const gridHeaders = dateHeaders.map(d => `${d.getDate()}\n${d.toLocaleDateString('en-US', { weekday: 'short' })}`);
+        const summaryHeaders = ["Present Days", "Total Hrs", "Late Count", "Late Mins"];
+
+        worksheet.addRow([...baseHeaders, ...timeHeaders, ...gridHeaders, ...summaryHeaders]);
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+        users.forEach((u, index) => {
+            const userRecs = records.filter(r => r.user_id === u.user_id);
+
+            let latestTimeIn = "-";
+            let latestTimeOut = "-";
+            let totalLateHours = 0;
+
+            if (userRecs.length > 0) {
+                const latestRec = userRecs.reduce((latest, rec) => {
+                    return new Date(rec.time_in) > new Date(latest.time_in) ? rec : latest;
+                });
+                latestTimeIn = latestRec.time_in ? new Date(latestRec.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+                latestTimeOut = latestRec.time_out ? new Date(latestRec.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+                totalLateHours = userRecs.reduce((sum, r) => sum + (r.late_minutes || 0), 0) / 60;
+            }
+
+            const userRow = [index + 1, u.user_name, u.desg_name || "-", u.dept_name || "-", latestTimeIn, latestTimeOut, totalLateHours.toFixed(2)];
+
+            let totalHrs = 0;
+            let lateCount = 0;
+            let lateMins = 0;
+
+            dateHeaders.forEach(d => {
+                const dateStr = d.toISOString().split('T')[0];
+                const rec = userRecs.find(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
+                if (rec) {
+                    userRow.push("1.0");
+                    totalHrs += parseFloat(reportsService.calculateWorkHours(rec.time_in, rec.time_out));
+                    if (rec.late_minutes > 0) {
+                        lateCount++;
+                        lateMins += rec.late_minutes;
+                    }
+                } else {
+                    const day = d.getDay();
+                    userRow.push(day === 0 ? "Sun" : day === 6 ? "Sat" : "0.0");
+                }
+            });
+
+            userRow.push(userRecs.length, totalHrs.toFixed(2), lateCount, lateMins);
+            const row = worksheet.addRow(userRow);
+            row.eachCell((cell) => {
+                if (cell.value === "0.0") cell.font = { color: { argb: 'FFFF0000' } };
+                if (cell.value === "Sun" || cell.value === "Sat") cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+            });
+        });
+    }
+
+    res.setHeader("Content-Type", format === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=Report_${type}.${format}`);
+    if (format === "csv") await workbook.csv.write(res);
+    else await workbook.xlsx.write(res);
+    res.end();
+});
