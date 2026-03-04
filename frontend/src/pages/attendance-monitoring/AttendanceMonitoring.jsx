@@ -1104,13 +1104,10 @@ const AttendanceMonitoring = () => {
                                                     {new Date(request.request_date).toLocaleDateString()}
                                                 </div>
                                                 <div className={`flex items-center gap-1 font-medium ${request.status === 'pending'
-                                                    ? (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000 ? 'text-rose-500' : 'text-amber-600')
+                                                    ? 'text-amber-600'
                                                     : request.status === 'approved' ? 'text-emerald-600' : 'text-red-600'
                                                     }`}>
-                                                    {request.status === 'pending' && (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000)
-                                                        ? 'Expired'
-                                                        : (request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)
-                                                    }
+                                                    {(request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)}
                                                 </div>
                                             </div>
                                         </div>
@@ -1130,22 +1127,21 @@ const AttendanceMonitoring = () => {
                                                 By {selectedRequestData.user_name} ({selectedRequestData.designation})
                                             </p>
                                         </div>
-                                        {selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) < 24 * 60 * 60 * 1000) && (
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
-                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                                >
-                                                    <XCircle size={16} /> Reject
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
-                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
-                                                >
-                                                    <CheckCircle size={16} /> Approve
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
+                                                className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                            >
+                                                <XCircle size={16} /> Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
+                                            >
+                                                <CheckCircle size={16} /> Approve
+                                            </button>
+                                        </div>
+
                                     </div>
 
                                     {/* ADMIN OVERRIDE SECTION */}
@@ -1519,22 +1515,14 @@ const AttendanceMonitoring = () => {
 
                                                                 <div>
                                                                     <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Auditor Comments</h4>
-                                                                    {selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) < 24 * 60 * 60 * 1000) ? (
-                                                                        <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                                                                            <textarea
-                                                                                value={reviewComment}
-                                                                                onChange={(e) => setReviewComment(e.target.value)}
-                                                                                placeholder="Add a review comment or explanation..."
-                                                                                className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-white resize-none"
-                                                                            ></textarea>
-                                                                        </div>
-                                                                    ) : (selectedRequestData.review_comments || (selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) > 24 * 60 * 60 * 1000))) && (
-                                                                        <div className="bg-slate-50 dark:bg-[#1e202e] p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                                                                            <p className="text-sm text-slate-700 dark:text-slate-300">
-                                                                                {selectedRequestData.status === 'pending' ? <span className="text-red-500 flex items-center gap-1"><AlertTriangle size={14} /> Expired Request</span> : selectedRequestData.review_comments}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
+                                                                    <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                                                                        <textarea
+                                                                            value={reviewComment}
+                                                                            onChange={(e) => setReviewComment(e.target.value)}
+                                                                            placeholder="Add a review comment or explanation..."
+                                                                            className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-white resize-none"
+                                                                        ></textarea>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
