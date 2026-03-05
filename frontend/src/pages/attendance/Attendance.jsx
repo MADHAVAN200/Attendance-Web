@@ -43,6 +43,7 @@ import {
 import { Bar, Doughnut, Radar } from 'react-chartjs-2';
 
 import CustomCalendar from '../../components/CustomCalendar';
+import DatePicker from '../../components/DatePicker';
 
 // Register ChartJS
 ChartJS.register(
@@ -112,9 +113,21 @@ const Attendance = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
+    // Late Reason Context
+    const [requireLateReason, setRequireLateReason] = useState(false);
+    const [lateReasonMessage, setLateReasonMessage] = useState("");
+    const [lateReasonText, setLateReasonText] = useState("");
+
     // Correction Request State
     const [correctionHistory, setCorrectionHistory] = useState([]);
-    const [corrDate, setCorrDate] = useState('');
+
+    // Default corrDate to today
+    const [corrDate, setCorrDate] = useState(() => {
+        const d = new Date();
+        const yOffset = d.getTimezoneOffset() * 60000;
+        return new Date(d.getTime() - yOffset).toISOString().split('T')[0];
+    });
+
     const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
     const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
     const [corrMethod, setCorrMethod] = useState('add_session'); // 'add_session' | 'reset'
@@ -124,10 +137,10 @@ const Attendance = () => {
     const [corrOut, setCorrOut] = useState('');
 
     // Inputs for 'add_session'
-    const [corrSessions, setCorrSessions] = useState([{ time_in: '', time_out: '' }]);
+    const [corrSessions, setCorrSessions] = useState([{ id: Date.now(), time_in: '', time_out: '' }]);
 
     const [corrReason, setCorrReason] = useState('');
-    const [existingRecord, setExistingRecord] = useState(null); // Data for selected date
+    const [existingRecord, setExistingRecord] = useState(null); // Keep for backend logic if needed
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null); // For details modal
 
@@ -193,17 +206,36 @@ const Attendance = () => {
 
         const fetchRecord = async () => {
             try {
-                // Reuse getMyRecords to find data for this specific day
                 const res = await attendanceService.getMyRecords(corrDate, corrDate);
-                // API returns { data: [...] }. Access data property.
                 if (res?.data && res.data.length > 0) {
-                    setExistingRecord(res.data[0]);
+                    setExistingRecord(res.data[0]); // Keep keeping the first record if needed elsewhere
+
+                    // Parse out all sessions and auto-populate the add_session array
+                    const userSessions = res.data;
+                    const loadedSessions = userSessions.map((s, i) => {
+                        let time_in_str = '';
+                        let time_out_str = '';
+                        if (s.time_in) {
+                            time_in_str = new Date(s.time_in).toTimeString().slice(0, 5);
+                        }
+                        if (s.time_out) {
+                            time_out_str = new Date(s.time_out).toTimeString().slice(0, 5);
+                        }
+                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str };
+                    });
+
+                    // Only overwrite if it wasn't just manually cleared or modified by the user recently 
+                    // To be safe, we always overwrite on date change
+                    setCorrSessions(loadedSessions);
+
                 } else {
                     setExistingRecord(null);
+                    setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
                 }
             } catch (error) {
                 console.error("Failed to fetch existing record", error);
                 setExistingRecord(null);
+                setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
             }
         };
 
@@ -228,6 +260,9 @@ const Attendance = () => {
     const openCamera = (mode) => {
         setCameraMode(mode);
         setImgSrc(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
         setShowCamera(true);
     };
 
@@ -235,6 +270,9 @@ const Attendance = () => {
         setShowCamera(false);
         setImgSrc(null);
         setCameraMode(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
     };
 
     const capture = useCallback(() => {
@@ -272,7 +310,11 @@ const Attendance = () => {
                 // if (accuracy > MAX_ALLOWED_ACCURACY) ... (Strict check disabled for dev flexibility if needed, but keeping generally)
 
                 const imageBlob = dataURLtoBlob(imgSrc);
-                const payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+                let payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+
+                if (requireLateReason && lateReasonText.trim()) {
+                    payload.late_reason = lateReasonText;
+                }
 
                 let res;
                 if (cameraMode === 'IN') {
@@ -287,7 +329,18 @@ const Attendance = () => {
                 fetchDailyRecords();
             } catch (error) {
                 console.error(error);
-                toast.error(error.message || "Attendance failed");
+
+                // Intercept Late Reason missing error
+                const errorMsg = error.message || "Attendance failed";
+                const errorLower = errorMsg.toLowerCase();
+
+                if (cameraMode === 'IN' && errorLower.includes("late") && errorLower.includes("reason")) {
+                    setRequireLateReason(true);
+                    setLateReasonMessage(errorMsg);
+                    toast.warning(errorMsg);
+                } else {
+                    toast.error(errorMsg);
+                }
             } finally {
                 setIsSubmitting(false);
             }
@@ -338,6 +391,23 @@ const Attendance = () => {
                 if (validSessions.length === 0) {
                     throw new Error("Please add at least one valid session (Time In & Time Out)");
                 }
+
+                // VALIDATE OVERLAPPING SESSIONS
+                for (let i = 0; i < validSessions.length; i++) {
+                    const sessionA = validSessions[i];
+                    if (sessionA.time_in >= sessionA.time_out) {
+                        throw new Error(`Invalid time range: In (${sessionA.time_in}) must be before Out (${sessionA.time_out})`);
+                    }
+                    for (let j = i + 1; j < validSessions.length; j++) {
+                        const sessionB = validSessions[j];
+
+                        // Check overlap
+                        if (sessionA.time_in < sessionB.time_out && sessionA.time_out > sessionB.time_in) {
+                            throw new Error(`Sessions cannot overlap: ${sessionA.time_in}-${sessionA.time_out} overlaps with ${sessionB.time_in}-${sessionB.time_out}`);
+                        }
+                    }
+                }
+
                 payload.sessions = validSessions;
             }
             // 3. RESET MODE
@@ -353,14 +423,18 @@ const Attendance = () => {
 
             toast.success("Correction request submitted!");
             // Reset Form
-            setCorrDate('');
+            const d = new Date();
+            const yOffset = d.getTimezoneOffset() * 60000;
+            const todayLocal = new Date(d.getTime() - yOffset).toISOString().split('T')[0];
+
+            setCorrDate(todayLocal);
             setCorrIn('');
             setCorrOut('');
             setCorrReason('');
             setCorrType('Correction');
             setCorrOtherType('');
             setCorrMethod('add_session');
-            setCorrSessions([{ time_in: '', time_out: '' }]);
+            setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
             setExistingRecord(null);
 
             fetchCorrectionHistory();
@@ -971,27 +1045,14 @@ const Attendance = () => {
                                         </div>
 
                                         <form onSubmit={handleSubmitCorrection} className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
-                                                <input
-                                                    type="date"
+                                            <div className="z-20 relative">
+                                                <DatePicker
+                                                    label="Date"
                                                     value={corrDate}
-                                                    max={new Date().toISOString().split('T')[0]}
-                                                    onChange={(e) => setCorrDate(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
-                                                    required
+                                                    onChange={(val) => setCorrDate(val)}
+                                                    maxDate={new Date().toISOString().split('T')[0]}
                                                 />
                                             </div>
-
-                                            {existingRecord && (
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm">
-                                                    <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Existing Record Found:</p>
-                                                    <div className="flex justify-between text-xs text-slate-500">
-                                                        <span>In: {existingRecord.time_in ? formatTime(existingRecord.time_in) : '--'}</span>
-                                                        <span>Out: {existingRecord.time_out ? formatTime(existingRecord.time_out) : '--'}</span>
-                                                    </div>
-                                                </div>
-                                            )}
 
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
@@ -1063,38 +1124,37 @@ const Attendance = () => {
                                             ) : (
                                                 <div className="space-y-3">
                                                     <label className="block text-xs font-bold text-slate-500 uppercase">Sessions</label>
-                                                    {corrSessions.map((session, index) => (
-                                                        <div key={index} className="flex gap-2">
+                                                    {[...corrSessions].sort((a, b) => {
+                                                        if (!a.time_in) return 1;
+                                                        if (!b.time_in) return -1;
+                                                        return a.time_in.localeCompare(b.time_in);
+                                                    }).map((session, index, arr) => (
+                                                        <div key={session.id} className="flex gap-2 animate-in fade-in zoom-in-95 duration-200">
                                                             <input
                                                                 type="time"
                                                                 value={session.time_in}
                                                                 onChange={(e) => {
-                                                                    const newSessions = [...corrSessions];
-                                                                    newSessions[index].time_in = e.target.value;
-                                                                    setCorrSessions(newSessions);
+                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
                                                                 placeholder="In"
                                                             />
                                                             <input
                                                                 type="time"
                                                                 value={session.time_out}
                                                                 onChange={(e) => {
-                                                                    const newSessions = [...corrSessions];
-                                                                    newSessions[index].time_out = e.target.value;
-                                                                    setCorrSessions(newSessions);
+                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
                                                                 placeholder="Out"
                                                             />
-                                                            {index > 0 && (
+                                                            {arr.length > 1 && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newSessions = corrSessions.filter((_, i) => i !== index);
-                                                                        setCorrSessions(newSessions);
+                                                                        setCorrSessions(prev => prev.filter(s => s.id !== session.id));
                                                                     }}
-                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                                                                 >
                                                                     <X size={16} />
                                                                 </button>
@@ -1103,8 +1163,8 @@ const Attendance = () => {
                                                     ))}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
-                                                        className="w-full py-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
+                                                        onClick={() => setCorrSessions([...corrSessions, { id: Date.now(), time_in: '', time_out: '' }])}
+                                                        className="w-full py-2.5 mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
                                                     >
                                                         + Add Another Session
                                                     </button>
@@ -1194,7 +1254,7 @@ const Attendance = () => {
 
                 {/* --- CORRECTION DETAILS MODAL --- */}
                 {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
@@ -1267,8 +1327,12 @@ const Attendance = () => {
                                             {(typeof selectedRequest.correction_data === 'string'
                                                 ? JSON.parse(selectedRequest.correction_data).sessions
                                                 : selectedRequest.correction_data.sessions || []
-                                            ).map((s, i) => (
-                                                <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700">
+                                            ).sort((a, b) => {
+                                                if (!a.time_in) return 1;
+                                                if (!b.time_in) return -1;
+                                                return a.time_in.localeCompare(b.time_in);
+                                            }).map((s, i) => (
+                                                <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors">
                                                     <span className="font-mono text-slate-600 dark:text-slate-400">In: <span className="text-slate-800 dark:text-white font-bold">{s.time_in}</span></span>
                                                     <span className="font-mono text-slate-600 dark:text-slate-400">Out: <span className="text-slate-800 dark:text-white font-bold">{s.time_out}</span></span>
                                                 </div>
@@ -1311,7 +1375,7 @@ const Attendance = () => {
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
                         <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-center px-4">
                                 <h3 className="text-2xl font-bold text-white tracking-tight">
@@ -1338,6 +1402,25 @@ const Attendance = () => {
                                     />
                                 )}
                             </div>
+
+                            {requireLateReason && imgSrc && (
+                                <div className="space-y-3 px-2 w-full max-w-lg mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-2 text-amber-300 bg-amber-900/40 border border-amber-500/30 p-3 rounded-xl mb-4 text-sm font-medium">
+                                        <AlertCircle size={18} className="shrink-0" />
+                                        <p>{lateReasonMessage}</p>
+                                    </div>
+                                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                                        Please provide a reason
+                                    </label>
+                                    <textarea
+                                        value={lateReasonText}
+                                        onChange={(e) => setLateReasonText(e.target.value)}
+                                        placeholder="I got held up in traffic..."
+                                        className="w-full px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-white placeholder-slate-400 h-24 resize-none backdrop-blur-md"
+                                        required
+                                    ></textarea>
+                                </div>
+                            )}
 
                             <div className="flex justify-center gap-6 pt-2">
                                 {!imgSrc ? (
