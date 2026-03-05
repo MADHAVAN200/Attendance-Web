@@ -551,7 +551,7 @@ export const deleteShift = async (shiftId, orgId) => {
 };
 
 export const getWorkLocations = async (orgId) => {
-    return await attendanceDB("work_locations").where({ org_id }).select(
+    return await attendanceDB("work_locations").where({ org_id: orgId }).select(
         "location_id", "location_name", "latitude", "longitude", "radius", "is_active"
     );
 };
