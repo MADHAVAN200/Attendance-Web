@@ -222,7 +222,7 @@ export const deleteShift = catchAsync(async (req, res, next) => {
 
 export const getWorkLocations = catchAsync(async (req, res, next) => {
     const locations = await userService.getWorkLocations(req.user.org_id);
-    res.json({ success: true, locations, data: locations });
+    res.json({ ok: true, locations });
 });
 
 export const bulkValidateUsers = catchAsync(async (req, res, next) => {
