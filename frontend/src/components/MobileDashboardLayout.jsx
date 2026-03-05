@@ -8,13 +8,12 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const { unreadCount } = useNotification();
 
-    // ... (theme logic remains the same)
-    // Initialize theme from localStorage or default to 'light'
+    // Initialize theme from localStorage or default to 'dark' logic
     const [theme, setTheme] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('theme') || 'light';
+            return localStorage.getItem('theme') || 'dark'; // defaulting to dark for this aesthetic update
         }
-        return 'light';
+        return 'dark';
     });
 
     useEffect(() => {
@@ -32,31 +31,31 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-poppins text-slate-900 dark:text-white pb-20 md:pb-0">
+        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-white pb-6 md:pb-0 transition-colors duration-300 overflow-x-hidden">
             {/* Header */}
             {!hideHeader && (
-                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 z-30 shadow-sm">
-                    <div className="flex items-center gap-3">
+                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between px-4 z-30">
+                    <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(true)}
-                            className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                            className="text-slate-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                         >
-                            <Menu size={24} />
+                            <Menu size={24} strokeWidth={2.5} />
                         </button>
-                        <h1 className="text-lg font-bold text-slate-800 dark:text-white truncate max-w-[200px]">{title}</h1>
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-wide">{title}</h1>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4">
                         <button
                             onClick={toggleTheme}
-                            className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                            className="text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                         >
-                            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                            {theme === 'light' ? <Moon size={22} fill="currentColor" /> : <Moon size={22} fill="currentColor" />}
                         </button>
-                        <button className="relative p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                            <Bell size={20} />
+                        <button className="relative text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
+                            <Bell size={22} />
                             {unreadCount > 0 && (
-                                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+                                <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-[#111827]"></span>
                             )}
                         </button>
                     </div>

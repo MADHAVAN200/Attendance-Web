@@ -12,6 +12,7 @@ import {
     Calendar,
     FileText,
     UserPlus,
+    UserCheck,
     Briefcase,
     RefreshCw
 } from 'lucide-react';
@@ -34,7 +35,7 @@ import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const { avatarTimestamp } = useAuth();
+    const { user, avatarTimestamp } = useAuth();
     const [stats, setStats] = React.useState({
         presentToday: 0,
         totalEmployees: 0,
@@ -117,375 +118,213 @@ const AdminDashboard = () => {
     ];
 
     return (
-        <MobileDashboardLayout title="Dashboard" hideHeader={true}>
-            <div className="p-4 bg-slate-50 dark:bg-slate-900 min-h-screen pb-24 transition-colors duration-300">
-                {/* Header Section */}
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
-                            Hello, {user?.name || 'Admin'} 👋
-                        </h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Here's what's happening today</p>
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border-2 border-white dark:border-slate-600 shadow-sm">
-                        <img src={`https://ui-avatars.com/api/?name=${user?.name}&background=random`} alt="Profile" className="w-full h-full object-cover" />
+        <MobileDashboardLayout title="Dashboard" hideHeader={false}>
+            <div className="py-2 space-y-8 animate-fade-in">
+                {/* Stats Stack */}
+                <div className="space-y-4">
+                    <StatCard
+                        title="Present Today"
+                        value={`${stats.presentToday}`}
+                        total={`/ ${stats.totalEmployees}`}
+                        trend={trends.present}
+                        trendUp={parseFloat(trends.present) >= 0}
+                        icon={<CheckCircle size={20} className="text-emerald-500" strokeWidth={2} />}
+                        iconBg="border border-emerald-500/20 bg-emerald-500/10"
+                        loading={isLoading}
+                    />
+                    <StatCard
+                        title="Absent"
+                        value={`${stats.absentToday} Employees`}
+                        trend={trends.absent}
+                        trendUp={parseFloat(trends.absent) < 0}
+                        icon={<XCircle size={20} className="text-rose-500" strokeWidth={2} />}
+                        iconBg="border border-rose-500/20 bg-rose-500/10"
+                        loading={isLoading}
+                    />
+                    <StatCard
+                        title="Late Check-ins"
+                        value={`${stats.lateCheckins} Employees`}
+                        trend={trends.late}
+                        trendUp={parseFloat(trends.late) < 0}
+                        icon={<Clock size={20} className="text-amber-500" strokeWidth={2} />}
+                        iconBg="border border-amber-500/20 bg-amber-500/10"
+                        loading={isLoading}
+                    />
+                    <StatCard
+                        title="On Leave"
+                        value={`${stats.onLeave || 0} Planned`}
+                        trend=""
+                        icon={<Calendar size={20} className="text-indigo-400" strokeWidth={2} />}
+                        iconBg="border border-indigo-400/20 bg-indigo-400/10"
+                        loading={isLoading}
+                    />
+                </div>
+
+                {/* Quick Actions */}
+                <div>
+                    <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-3 px-1">Quick Actions</h3>
+                    <div className="space-y-3">
+                        <QuickLinkCard
+                            onClick={() => navigate('/mobile-view/employees')}
+                            icon={<UserPlus size={20} className="text-indigo-400" />}
+                            iconBg="bg-indigo-500/10"
+                            title="Add Employee"
+                        />
+                        <QuickLinkCard
+                            onClick={() => navigate('/mobile-view/attendance-monitoring')}
+                            icon={<AlertTriangle size={20} className="text-rose-400" />}
+                            iconBg="bg-rose-500/10"
+                            title="Live Monitor"
+                        />
+                        <QuickLinkCard
+                            onClick={() => navigate('/mobile-view/shifts')}
+                            icon={<Briefcase size={20} className="text-purple-400" />}
+                            iconBg="bg-purple-500/10"
+                            title="Manage Shifts"
+                        />
                     </div>
                 </div>
 
-                {/* Quick Stats Grid */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-3">
-                            <Users size={20} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{stats.totalEmployees}</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Employees</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="w-10 h-10 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400 mb-3">
-                            <UserCheck size={20} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{stats.presentToday}</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Present Today</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-600 dark:text-orange-400 mb-3">
-                            <Clock size={20} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{stats.onLeave}</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">On Leave</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-600 dark:text-purple-400 mb-3">
-                            <AlertTriangle size={20} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{stats.pendingRequests || 0}</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Pending Requests</p>
-                    </div>
-                </div>
+                {/* Analytics Segment */}
+                <div>
+                    <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-3 px-1">Analytics</h3>
 
-                {/* Quick Links - Only for Admin and HR */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-3">
-                        <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Quick Actions</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <QuickLinkCard onClick={() => navigate('/mobile-view/employees')} icon={<UserPlus size={20} />} title="Add Employee" desc="Create new user profile" />
-                            <QuickLinkCard onClick={() => navigate('/mobile-view/reports')} icon={<FileText size={20} />} title="Generate Report" desc="Download monthly stats" />
-                            <QuickLinkCard onClick={() => navigate('/mobile-view/policy-builder?tab=shifts')} icon={<Briefcase size={20} />} title="Manage Shifts" desc="Update work schedules" />
-                        </div>
-                    </div>
-                </div>
+                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/60">
+                        <h4 className="text-lg font-bold text-slate-800 dark:text-white">Attendance Trends</h4>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 mt-1">Weekly Insight</p>
 
-                {/* Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Charts Column */}
-                    <div className="lg:col-span-2 space-y-8">
-                        {/* 1. Overall Attendance Trends */}
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                            <div className="flex items-center justify-between mb-6 gap-2">
-                                <div className="flex-shrink-0">
-                                    <h3 className="font-semibold text-base sm:text-lg text-slate-800 dark:text-white truncate max-w-[150px] sm:max-w-none">Overall Trends</h3>
-                                </div>
-
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                                    {/* Main Mode Toggle (Pill Style) */}
-                                    <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50 flex-shrink-0">
-                                        <button
-                                            onClick={() => setViewMode('range')}
-                                            className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all duration-200 ${viewMode === 'range'
-                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-                                        >
-                                            Quick
-                                        </button>
-                                        <button
-                                            onClick={() => setViewMode('calendar')}
-                                            className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all duration-200 ${viewMode === 'calendar'
-                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
-                                        >
-                                            Calendar
-                                        </button>
-                                    </div>
-
-                                    {/* Sub-selectors and Sync - Compact Wrapper */}
-                                    <div className="flex items-center gap-1.5 h-8 px-1.5 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-slate-700/50 flex-shrink-0">
-                                        {viewMode === 'range' ? (
-                                            <div className="flex items-center">
-                                                {['daily', 'weekly', 'monthly'].map((r) => (
-                                                    <button
-                                                        key={r}
-                                                        onClick={() => setActiveRange(r)}
-                                                        className={`px-2 py-0.5 rounded text-[10px] sm:text-xs font-bold transition-all ${activeRange === r
-                                                            ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
-                                                            : 'text-slate-400 dark:text-slate-500'
-                                                            }`}
-                                                    >
-                                                        {r.charAt(0).toUpperCase()}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1">
-                                                <select
-                                                    value={selectedMonth}
-                                                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                                    className="bg-transparent text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
-                                                >
-                                                    {Array.from({ length: 12 }, (_, i) => (
-                                                        <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="w-px h-3 bg-slate-300 dark:bg-slate-600" />
-                                                <select
-                                                    value={selectedYear}
-                                                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                                    className="bg-transparent text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
-                                                >
-                                                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
-                                                        <option key={y} value={y}>{y}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
-
-                                        <div className="w-px h-3 bg-slate-200 dark:bg-slate-700" />
-
-                                        <button
-                                            onClick={handleRefresh}
-                                            disabled={isLoading}
-                                            className={`p-1 rounded-md text-slate-400 hover:text-indigo-600 transition-all ${isLoading ? 'opacity-50' : ''}`}
-                                            title="Sync Data"
-                                        >
-                                            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="h-72">
-                                {isLoading ? (
-                                    <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg flex items-center justify-center">
-                                        <div className="h-40 w-full mx-8 flex items-end gap-4">
-                                            {[1, 2, 3, 4, 5].map(i => (
-                                                <div key={i} className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-t" style={{ height: `${20 * i}%` }}></div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={chartData}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{ fill: 'transparent' }} />
-                                            <Bar dataKey="present" fill="#10b981" radius={[4, 4, 0, 0]} name="Present" />
-                                            <Bar dataKey="absent" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Absent" />
-                                            <Bar dataKey="late" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Late" />
-                                            <Legend verticalAlign="top" height={36} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {/* 2. Present vs Absent (Area Chart) */}
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                                <h3 className="font-semibold text-base text-slate-800 dark:text-white mb-4">Present vs Absent</h3>
-                                <div className="h-60">
-                                    {isLoading ? (
-                                        <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg" />
-                                    ) : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={chartData}>
-                                                <defs>
-                                                    <linearGradient id="colorPresent2" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                    </linearGradient>
-                                                    <linearGradient id="colorAbsent2" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: 12 }} />
-                                                <Area type="monotone" dataKey="present" stroke="#6366f1" fillOpacity={1} fill="url(#colorPresent2)" name="Present" />
-                                                <Area type="monotone" dataKey="absent" stroke="#f43f5e" fillOpacity={1} fill="url(#colorAbsent2)" name="Absent" />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* 3. Present vs Late (Bar Chart) */}
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                                <h3 className="font-semibold text-base text-slate-800 dark:text-white mb-4">Present vs Late</h3>
-                                <div className="h-60">
-                                    {isLoading ? (
-                                        <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-700/20 rounded-lg" />
-                                    ) : (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={chartData}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', fontSize: 12 }} />
-                                                <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Present" />
-                                                <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Late" />
-                                                <Legend verticalAlign="top" height={36} />
-                                            </LineChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column: Activity & Alerts */}
-                    <div className="space-y-8">
-                        {/* Live Activity Feed */}
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Today's Activity</h3>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                    <span className="relative flex h-2 w-2">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                    </span>
-                                    Live
-                                </div>
-                            </div>
-                            <div
-                                className={`space-y-4 px-1 transition-all duration-300 ${isFeedExpanded ? 'max-h-[600px]' : 'max-h-[380px]'} overflow-y-auto custom-scrollbar`}
-                            >
-                                {isLoading ? (
-                                    [1, 2, 3, 4, 5, 6].map(i => (
-                                        <div key={i} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0 animate-pulse">
-                                            <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0"></div>
-                                            <div className="flex-1 space-y-2">
-                                                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                                                <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded w-1/2"></div>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : activities.length > 0 ? (
-                                    activities.map((activity) => (
-                                        <div key={activity.id} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-slate-700/50 last:border-0 last:pb-0">
-                                            <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center flex-shrink-0 text-sm font-bold text-indigo-600 dark:text-indigo-400 overflow-hidden">
-                                                {activity.profile_image_url ? (
-                                                    <img src={`${activity.profile_image_url}?t=${avatarTimestamp}`} alt={activity.user} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    activity.user?.charAt(0) || '?'
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{activity.user || 'Unknown User'}</p>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400">{activity.role || 'System'} • {activity.action}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
-                                                    {activity.time}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="py-8 text-center">
-                                        <p className="text-sm text-slate-500">No activity yet today</p>
-                                    </div>
-                                )}
-                            </div>
-                            {activities.length > 5 && (
-                                <button
-                                    onClick={() => setIsFeedExpanded(!isFeedExpanded)}
-                                    className="w-full mt-4 py-2 text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold transition-all border border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-2"
-                                >
-                                    {isFeedExpanded ? 'Show Less' : 'Show More Today'}
-                                </button>
+                        <div className="h-64 mt-4">
+                            {isLoading ? (
+                                <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-800/50 rounded-lg"></div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} dy={10} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', borderRadius: '8px', border: 'none', color: '#fff' }}
+                                            itemStyle={{ color: '#fff' }}
+                                        />
+                                        <Legend
+                                            verticalAlign="top"
+                                            height={36}
+                                            iconType="circle"
+                                            wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', left: 0 }}
+                                        />
+                                        <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Present" />
+                                        <Line type="monotone" dataKey="absent" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Absent" />
+                                        <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Late" />
+                                    </LineChart>
+                                </ResponsiveContainer>
                             )}
                         </div>
+                    </div>
+                </div>
 
-                        {/* Anomalies / Alerts */}
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                            <div className="flex items-center gap-2 mb-4 text-amber-600 dark:text-amber-500">
-                                <AlertTriangle size={20} />
-                                <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Anomalies</h3>
-                            </div>
-                            <div className="space-y-3">
-                                {alerts.map((alert) => (
-                                    <div key={alert.id} className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-lg text-sm text-amber-800 dark:text-amber-200 flex gap-3 items-start">
-                                        <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></div>
-                                        <span className="leading-snug">{alert.message}</span>
+                {/* Live Activity Segment */}
+                <div className="bg-white dark:bg-[#1a2332] rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60">
+                    <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60">
+                        <h3 className="font-bold text-lg text-slate-800 dark:text-white">Live Activity</h3>
+                        <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
+                    </div>
+
+                    <div className="p-2">
+                        {isLoading ? (
+                            <div className="p-4 space-y-4">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="flex items-start gap-4 animate-pulse">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                                        <div className="flex-1 space-y-2 py-1">
+                                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+                                            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        ) : activities.length > 0 ? (
+                            <div className="flex flex-col">
+                                {activities.map((activity, index) => (
+                                    <div key={activity.id} className={`flex items-start gap-4 p-4 ${index !== activities.length - 1 ? 'border-b border-slate-50 dark:border-[#202b3d]' : ''}`}>
+                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#2b2533] text-[#f43f5e] font-bold text-lg shrink-0 overflow-hidden">
+                                            {activity.profile_image_url ? (
+                                                <img src={`${activity.profile_image_url}?t=${avatarTimestamp}`} alt={activity.user} className="w-full h-full object-cover" />
+                                            ) : (
+                                                activity.user?.charAt(0) || '?'
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <p className="text-[15px] font-bold text-slate-800 dark:text-white truncate">{activity.user || 'Unknown User'}</p>
+                                            <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{activity.role || 'Employee'} • {activity.action}</p>
+                                        </div>
+
+                                        <div className="shrink-0 bg-slate-100 dark:bg-[#151b28] px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-1">
+                                            {activity.time ? activity.time.split(' ')[1] + ' ' + (activity.time.split(' ')[2] || '') : 'Now'}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center text-slate-500">
+                                No activity yet today
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
         </MobileDashboardLayout>
-
     );
 };
 
-const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading }) => (
-    <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, iconBg }) => (
+    <div className="bg-white dark:bg-[#1a2332] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 relative overflow-hidden">
         {loading ? (
             <div className="animate-pulse space-y-4">
-                <div className="flex justify-between items-start">
-                    <div className="space-y-2 w-full">
-                        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
-                        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                    </div>
-                    <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                </div>
-                <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded w-2/3"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
             </div>
         ) : (
             <>
-                <div className="flex items-start justify-between mb-4">
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-                        <h4 className="text-3xl font-bold text-slate-800 dark:text-white mt-1 tracking-tight">{value} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">{total}</span></h4>
-                    </div>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-100 dark:border-slate-700">
+                <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-300">{title}</p>
+                    <div className={`p-2 rounded-full ${iconBg}`}>
                         {icon}
                     </div>
                 </div>
-                <div className="flex items-center text-sm">
-                    {trend && (
-                        <span className={`font-semibold ${trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'} flex items-center bg-opacity-10 px-1.5 py-0.5 rounded`}>
-                            {trendUp ? '↑' : '↓'} {trend}
+
+                <h4 className="text-[28px] font-bold text-slate-800 dark:text-white tracking-tight flex items-baseline gap-1">
+                    {value.split(' ')[0]}
+                    {value.split(' ')[1] && <span className="text-sm font-normal text-slate-800 dark:text-white"> {value.split(' ').slice(1).join(' ')}</span>}
+                    {total && <span className="text-sm font-normal text-slate-400">{total}</span>}
+                </h4>
+
+                {trend !== undefined && trend !== "" && (
+                    <div className="flex items-center text-[13px] mt-2 font-bold">
+                        <span className={`${trendUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {trendUp && !trend.startsWith('+') && !trend.startsWith('-') ? '+' : ''}{trend}
                         </span>
-                    )}
-                    {trend && (
-                        <span className="text-slate-400 dark:text-slate-500 ml-2">
-                            vs {period === 'daily' ? 'yesterday' : period === 'weekly' ? 'last week' : 'last month'}
-                        </span>
-                    )}
-                    {!trend && period && <span className="text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded">{period}</span>}
-                </div>
+                        <span className="text-slate-400 dark:text-slate-400 font-normal ml-1">vs yesterday</span>
+                    </div>
+                )}
             </>
         )}
     </div>
 );
 
-const QuickLinkCard = ({ icon, title, desc, onClick }) => (
+const QuickLinkCard = ({ icon, title, onClick, iconBg }) => (
     <div
         onClick={onClick}
-        className="bg-white dark:bg-dark-card p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all cursor-pointer group"
+        className="bg-white dark:bg-[#1a2332] p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800/60 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
     >
         <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:bg-indigo-600 dark:group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
                 {icon}
             </div>
-            <div>
-                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p>
-            </div>
+            <h4 className="text-[15px] font-semibold text-slate-800 dark:text-slate-200 tracking-wide">{title}</h4>
+        </div>
+        <div className="text-slate-400 dark:text-slate-300">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
         </div>
     </div>
 );

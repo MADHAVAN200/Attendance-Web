@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
 import {
     Search,
@@ -16,7 +17,8 @@ import {
     AlertCircle,
     X,
     LogIn,
-    LogOut
+    LogOut,
+    History
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
@@ -339,9 +341,58 @@ const StatusBadge = ({ status }) => {
 };
 
 const RequestsView = () => {
+    const { user } = useAuth();
     const [subTab, setSubTab] = useState('pending'); // 'pending' | 'history'
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+    const handleRequestClick = async (req) => {
+        if (isFetchingDetails) return;
+        try {
+            setIsFetchingDetails(true);
+            const requestId = req.acr_id || req.request_id || req.id;
+            const res = await attendanceService.getCorrectionDetails(requestId);
+            const details = res.data || res;
+            setSelectedRequest({ ...req, ...details });
+        } catch (error) {
+            console.error("Failed to fetch correction details:", error);
+            toast.error(error.message || "Failed to fetch request details");
+            setSelectedRequest(req);
+        } finally {
+            setIsFetchingDetails(false);
+        }
+    };
+
+    const handleUpdateStatus = async (requestId, status) => {
+        if (!requestId) return;
+        try {
+            setIsUpdatingStatus(true);
+            await attendanceService.updateCorrectionStatus(requestId, status, '');
+            toast.success(`Request ${status.toLowerCase()} successfully`);
+
+            setRequests(prev => prev.map(req => {
+                const id = req.acr_id || req.request_id || req.id;
+                if (id === requestId) {
+                    return { ...req, status: status, approved_by: user?.name, updated_at: new Date().toISOString() };
+                }
+                return req;
+            }));
+
+            setTimeout(() => {
+                setSelectedRequest(null);
+            }, 300);
+
+        } catch (error) {
+            console.error('Failed to update status', error);
+            toast.error(error.message || 'Failed to update request');
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -395,7 +446,11 @@ const RequestsView = () => {
                     <div className="py-10 text-center text-slate-400 text-xs">Loading requests...</div>
                 ) : requests.length > 0 ? (
                     requests.map(req => (
-                        <div key={req.acr_id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                        <div
+                            key={req.acr_id}
+                            onClick={() => handleRequestClick(req)}
+                            className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
                                     {req.user_name ? req.user_name.charAt(0) : 'U'}
@@ -428,6 +483,137 @@ const RequestsView = () => {
                     </div>
                 )}
             </div>
+
+            {/* --- CORRECTION DETAILS VIEW MODAL --- */}
+            {selectedRequest && createPortal(
+                <div className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                        {/* Header Pull Bar (Mobile) */}
+                        <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
+                            <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+                        </div>
+
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-slate-800/60 shrink-0">
+                            <div>
+                                <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id || Math.floor(Math.random() * 100) + 1}</h3>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xs font-bold">
+                                        {(selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'U').charAt(0)}
+                                    </div>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'Employee'}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-slate-800 sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Modal Content Scrollable Area */}
+                        <div className="px-6 py-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+
+                            {/* Correction Details */}
+                            <section>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Correction Details</h4>
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                                        <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">Request Type</span>
+                                        <span className="font-bold text-slate-800 dark:text-white text-sm uppercase">{selectedRequest.correction_type || selectedRequest.type}</span>
+                                    </div>
+                                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                                        <span className="text-xs text-indigo-500/70 dark:text-indigo-400/70 mb-1">Method</span>
+                                        <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.details?.method || 'MANUAL'}</span>
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 mb-3 block">Requested Sessions</span>
+                                    <div className="space-y-2">
+                                        {selectedRequest.details?.sessions?.map((s, i) => (
+                                            <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-white">
+                                                <span>In: {s.in || s.time_in || '--:--'}</span>
+                                                <span>Out: {s.out || s.time_out || '--:--'}</span>
+                                            </div>
+                                        )) || (
+                                                <div className="flex flex-col text-sm font-bold text-slate-800 dark:text-white">
+                                                    <span>In: {selectedRequest.time_in || '--:--'}</span>
+                                                    <span>Out: {selectedRequest.time_out || '--:--'}</span>
+                                                </div>
+                                            )}
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Justification */}
+                            <section>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Justification & Comments</h4>
+                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                                    <FileText size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                                    <p className="text-sm font-medium italic text-slate-600 dark:text-slate-300">
+                                        "{selectedRequest.reason || selectedRequest.comments || 'No comment provided'}"
+                                    </p>
+                                </div>
+                            </section>
+
+                            {/* Audit Trail */}
+                            <section>
+                                <div className="border-t border-slate-100 dark:border-slate-800/60 mb-6"></div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <History size={14} className="text-slate-400" />
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Trail</h4>
+                                </div>
+
+                                <div className="relative pl-3 border-l-2 border-slate-200 dark:border-slate-800 space-y-6">
+                                    {/* Submited */}
+                                    <div className="relative">
+                                        <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 border-indigo-500"></div>
+                                        <h5 className="font-bold text-sm text-slate-800 dark:text-white">Submitted</h5>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'User'}
+                                        </p>
+                                    </div>
+
+                                    {/* Final Status (if processed) */}
+                                    {(selectedRequest.status || 'PENDING').toUpperCase() !== 'PENDING' && (
+                                        <div className="relative">
+                                            <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 
+                                                    ${(selectedRequest.status).toUpperCase() === 'APPROVED' ? 'border-emerald-500' : 'border-rose-500'}`}>
+                                            </div>
+                                            <h5 className="font-bold text-sm text-slate-800 dark:text-white drop-shadow-sm capitalize">
+                                                {(selectedRequest.status).toLowerCase()}
+                                            </h5>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                {new Date(selectedRequest.updated_at || Date.now()).toLocaleString()} • by {selectedRequest.approved_by || 'Admin/HR'}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Admin/HR Action Buttons (Bottom Fixed) */}
+                        {/* Only show if user is Admin/HR and request is PENDING */}
+                        {['admin', 'hr', 'manager'].includes((user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
+                            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
+                                <button
+                                    onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'REJECTED')}
+                                    disabled={isUpdatingStatus}
+                                    className="flex-1 py-3.5 bg-white dark:bg-[#1a2332] border border-rose-200 dark:border-rose-900 shadow-sm text-rose-600 dark:text-rose-500 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
+                                >
+                                    Reject
+                                </button>
+                                <button
+                                    onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'APPROVED')}
+                                    disabled={isUpdatingStatus}
+                                    className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
+                                >
+                                    {isUpdatingStatus ? <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : 'Accept'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };
