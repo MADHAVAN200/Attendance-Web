@@ -56,7 +56,6 @@ const AttendanceMonitoring = () => {
     const [correctionRequests, setCorrectionRequests] = useState([]);
     const [requestCount, setRequestCount] = useState(0);
     const [selectedRequestData, setSelectedRequestData] = useState(null);
-    const [originalRecords, setOriginalRecords] = useState([]); // Added for visual timeline
     const [reviewComment, setReviewComment] = useState('');
     const [requestsLoading, setRequestsLoading] = useState(false);
     const [correctionSearchTerm, setCorrectionSearchTerm] = useState('');
@@ -262,69 +261,14 @@ const AttendanceMonitoring = () => {
             setSelectedRequestData(data);
             setReviewComment(data.review_comments || '');
 
-            // Fetch original original records for timeline diff
-            try {
-                if (data.user_id && data.request_date) {
-                    // Extract date segment (YYYY-MM-DD) in local time to avoid UTC offset issues
-                    let reqDateString = data.request_date;
-                    if (typeof data.request_date === 'string' && data.request_date.includes('T')) {
-                        const d = new Date(data.request_date);
-                        if (!isNaN(d.getTime())) {
-                            reqDateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                        } else {
-                            reqDateString = data.request_date.split('T')[0];
-                        }
-                    } else if (data.request_date instanceof Date) {
-                        reqDateString = `${data.request_date.getFullYear()}-${String(data.request_date.getMonth() + 1).padStart(2, '0')}-${String(data.request_date.getDate()).padStart(2, '0')}`;
-                    }
-
-                    const records = await attendanceService.getUserDailyRecords(data.user_id, reqDateString);
-                    setOriginalRecords(records || []);
-                }
-            } catch (err) {
-                console.error("Failed to fetch original records for visual timeline", err);
-                setOriginalRecords([]);
-            }
-
-            // Reset Override State
+            // Reset Override State — default sessions from proposed_data snapshot
             setOverrideMode(false);
-            setOverrideMethod(data.correction_method || 'add_session'); // default to add_session (Manual Correction)
+            setOverrideMethod('add_session');
 
-            let correctionData = {};
-            try {
-                correctionData = typeof data.correction_data === 'string'
-                    ? JSON.parse(data.correction_data)
-                    : data.correction_data || {};
-            } catch (error) {
-                console.error("Error parsing correction data", error);
-            }
-
-            setOverrideIn(correctionData.time_in || '');
-            setOverrideOut(correctionData.time_out || '');
-
-            // Parse sessions if available
-            try {
-                let sessions = correctionData.sessions;
-
-                // Fallback for fallback/legacy if sessions is empty but we have time_in/out
-                if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
-                    // Helper to extract HH:MM
-                    const getTime = (t) => {
-                        if (!t) return '';
-                        if (t.includes('T')) return t.split('T')[1].substring(0, 5);
-                        if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
-                        return t.substring(0, 5);
-                    };
-                    sessions = [{
-                        time_in: getTime(correctionData.time_in),
-                        time_out: getTime(correctionData.time_out)
-                    }];
-                }
-
-                setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
-            } catch (e) {
-                setOverrideSessions([{ time_in: '', time_out: '' }]);
-            }
+            const proposedSnap = Array.isArray(data.proposed_data) ? data.proposed_data : [];
+            setOverrideSessions(proposedSnap.length > 0 ? proposedSnap : [{ time_in: '', time_out: '' }]);
+            setOverrideIn('');
+            setOverrideOut('');
         } catch (error) {
             toast.error("Failed to fetch request details");
         }
@@ -397,26 +341,12 @@ const AttendanceMonitoring = () => {
         try {
             const overrides = {};
             if (status === 'approved' && overrideMode) {
-                overrides.correction_method = overrideMethod;
-
-                if (overrideMethod === 'reset') {
-                    if (!overrideIn || !overrideOut) {
-                        toast.error("Both Start and End times are required for Reset override");
-                        return;
-                    }
-                    overrides.reset_time_in = overrideIn;
-                    overrides.reset_time_out = overrideOut;
-                } else if (overrideMethod === 'add_session' || overrideMethod === 'fix') {
-                    const valid = overrideSessions.filter(s => s.time_in && s.time_out);
-                    if (valid.length === 0) {
-                        toast.error("At least one valid session required for manual correction");
-                        return;
-                    }
-                    overrides.sessions = valid;
-                    // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
-                    // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
-                    // Backend handles both.
+                const valid = overrideSessions.filter(s => s.time_in && s.time_out);
+                if (valid.length === 0) {
+                    toast.error("At least one valid session required for manual correction");
+                    return;
                 }
+                overrides.sessions = valid;
             }
 
             await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment, overrides);
@@ -1256,53 +1186,27 @@ const AttendanceMonitoring = () => {
 
                                             {/* VISUAL TIMELINE SECTION */}
                                             {(() => {
-                                                // Prepare Data for Timeline
-                                                const originalTasks = originalRecords.map((r, i) => {
-                                                    const formatTime = (t) => {
-                                                        if (!t) return null;
-                                                        const d = new Date(t);
-                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
-                                                    };
-                                                    return {
-                                                        id: `orig-${r.record_id || i}`,
-                                                        startTime: formatTime(r.time_in),
-                                                        endTime: formatTime(r.time_out) || formatTime(new Date()), // fallback to now if active
-                                                    };
-                                                }).filter(t => t.startTime && t.endTime);
+                                                // Use stored snapshots — these NEVER change after submission
+                                                const originalSnap = Array.isArray(selectedRequestData.original_data)
+                                                    ? selectedRequestData.original_data
+                                                    : [];
+                                                const proposedSnap = Array.isArray(selectedRequestData.proposed_data)
+                                                    ? selectedRequestData.proposed_data
+                                                    : [];
 
-                                                let proposedTasks = [];
-                                                if (selectedRequestData.correction_method === 'add_session') {
-                                                    const correctionData = typeof selectedRequestData.correction_data === 'string'
-                                                        ? JSON.parse(selectedRequestData.correction_data)
-                                                        : selectedRequestData.correction_data || {};
-                                                    proposedTasks = (correctionData.sessions || []).map((s, i) => ({
-                                                        id: `prop-${i}`,
-                                                        startTime: (s.time_in || '').substring(0, 5),
-                                                        endTime: (s.time_out || '').substring(0, 5)
-                                                    })).filter(t => t.startTime && t.endTime);
-                                                } else if (selectedRequestData.correction_method === 'reset' || selectedRequestData.correction_method === 'fix') {
-                                                    const correctionData = typeof selectedRequestData.correction_data === 'string'
-                                                        ? JSON.parse(selectedRequestData.correction_data)
-                                                        : selectedRequestData.correction_data || {};
+                                                const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
 
-                                                    const tIn = correctionData.time_in;
-                                                    const tOut = correctionData.time_out;
+                                                const originalTasks = originalSnap.map((s, i) => ({
+                                                    id: `orig-${i}`,
+                                                    startTime: fmtTime(s.time_in),
+                                                    endTime: fmtTime(s.time_out)
+                                                })).filter(t => t.startTime && t.endTime);
 
-                                                    const getTimeStr = (val) => {
-                                                        if (!val) return '';
-                                                        let d = new Date(val.replace(' ', 'T'));
-                                                        if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
-                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                                                    };
-
-                                                    if (tIn && tOut) {
-                                                        proposedTasks = [{
-                                                            id: 'prop-single',
-                                                            startTime: getTimeStr(tIn),
-                                                            endTime: getTimeStr(tOut)
-                                                        }];
-                                                    }
-                                                }
+                                                const proposedTasks = proposedSnap.map((s, i) => ({
+                                                    id: `prop-${i}`,
+                                                    startTime: fmtTime(s.time_in),
+                                                    endTime: fmtTime(s.time_out)
+                                                })).filter(t => t.startTime && t.endTime);
 
                                                 const allTasks = [...originalTasks, ...proposedTasks];
 
@@ -1332,44 +1236,33 @@ const AttendanceMonitoring = () => {
                                                     return Math.max(0, timeToPos(end) - timeToPos(start));
                                                 };
 
-                                                const fmtTime = (t) => t ? t.slice(0, 5) : '';
-
-                                                // Calculate Diff
+                                                // Heuristic diff: compare originalTasks vs proposedTasks
                                                 const changesList = [];
-                                                // Simple diff strategy based on overlap/times for attendance
-                                                // If reset: DELETE all org, ADD new single
-                                                if (selectedRequestData.correction_method === 'reset') {
-                                                    originalTasks.forEach(t => changesList.push({ type: 'DELETE', task: t, reason: 'Reset: Session removed' }));
-                                                    proposedTasks.forEach(t => changesList.push({ type: 'ADD', task: t, reason: 'Reset: New session established' }));
-                                                } else {
-                                                    // heuristic check - compare times
-                                                    proposedTasks.forEach(prop => {
-                                                        const match = originalTasks.find(orig => orig.startTime === prop.startTime && orig.endTime === prop.endTime);
-                                                        if (match) {
-                                                            match.matched = true;
+                                                proposedTasks.forEach(prop => {
+                                                    const match = originalTasks.find(orig => orig.startTime === prop.startTime && orig.endTime === prop.endTime);
+                                                    if (match) {
+                                                        match.matched = true;
+                                                    } else {
+                                                        const overlapping = originalTasks.find(orig => !orig.matched &&
+                                                            (Math.abs(getMinutes(orig.startTime) - getMinutes(prop.startTime)) < 120 ||
+                                                                Math.abs(getMinutes(orig.endTime) - getMinutes(prop.endTime)) < 120)
+                                                        );
+                                                        if (overlapping) {
+                                                            overlapping.matched = true;
+                                                            changesList.push({
+                                                                type: 'MODIFY',
+                                                                task: prop,
+                                                                original: overlapping,
+                                                                reason: `Time adjusted: ${fmtTime(overlapping.startTime)}-${fmtTime(overlapping.endTime)} → ${fmtTime(prop.startTime)}-${fmtTime(prop.endTime)}`
+                                                            });
                                                         } else {
-                                                            // Could be modify if overlap
-                                                            const overlapping = originalTasks.find(orig => !orig.matched &&
-                                                                (Math.abs(getMinutes(orig.startTime) - getMinutes(prop.startTime)) < 120 ||
-                                                                    Math.abs(getMinutes(orig.endTime) - getMinutes(prop.endTime)) < 120)
-                                                            );
-                                                            if (overlapping) {
-                                                                overlapping.matched = true;
-                                                                changesList.push({
-                                                                    type: 'MODIFY',
-                                                                    task: prop,
-                                                                    original: overlapping,
-                                                                    reason: `Time adjusted: ${fmtTime(overlapping.startTime)}-${fmtTime(overlapping.endTime)} → ${fmtTime(prop.startTime)}-${fmtTime(prop.endTime)}`
-                                                                });
-                                                            } else {
-                                                                changesList.push({ type: 'ADD', task: prop, reason: 'New session added' });
-                                                            }
+                                                            changesList.push({ type: 'ADD', task: prop, reason: 'New session added' });
                                                         }
-                                                    });
-                                                    originalTasks.filter(o => !o.matched).forEach(orig => {
-                                                        changesList.push({ type: 'DELETE', task: orig, reason: 'Session removed' });
-                                                    });
-                                                }
+                                                    }
+                                                });
+                                                originalTasks.filter(o => !o.matched).forEach(orig => {
+                                                    changesList.push({ type: 'DELETE', task: orig, reason: 'Session removed' });
+                                                });
 
                                                 return (
                                                     <>
@@ -1528,7 +1421,8 @@ const AttendanceMonitoring = () => {
                                                         </div>
                                                     </>
                                                 );
-                                            })()}
+                                            })()
+                                            }
                                         </div>
 
                                         {/* Audit Trail */}

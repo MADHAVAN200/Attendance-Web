@@ -141,4 +141,39 @@ router.delete('/shifts/:shift_id', authenticateJWT, catchAsync(async (req, res) 
     res.json({ ok: true, message: 'Shift deleted' });
 }));
 
+// GET /policies/shift-users — list all org users with their shift assignment
+router.get('/shift-users', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
+    const org_id = req.user.org_id;
+    const users = await attendanceDB('users')
+        .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
+        .where('users.org_id', org_id)
+        .select(
+            'users.user_id',
+            'users.user_name',
+            'users.shift_id',
+            'users.profile_image_url',
+            'designations.desg_name'
+        )
+        .orderBy('users.user_name', 'asc');
+
+    res.json({ ok: true, users });
+}));
+
+// PUT /policies/users/:user_id/shift — assign a user to a shift
+router.put('/users/:user_id/shift', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
+    const org_id = req.user.org_id;
+    const { user_id } = req.params;
+    const { shift_id } = req.body; // null to unassign
+
+    const affected = await attendanceDB('users')
+        .where({ user_id, org_id })
+        .update({ shift_id: shift_id || null });
+
+    if (affected === 0) {
+        return res.status(404).json({ ok: false, message: 'User not found or unauthorized' });
+    }
+
+    res.json({ ok: true, message: shift_id ? 'Shift assigned' : 'Shift unassigned' });
+}));
+
 export default router;
