@@ -173,6 +173,22 @@ export const adminService = {
             throw new Error(error.response?.data?.message || "Failed to delete shift");
         }
     },
+    async getShiftUsers() {
+        try {
+            const res = await api.get(`${POLICY_API_URL}/shift-users`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch shift users");
+        }
+    },
+    async assignUserShift(userId, shiftId) {
+        try {
+            const res = await api.put(`${POLICY_API_URL}/users/${userId}/shift`, { shift_id: shiftId });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to assign shift");
+        }
+    },
     async getWorkLocations() {
         try {
             const res = await api.get(`/locations`); // Route in original was /api/locations, so since baseURL is /api, we use /locations
