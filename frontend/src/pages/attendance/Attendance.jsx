@@ -140,7 +140,8 @@ const Attendance = () => {
     const [corrSessions, setCorrSessions] = useState([{ id: Date.now(), time_in: '', time_out: '' }]);
 
     const [corrReason, setCorrReason] = useState('');
-    const [existingRecord, setExistingRecord] = useState(null); // Keep for backend logic if needed
+    const [existingRecord, setExistingRecord] = useState(null);
+    const [originalSessions, setOriginalSessions] = useState([]); // Immutable snapshot of DB records at date-load time
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null); // For details modal
 
@@ -208,7 +209,7 @@ const Attendance = () => {
             try {
                 const res = await attendanceService.getMyRecords(corrDate, corrDate);
                 if (res?.data && res.data.length > 0) {
-                    setExistingRecord(res.data[0]); // Keep keeping the first record if needed elsewhere
+                    setExistingRecord(res.data[0]);
 
                     // Parse out all sessions and auto-populate the add_session array
                     const userSessions = res.data;
@@ -221,20 +222,24 @@ const Attendance = () => {
                         if (s.time_out) {
                             time_out_str = new Date(s.time_out).toTimeString().slice(0, 5);
                         }
-                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str };
+                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str, isExisting: true };
                     });
 
-                    // Only overwrite if it wasn't just manually cleared or modified by the user recently 
-                    // To be safe, we always overwrite on date change
+                    // Save a frozen snapshot for original_data — never modified by form edits
+                    setOriginalSessions(loadedSessions.map(s => ({ time_in: s.time_in, time_out: s.time_out })));
+
+                    // Pre-fill form with existing sessions (user will edit these)
                     setCorrSessions(loadedSessions);
 
                 } else {
                     setExistingRecord(null);
+                    setOriginalSessions([]);
                     setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
                 }
             } catch (error) {
                 console.error("Failed to fetch existing record", error);
                 setExistingRecord(null);
+                setOriginalSessions([]);
                 setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
             }
         };
@@ -377,16 +382,14 @@ const Attendance = () => {
 
         setIsSubmittingCorrection(true);
         try {
-            const payload = {
-                correction_type: corrType === 'Other' ? corrOtherType : corrType,
-                request_date: corrDate,
-                reason: corrReason,
-                correction_method: corrMethod
-            };
+            // original_data = frozen snapshot of DB records loaded when the date was selected
+            // This is NEVER the same as corrSessions (which user may have edited)
+            const original_data = originalSessions;
 
-            // 2. ADD SESSION MODE (Manual Correction)
+            // Build proposed_data based on correction mode
+            let proposed_data = [];
+
             if (corrMethod === 'add_session') {
-                // Filter out empty sessions
                 const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
                 if (validSessions.length === 0) {
                     throw new Error("Please add at least one valid session (Time In & Time Out)");
@@ -400,24 +403,31 @@ const Attendance = () => {
                     }
                     for (let j = i + 1; j < validSessions.length; j++) {
                         const sessionB = validSessions[j];
-
-                        // Check overlap
                         if (sessionA.time_in < sessionB.time_out && sessionA.time_out > sessionB.time_in) {
                             throw new Error(`Sessions cannot overlap: ${sessionA.time_in}-${sessionA.time_out} overlaps with ${sessionB.time_in}-${sessionB.time_out}`);
                         }
                     }
                 }
 
-                payload.sessions = validSessions;
-            }
-            // 3. RESET MODE
-            else if (corrMethod === 'reset') {
+                proposed_data = validSessions.map(s => ({ time_in: s.time_in, time_out: s.time_out }));
+            } else if (corrMethod === 'reset') {
                 if (!corrIn || !corrOut) {
                     throw new Error("New Time In and Time Out are required for Reset.");
                 }
-                payload.requested_time_in = corrIn;
-                payload.requested_time_out = corrOut;
+                proposed_data = [{ time_in: corrIn, time_out: corrOut }];
             }
+
+            if (proposed_data.length === 0) {
+                throw new Error("Please define at least one proposed session.");
+            }
+
+            const payload = {
+                correction_type: corrType === 'Other' ? corrOtherType : corrType,
+                request_date: corrDate,
+                reason: corrReason,
+                original_data,
+                proposed_data
+            };
 
             await attendanceService.submitCorrectionRequest(payload);
 
@@ -1133,22 +1143,24 @@ const Attendance = () => {
                                                             <input
                                                                 type="time"
                                                                 value={session.time_in}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
                                                                     setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="In"
                                                             />
                                                             <input
                                                                 type="time"
                                                                 value={session.time_out}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
                                                                     setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="Out"
                                                             />
-                                                            {arr.length > 1 && (
+                                                            {arr.length > 1 && !session.isExisting && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
