@@ -222,7 +222,7 @@ const Attendance = () => {
                         if (s.time_out) {
                             time_out_str = new Date(s.time_out).toTimeString().slice(0, 5);
                         }
-                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str };
+                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str, isExisting: true };
                     });
 
                     // Save a frozen snapshot for original_data — never modified by form edits
@@ -1143,22 +1143,24 @@ const Attendance = () => {
                                                             <input
                                                                 type="time"
                                                                 value={session.time_in}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
                                                                     setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="In"
                                                             />
                                                             <input
                                                                 type="time"
                                                                 value={session.time_out}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
                                                                     setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="Out"
                                                             />
-                                                            {arr.length > 1 && (
+                                                            {arr.length > 1 && !session.isExisting && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
