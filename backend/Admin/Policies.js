@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import AppError from "../utils/AppError.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -24,7 +24,7 @@ const router = express.Router();
 router.get('/config', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
     // try removed
     const org_id = req.user.org_id;
-    const shifts = await knexDB('shifts').where({ org_id }); // This seems to be fetching shifts, not general config. User might intend to change this later.
+    const shifts = await attendanceDB('shifts').where({ org_id }); // This seems to be fetching shifts, not general config. User might intend to change this later.
     res.json({ ok: true, shifts });
 }));
 
@@ -34,7 +34,7 @@ router.get('/config', authenticateJWT, ensureAdmin, catchAsync(async (req, res) 
 // GET /policies/shifts
 router.get('/shifts', authenticateJWT, catchAsync(async (req, res) => {
     const org_id = req.user.org_id;
-    const shifts = await knexDB('shifts').where({ org_id });
+    const shifts = await attendanceDB('shifts').where({ org_id });
     console.log(shifts);
 
     // Parse JSON rules for frontend compatibility (Simulate columns)
@@ -84,7 +84,7 @@ router.post('/shifts', authenticateJWT, catchAsync(async (req, res) => {
         entry_requirements: rules.entry_requirements || { selfie: true, geofence: true }
     };
 
-    const [id] = await knexDB('shifts').insert({
+    const [id] = await attendanceDB('shifts').insert({
         org_id,
         shift_name,
         // No legacy columns used
@@ -108,7 +108,7 @@ router.put('/shifts/:shift_id', authenticateJWT, catchAsync(async (req, res) => 
         policy_rules: JSON.stringify(policy_rules)
     };
 
-    const affected = await knexDB('shifts')
+    const affected = await attendanceDB('shifts')
         .where({ shift_id, org_id })
         .update(updates);
 
@@ -125,12 +125,12 @@ router.delete('/shifts/:shift_id', authenticateJWT, catchAsync(async (req, res) 
     const { shift_id } = req.params;
 
     // Check if shift is assigned to any user
-    const usersCount = await knexDB('users').where({ shift_id }).count('user_id as count').first();
+    const usersCount = await attendanceDB('users').where({ shift_id }).count('user_id as count').first();
     if (usersCount.count > 0) {
         return res.status(400).json({ ok: false, message: `Cannot delete shift. It is assigned to ${usersCount.count} users.` });
     }
 
-    const affected = await knexDB('shifts')
+    const affected = await attendanceDB('shifts')
         .where({ shift_id, org_id })
         .del();
 
@@ -139,6 +139,41 @@ router.delete('/shifts/:shift_id', authenticateJWT, catchAsync(async (req, res) 
     }
 
     res.json({ ok: true, message: 'Shift deleted' });
+}));
+
+// GET /policies/shift-users — list all org users with their shift assignment
+router.get('/shift-users', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
+    const org_id = req.user.org_id;
+    const users = await attendanceDB('users')
+        .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
+        .where('users.org_id', org_id)
+        .select(
+            'users.user_id',
+            'users.user_name',
+            'users.shift_id',
+            'users.profile_image_url',
+            'designations.desg_name'
+        )
+        .orderBy('users.user_name', 'asc');
+
+    res.json({ ok: true, users });
+}));
+
+// PUT /policies/users/:user_id/shift — assign a user to a shift
+router.put('/users/:user_id/shift', authenticateJWT, ensureAdmin, catchAsync(async (req, res) => {
+    const org_id = req.user.org_id;
+    const { user_id } = req.params;
+    const { shift_id } = req.body; // null to unassign
+
+    const affected = await attendanceDB('users')
+        .where({ user_id, org_id })
+        .update({ shift_id: shift_id || null });
+
+    if (affected === 0) {
+        return res.status(404).json({ ok: false, message: 'User not found or unauthorized' });
+    }
+
+    res.json({ ok: true, message: shift_id ? 'Shift assigned' : 'Shift unassigned' });
 }));
 
 export default router;

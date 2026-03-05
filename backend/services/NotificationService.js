@@ -1,5 +1,5 @@
 import EventBus from '../utils/EventBus.js';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 
 class NotificationService {
     constructor() {
@@ -28,7 +28,7 @@ class NotificationService {
                 return;
             }
 
-            await knexDB('notifications').insert({
+            await attendanceDB('notifications').insert({
                 org_id,
                 user_id,
                 type,

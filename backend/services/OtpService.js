@@ -15,7 +15,7 @@ export const generateOtp = (email, req) => {
     expiresAt: Date.now() + OTP_EXPIRY_MS,
     attempts: 0,
     ua: req.headers["user-agent"],
-    ip: req.ip
+    ip: req.clientIp || req.ip
   });
 
   return otp;

@@ -8,6 +8,7 @@ export const adminService = {
     async getAllUsers(includeWorkLocation = false) {
         try {
             const res = await api.get(`${ADMIN_API_URL}/users?workLocation=${includeWorkLocation}`);
+            console.log("fetched all users", res.data);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch users");
@@ -17,6 +18,7 @@ export const adminService = {
     // Get single user
     async getUserById(userId) {
         try {
+            console.log("fetching single user");
             const res = await api.get(`${ADMIN_API_URL}/user/${userId}`);
             return res.data;
         } catch (error) {
@@ -51,6 +53,36 @@ export const adminService = {
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete user");
+        }
+    },
+
+    // Toggle Status
+    async toggleUserStatus(userId, isActive) {
+        try {
+            const res = await api.put(`${ADMIN_API_URL}/user/${userId}/status`, { is_active: isActive });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to update status");
+        }
+    },
+
+    // Restore User
+    async restoreUser(userId) {
+        try {
+            const res = await api.post(`${ADMIN_API_URL}/user/${userId}/restore`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to restore user");
+        }
+    },
+
+    // Force Delete User
+    async forceDeleteUser(userId) {
+        try {
+            const res = await api.delete(`${ADMIN_API_URL}/user/${userId}/force`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to permanently delete user");
         }
     },
 
@@ -141,6 +173,22 @@ export const adminService = {
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete shift");
+        }
+    },
+    async getShiftUsers() {
+        try {
+            const res = await api.get(`${POLICY_API_URL}/shift-users`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch shift users");
+        }
+    },
+    async assignUserShift(userId, shiftId) {
+        try {
+            const res = await api.put(`${POLICY_API_URL}/users/${userId}/shift`, { shift_id: shiftId });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to assign shift");
         }
     },
     async getWorkLocations() {

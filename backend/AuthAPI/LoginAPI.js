@@ -6,8 +6,9 @@ import EventBus from "../utils/EventBus.js";
 import { getEventSource } from "../utils/clientInfo.js";
 import catchAsync from "../utils/catchAsync.js";
 import { verifyCaptcha, generateCaptcha } from "../middleware/verifyCaptcha.js";
-import { authLimiter } from "../middleware/rateLimiter.js";
 import * as TokenService from "../services/tokenService.js";
+import { authenticateJWT } from "../middleware/auth.js";
+import { authLimiter, loginIpLimiter } from '../middleware/rateLimiter.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 Days
@@ -17,118 +18,50 @@ const router = express.Router();
 // Generate Captcha route
 router.get("/captcha/generate", generateCaptcha);
 
-import { authenticateJWT } from "../middleware/auth.js";
 
 
-// Login route
-router.post("/login", authLimiter, catchAsync(async (req, res) => {
-  const { user_input, user_password } = req.body;
+// Login Route
+// Double-Layer Protection:
+// 1. IP Fail-Safe: Stops bots from trying 100+ different accounts from one IP.
+// 2. Auth Limiter: Stops anyone from brute-forcing a specific account (8 tries).
+router.post('/login', loginIpLimiter, authLimiter, catchAsync(async (req, res) => {
+  const { user_input, user_password, captchaToken } = req.body;
 
   if (!user_input || !user_password) {
     return res.status(400).json({ message: "Username and password are required." });
   }
 
-  // Try Super Admin Login
-  const superAdminResponse = await handleSuperAdminLogin(user_input, user_password, req, res);
-  if (superAdminResponse) return; // Response already sent
-
-  // Try Normal User Login
-  const userResponse = await handleUserLogin(user_input, user_password, req, res);
-  if (userResponse) return; // Response already sent
-
-  return res.status(401).json({ message: 'Invalid credentials' });
-}));
-
-
-// Admin Login
-async function handleSuperAdminLogin(userInput, password, req, res) {
-  const superAdmin = await DB.knexDB('super_admins')
-    .where('admin_code', userInput)
-    .first();
-
-  if (!superAdmin) return false;
-
-  const isMatch = await bcrypt.compare(password, superAdmin.password_hash);
-  if (!isMatch) {
-    res.status(401).json({ message: 'Incorrect Password' });
-    return true;
-  }
-
-  if (!superAdmin.is_active) {
-    res.status(403).json({ message: 'Account is inactive. Contact support.' });
-    return true;
-  }
-
-  const tokenPayload = {
-    user_id: superAdmin.id,
-    user_code: superAdmin.admin_code,
-    user_name: superAdmin.name,
-    email: superAdmin.email,
-    user_type: 'super_admin',
-    org_id: null,
-    profile_image_url: superAdmin.profile_image_url
-  };
-
-  const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-  const refreshToken = TokenService.generateRefreshToken();
-
-  // Cookie Set
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax',
-    maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
-    path: '/'
-  });
-
-  // Super Admin Activity Log
-  EventBus.emitActivityLog({
-    user_id: superAdmin.id,
-    org_id: null, // Super Admins are global
-    event_type: "SUPER_ADMIN_LOGIN",
-    event_source: getEventSource(req),
-    object_type: "SUPER_ADMIN",
-    object_id: superAdmin.id,
-    description: "Super Admin logged in via Admin Code",
-    request_ip: req.ip || req.connection.remoteAddress,
-    user_agent: req.get('User-Agent')
-  });
-
-  res.status(200).json({
-    accessToken: accessToken,
-    user: {
-      id: superAdmin.id,
-      user_code: superAdmin.admin_code,
-      user_name: superAdmin.name,
-      email: superAdmin.email,
-      user_type: 'super_admin',
-      phone: superAdmin.mobile_number,
-      designation: 'Super Admin',
-      department: 'Administration',
-      org_id: null,
-      profile_image_url: superAdmin.profile_image_url
-    }
-  });
-  return true;
-}
-
-// User Login
-async function handleUserLogin(userInput, password, req, res) {
-  const user = await DB.knexDB('users')
+  // 1. Fetch user by Email or Phone
+  const user = await DB.attendanceDB('users')
     .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
     .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
     .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
     .select(
       'users.user_id', 'users.user_code', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
-      'users.profile_image_url', 'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
+      'users.profile_image_url', 'users.is_active', 'users.is_deleted',
+      'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
     )
     .where('users.email', userInput)
     .orWhere('users.phone_no', userInput)
     .first();
 
-  if (!user) return false;
 
-  const isMatch = await bcrypt.compare(password, user.user_password);
+  if (!user) {
+    return res.status(401).json({ message: 'User not found' });
+  }
+
+  // Check if user is deleted
+  if (user.is_deleted) {
+    return res.status(403).json({ message: 'Your account has been deleted. Please contact support.' });
+  }
+
+  // Check if user is active
+  if (!user.is_active) {
+    return res.status(403).json({ message: 'Your account is inactive. Please contact HR.' });
+  }
+
+  // 2. Compare password
+  const isMatch = await bcrypt.compare(user_password, user.user_password);
   if (!isMatch) {
     res.status(401).json({ message: 'Incorrect Password' });
     return true;
@@ -145,7 +78,7 @@ async function handleUserLogin(userInput, password, req, res) {
 
   const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
   const refreshToken = TokenService.generateRefreshToken();
-  const ipAddress = req.ip || req.connection.remoteAddress;
+  const ipAddress = req.clientIp || req.ip;
   const userAgent = req.get('User-Agent') || 'Unknown';
 
   await TokenService.saveRefreshToken(user.user_id, refreshToken, ipAddress, userAgent);
@@ -166,7 +99,7 @@ async function handleUserLogin(userInput, password, req, res) {
     object_type: "USER",
     object_id: user.user_id,
     description: "User logged in successfully",
-    request_ip: req.ip,
+    request_ip: req.clientIp || req.ip,
     user_agent: req.get('User-Agent')
   });
 
@@ -222,7 +155,7 @@ router.post("/refresh", async (req, res) => {
     } else {
       // Rotate Token: Revoke old, Issue new
       newRefreshToken = TokenService.generateRefreshToken();
-      const ipAddress = req.ip;
+      const ipAddress = req.clientIp || req.ip;
       const userAgent = req.get('User-Agent');
 
       await TokenService.revokeRefreshToken(refreshToken, newRefreshToken);
@@ -261,7 +194,7 @@ router.post("/refresh", async (req, res) => {
 // Route: GET /me - Check current auth/session
 router.get("/me", authenticateJWT, catchAsync(async (req, res) => {
   // Fetch fresh user data to ensure avatar updates are reflected immediately
-  const user = await DB.knexDB('users')
+  const user = await DB.attendanceDB('users')
     .where('user_id', req.user.user_id)
     .select('user_code', 'user_name', 'email', 'user_type', 'org_id', 'profile_image_url')
     .first();

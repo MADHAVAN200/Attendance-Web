@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
@@ -15,7 +15,7 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
     // If we re-parse with new Date(), we risk timezone shifts if server time differs.
     const formattedDate = event_date;
 
-    const [event_id] = await knexDB("events_meetings").insert({
+    const [event_id] = await attendanceDB("events_meetings").insert({
         org_id: req.user.org_id,
         user_id: req.user.user_id,
         title,
@@ -25,8 +25,8 @@ router.post('/create', authenticateJWT, catchAsync(async (req, res) => {
         end_time,
         location,
         type, // 'EVENT' or 'MEETING'
-        created_at: knexDB.fn.now(),
-        updated_at: knexDB.fn.now()
+        created_at: attendanceDB.fn.now(),
+        updated_at: attendanceDB.fn.now()
     });
 
     res.json({ ok: true, message: "Created successfully", event_id });
@@ -38,10 +38,10 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
     const { date_from, date_to, type } = req.query;
     const org_id = req.user.org_id;
 
-    let query = knexDB("events_meetings")
+    let query = attendanceDB("events_meetings")
         .select(
             "*",
-            knexDB.raw("DATE_FORMAT(event_date, '%Y-%m-%d') as event_date")
+            attendanceDB.raw("DATE_FORMAT(event_date, '%Y-%m-%d') as event_date")
         )
         .where("org_id", org_id)
         .where("user_id", req.user.user_id);
@@ -74,9 +74,9 @@ router.put('/update/:event_id', authenticateJWT, catchAsync(async (req, res) => 
     delete updates.user_id; // Usually ownership doesn't change
     delete updates.created_at;
 
-    updates.updated_at = knexDB.fn.now();
+    updates.updated_at = attendanceDB.fn.now();
 
-    await knexDB("events_meetings")
+    await attendanceDB("events_meetings")
         .where({ event_id, org_id: req.user.org_id })
         .update(updates);
 
@@ -87,7 +87,7 @@ router.put('/update/:event_id', authenticateJWT, catchAsync(async (req, res) => 
 router.delete('/delete/:event_id', authenticateJWT, catchAsync(async (req, res) => {
     const { event_id } = req.params;
 
-    await knexDB("events_meetings")
+    await attendanceDB("events_meetings")
         .where({ event_id, org_id: req.user.org_id })
         .del();
 

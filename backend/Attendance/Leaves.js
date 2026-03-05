@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from '../utils/catchAsync.js';
 import NotificationService from '../services/NotificationService.js';
@@ -33,14 +33,14 @@ const router = express.Router();
 router.get('/my-history', authenticateJWT, catchAsync(async (req, res) => {
     const { user_id, org_id } = req.user;
 
-    const leaves = await knexDB('leave_requests')
+    const leaves = await attendanceDB('leave_requests')
         .where({ user_id, org_id })
         .orderBy('applied_at', 'desc');
 
     // Fetch Attachments
     const leaveIds = leaves.map(l => l.lr_id);
     if (leaveIds.length > 0) {
-        const attachments = await knexDB('leave_attachments').whereIn('leave_id', leaveIds);
+        const attachments = await attendanceDB('leave_attachments').whereIn('leave_id', leaveIds);
 
         // Map attachments to leaves with signed URLs
         const attachmentMap = new Map();
@@ -92,7 +92,7 @@ router.post('/request', authenticateJWT, upload.array('attachments', 5), catchAs
     const sqlEnd = formatSQLDate(end);
 
     // Check for overlapping requests (optional but recommended)
-    const overlap = await knexDB('leave_requests')
+    const overlap = await attendanceDB('leave_requests')
         .where({ user_id, org_id })
         .whereIn('status', ['Pending', 'Approved']) // Changed to Title Case
         .where(builder => {
@@ -109,7 +109,7 @@ router.post('/request', authenticateJWT, upload.array('attachments', 5), catchAs
         return res.status(400).json({ ok: false, message: "Use has an overlapping leave request." });
     }
 
-    const [insertId] = await knexDB('leave_requests').insert({
+    const [insertId] = await attendanceDB('leave_requests').insert({
         user_id,
         org_id,
         leave_type,
@@ -150,7 +150,7 @@ router.post('/request', authenticateJWT, upload.array('attachments', 5), catchAs
 
         // Separate DB data from Response data
         const dbInserts = attachmentsData.map(({ _signedUrl, ...rest }) => rest);
-        await knexDB('leave_attachments').insert(dbInserts);
+        await attendanceDB('leave_attachments').insert(dbInserts);
 
         // Response data
         const responseAttachments = attachmentsData.map(a => ({
@@ -175,7 +175,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
     const { id } = req.params;
     const { user_id, org_id } = req.user;
 
-    const request = await knexDB('leave_requests').where({ lr_id: id, user_id, org_id }).first();
+    const request = await attendanceDB('leave_requests').where({ lr_id: id, user_id, org_id }).first();
 
     if (!request) {
         return res.status(404).json({ ok: false, message: "Request not found" });
@@ -185,7 +185,7 @@ router.delete('/request/:id', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(400).json({ ok: false, message: "Cannot withdraw processed request" });
     }
 
-    await knexDB('leave_requests').where({ lr_id: id }).del();
+    await attendanceDB('leave_requests').where({ lr_id: id }).del();
 
     res.json({ ok: true, message: "Request withdrawn" });
 }));
@@ -201,7 +201,7 @@ router.get('/admin/pending', authenticateJWT, catchAsync(async (req, res) => {
         return res.status(403).json({ ok: false, message: "Access denied" });
     }
 
-    const requests = await knexDB('leave_requests as lr')
+    const requests = await attendanceDB('leave_requests as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
         .select(
             'lr.*',
@@ -216,7 +216,7 @@ router.get('/admin/pending', authenticateJWT, catchAsync(async (req, res) => {
     // Attach attachments
     const leaveIds = requests.map(l => l.lr_id);
     if (leaveIds.length > 0) {
-        const attachments = await knexDB('leave_attachments').whereIn('leave_id', leaveIds);
+        const attachments = await attendanceDB('leave_attachments').whereIn('leave_id', leaveIds);
         const attachmentMap = new Map();
 
         await Promise.all(attachments.map(async (a) => {
@@ -245,7 +245,7 @@ router.get('/admin/history', authenticateJWT, catchAsync(async (req, res) => {
 
     const { user_id, status, start_date, end_date } = req.query;
 
-    let query = knexDB('leave_requests as lr')
+    let query = attendanceDB('leave_requests as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
         .select('lr.*', 'u.user_name')
         .where('lr.org_id', req.user.org_id);
@@ -261,7 +261,7 @@ router.get('/admin/history', authenticateJWT, catchAsync(async (req, res) => {
     // Attach attachments
     const leaveIds = history.map(l => l.lr_id);
     if (leaveIds.length > 0) {
-        const attachments = await knexDB('leave_attachments').whereIn('leave_id', leaveIds);
+        const attachments = await attendanceDB('leave_attachments').whereIn('leave_id', leaveIds);
         const attachmentMap = new Map();
 
         await Promise.all(attachments.map(async (a) => {
@@ -309,7 +309,7 @@ router.put('/admin/status/:id', authenticateJWT, catchAsync(async (req, res) => 
         updateData.pay_percentage = pay_type === 'Partial' ? (pay_percentage || 50) : (pay_type === 'Paid' ? 100 : 0);
     }
 
-    const affected = await knexDB('leave_requests')
+    const affected = await attendanceDB('leave_requests')
         .where({ lr_id: id, org_id: req.user.org_id })
         .update(updateData);
 
@@ -318,7 +318,7 @@ router.put('/admin/status/:id', authenticateJWT, catchAsync(async (req, res) => 
     }
 
     // Fetch user for notification
-    const request = await knexDB('leave_requests').where({ lr_id: id }).first();
+    const request = await attendanceDB('leave_requests').where({ lr_id: id }).first();
     if (request) {
         NotificationService.handleNotification({
             org_id: req.user.org_id,

@@ -1,5 +1,5 @@
 
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 import { verifyUserGeofence } from "./Geofencing.js";
 
 // --- TEMPLATES ---
@@ -317,7 +317,7 @@ export const PolicyService = {
      */
     buildSessionContext: async (user_id, localTime, eventType) => {
         // Get all today's sessions
-        const todaySessions = await knexDB("attendance_records")
+        const todaySessions = await attendanceDB("attendance_records")
             .where({ user_id })
             .whereRaw("DATE(time_in) = DATE(?)", [localTime])
             .orderBy("time_in", "asc");

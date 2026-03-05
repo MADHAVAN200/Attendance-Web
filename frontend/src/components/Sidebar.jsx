@@ -68,7 +68,7 @@ const getNavItems = (userType) => {
         { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
         { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
         { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
-        { icon: <CreditCard size={20} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
+        // { icon: <CreditCard size={20} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
     ];
 
     return allItems.filter(item => item.roles.includes(userType));

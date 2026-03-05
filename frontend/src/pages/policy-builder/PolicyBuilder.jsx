@@ -1,57 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
-    Save,
-    Play,
-    Plus,
-    X,
-    Settings,
-    Clock,
-    MapPin,
-    Calendar,
-    AlertTriangle,
-    CheckCircle,
-    ArrowRight,
-    Trash2,
-    Move,
-    FileText,
-    Zap,
-    Briefcase,
-    Edit2,
-    Layers
+    Save, Play, Plus, X, Settings, Clock, MapPin, Calendar, AlertTriangle,
+    CheckCircle, Trash2, Move, FileText, Zap, Briefcase, Edit2, Layers,
+    Search, Users, Check, ArrowRight
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 const PolicyBuilder = () => {
     const location = useLocation();
-    const [activeTab, setActiveTab] = useState('shifts'); // 'automation' | 'shifts'
+    const { avatarTimestamp } = useAuth();
+    const [activeTab, setActiveTab] = useState('shifts');
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const tab = params.get('tab');
-        if (tab === 'shifts') {
-            setActiveTab('shifts');
-        } else if (tab === 'automation') {
-            setActiveTab('automation');
-        }
+        if (tab === 'shifts') setActiveTab('shifts');
+        else if (tab === 'automation') setActiveTab('automation');
     }, [location.search]);
 
-    // --- AUTOMATION / CANVAS STATE ---
+    // ── AUTOMATION STATE (kept for future) ──────────────────────────────────
     const [blocks, setBlocks] = useState([
         { id: 1, type: 'trigger', title: 'On Clock In', icon: Clock, x: 50, y: 50, properties: {} },
         { id: 2, type: 'condition', title: 'Is Late? (>15m)', icon: AlertTriangle, x: 50, y: 180, properties: { threshold: 15 } },
         { id: 3, type: 'action', title: 'Mark as "Late"', icon: FileText, x: 50, y: 310, properties: { status: 'Late' } },
     ]);
-    const [connections, setConnections] = useState([
-        { from: 1, to: 2 },
-        { from: 2, to: 3 },
-    ]);
+    const [connections] = useState([{ from: 1, to: 2 }, { from: 2, to: 3 }]);
     const [selectedBlock, setSelectedBlock] = useState(null);
     const [isTestMode, setIsTestMode] = useState(false);
     const [testResult, setTestResult] = useState(null);
-
     const blockTypes = [
         { type: 'condition', title: 'Location Check', icon: MapPin },
         { type: 'condition', title: 'Time Check', icon: Clock },
@@ -60,771 +40,569 @@ const PolicyBuilder = () => {
         { type: 'action', title: 'Send Alert', icon: Zap },
         { type: 'action', title: 'Deduct Pay', icon: AlertTriangle },
     ];
+    const deleteBlock = (id) => { setBlocks(blocks.filter(b => b.id !== id)); if (selectedBlock === id) setSelectedBlock(null); };
+    const addBlock = (t) => { const b = { id: Date.now(), ...t, x: 300, y: 100 + blocks.length * 20, properties: {} }; setBlocks([...blocks, b]); setSelectedBlock(b.id); };
+    const runTest = () => { setTestResult(null); setTimeout(() => setTestResult({ status: 'success', message: 'Policy Executed: User marked as "Late". Alert sent.' }), 800); };
 
-    // --- SHIFT MANAGEMENT STATE ---
+    // ── SHIFT STATE ─────────────────────────────────────────────────────────
     const [shifts, setShifts] = useState([]);
+    const [selectedShift, setSelectedShift] = useState(null);
     const [isLoadingShifts, setIsLoadingShifts] = useState(false);
-    const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
-    const [editingShift, setEditingShift] = useState(null); // null for new, object for edit
+    const [shiftSearch, setShiftSearch] = useState('');
+
+    const [showShiftForm, setShowShiftForm] = useState(false);
+    const [editingShift, setEditingShift] = useState(null);
     const [isOtEnabled, setIsOtEnabled] = useState(false);
     const [shiftForm, setShiftForm] = useState({
-        name: '',
-        start: '09:00',
-        end: '18:00',
-        grace: 0,
-        otThreshold: 9.0,
-        reqEntrySelfie: true,
-        reqEntryGeofence: true,
-        reqExitSelfie: false,
-        reqExitGeofence: false
+        name: '', start: '09:00', end: '18:00', grace: 0,
+        otThreshold: 9.0, reqEntrySelfie: true, reqEntryGeofence: true,
+        reqExitSelfie: false, reqExitGeofence: false
     });
 
-    useEffect(() => {
-        if (isShiftModalOpen) {
-            if (editingShift) {
-                const rules = editingShift.policy_rules || {};
-                setShiftForm({
-                    name: editingShift.name,
-                    start: editingShift.start,
-                    end: editingShift.end,
-                    grace: editingShift.grace,
-                    otThreshold: editingShift.otThreshold || 8.0,
-                    reqEntrySelfie: !!rules.entry_requirements?.selfie,
-                    reqEntryGeofence: !!rules.entry_requirements?.geofence,
-                    reqExitSelfie: !!rules.exit_requirements?.selfie,
-                    reqExitGeofence: !!rules.exit_requirements?.geofence
-                });
-                setIsOtEnabled(!!editingShift.overtime);
-            } else {
-                setShiftForm({
-                    name: '',
-                    start: '09:00',
-                    end: '18:00',
-                    grace: 0,
-                    otThreshold: 9.0,
-                    reqEntrySelfie: true,
-                    reqEntryGeofence: true,
-                    reqExitSelfie: false,
-                    reqExitGeofence: false
-                });
-                setIsOtEnabled(false);
-            }
-        }
-    }, [isShiftModalOpen, editingShift]);
+    // ── USER STATE ───────────────────────────────────────────────────────────
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [userSearch, setUserSearch] = useState('');
 
-    // Auto-calculate OT Threshold based on duration
-    useEffect(() => {
-        if (!isShiftModalOpen) return;
+    // ── HELPERS ─────────────────────────────────────────────────────────────
+    const calculateDuration = (start, end) => {
+        if (!start || !end) return '0h 00m';
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let d = (eh * 60 + em) - (sh * 60 + sm);
+        if (d < 0) d += 24 * 60;
+        return `${Math.floor(d / 60)}h ${String(d % 60).padStart(2, '0')}m`;
+    };
 
-        // Prevent overwriting DB value on initial Edit load
-        // Prevent overwriting DB value on initial Edit load
-        // Compare first 5 chars (HH:mm) to handle potential HH:mm:ss vs HH:mm differences
-        if (editingShift && editingShift.start && editingShift.end &&
-            shiftForm.start.substring(0, 5) === editingShift.start.substring(0, 5) &&
-            shiftForm.end.substring(0, 5) === editingShift.end.substring(0, 5)) {
-            return;
-        }
+    const shiftColors = ['indigo', 'violet', 'sky', 'teal', 'amber', 'rose'];
+    const getShiftColor = (idx) => shiftColors[idx % shiftColors.length];
 
-        const { start, end } = shiftForm;
-        if (!start || !end) return;
-
-        const [startH, startM] = start.split(':').map(Number);
-        const [endH, endM] = end.split(':').map(Number);
-
-        let diffM = (endH * 60 + endM) - (startH * 60 + startM);
-        if (diffM < 0) diffM += 24 * 60;
-
-        // Calculate Float hours for duration (e.g., 8.5)
-        const durationH = diffM / 60;
-
-        // Use a fixed precision if needed, e.g. 1 decimal place
-        const durationFloat = parseFloat(durationH.toFixed(2));
-
-        setShiftForm(prev => {
-            // Avoid infinite loop if value is already same (compare loosely or with epsilon if needed)
-            if (prev.otThreshold === durationFloat) return prev;
-            return { ...prev, otThreshold: durationFloat };
-        });
-
-    }, [shiftForm.start, shiftForm.end, isShiftModalOpen]);
-
-    // Fetch Shifts
-    useEffect(() => {
-        if (activeTab === 'shifts') {
-            loadShifts();
-        }
-    }, [activeTab]);
-
-    const loadShifts = async () => {
+    // ── LOAD DATA ────────────────────────────────────────────────────────────
+    const loadShifts = useCallback(async () => {
         setIsLoadingShifts(true);
         try {
             const res = await adminService.getShifts();
-            
             if (res.shifts) {
-                // Map backend fields to frontend UI expected fields
-                const mapped = res.shifts.map(s => ({
-                    id: s.shift_id,
-                    name: s.shift_name,
-                    start: (s.start_time || "09:00").substring(0, 5),
-                    end: (s.end_time || "18:00").substring(0, 5),
+                const mapped = res.shifts.map((s, idx) => ({
+                    id: s.shift_id, name: s.shift_name,
+                    start: (s.start_time || '09:00').substring(0, 5),
+                    end: (s.end_time || '18:00').substring(0, 5),
                     grace: s.grace_period_mins,
                     overtime: !!s.is_overtime_enabled,
                     otThreshold: parseFloat(s.overtime_threshold_hours),
-                    policy_rules: typeof s.policy_rules === 'string' ? JSON.parse(s.policy_rules) : (s.policy_rules || {}),
-                    color: 'blue' 
+                    policy_rules: s.policy_rules || {},
+                    color: getShiftColor(idx)
                 }));
                 setShifts(mapped);
-            } else {
-                console.warn("API returned no shifts array:", res);
+                if (!selectedShift) setSelectedShift(mapped[0] || null);
+                else setSelectedShift(prev => mapped.find(s => s.id === prev?.id) || mapped[0] || null);
             }
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load shifts");
-        } finally {
-            setIsLoadingShifts(false);
+        } catch (e) { console.error(e); toast.error('Failed to load shifts'); }
+        finally { setIsLoadingShifts(false); }
+    }, []);
+
+    const loadUsers = useCallback(async () => {
+        setLoadingUsers(true);
+        try {
+            const res = await adminService.getShiftUsers();
+            if (res.ok) setUsers(res.users);
+        } catch (e) { console.error(e); toast.error('Failed to load users'); }
+        finally { setLoadingUsers(false); }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'shifts') {
+            loadShifts();
+            loadUsers();
         }
-    };
+    }, [activeTab]);
 
-    // --- AUTOMATION HANDLERS ---
-    const addBlock = (typeTemplate) => {
-        const newBlock = {
-            id: Date.now(),
-            type: typeTemplate.type,
-            title: typeTemplate.title,
-            icon: typeTemplate.icon,
-            x: 300,
-            y: 100 + (blocks.length * 20),
-            properties: {}
-        };
-        setBlocks([...blocks, newBlock]);
-        setSelectedBlock(newBlock.id);
-    };
+    // Auto-calc OT threshold
+    useEffect(() => {
+        if (!showShiftForm) return;
+        if (editingShift && editingShift.start?.substring(0, 5) === shiftForm.start?.substring(0, 5) && editingShift.end?.substring(0, 5) === shiftForm.end?.substring(0, 5)) return;
+        const { start, end } = shiftForm;
+        if (!start || !end) return;
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let d = (eh * 60 + em) - (sh * 60 + sm);
+        if (d < 0) d += 24 * 60;
+        const h = parseFloat((d / 60).toFixed(2));
+        setShiftForm(prev => prev.otThreshold === h ? prev : { ...prev, otThreshold: h });
+    }, [shiftForm.start, shiftForm.end, showShiftForm]);
 
-    const deleteBlock = (id) => {
-        setBlocks(blocks.filter(b => b.id !== id));
-        setConnections(connections.filter(c => c.from !== id && c.to !== id));
-        if (selectedBlock === id) setSelectedBlock(null);
-    };
-
-    const runTest = () => {
-        setTestResult(null);
-        setTimeout(() => {
-            setTestResult({
-                status: 'success',
-                message: 'Policy Executed Successfully: User marked as "Late". Alert sent to Manager.'
+    // Populate form when editing
+    useEffect(() => {
+        if (showShiftForm && editingShift) {
+            const rules = editingShift.policy_rules || {};
+            setShiftForm({
+                name: editingShift.name, start: editingShift.start, end: editingShift.end,
+                grace: editingShift.grace, otThreshold: editingShift.otThreshold || 8.0,
+                reqEntrySelfie: !!rules.entry_requirements?.selfie,
+                reqEntryGeofence: !!rules.entry_requirements?.geofence,
+                reqExitSelfie: !!rules.exit_requirements?.selfie,
+                reqExitGeofence: !!rules.exit_requirements?.geofence,
             });
-        }, 800);
-    };
+            setIsOtEnabled(!!editingShift.overtime);
+        } else if (showShiftForm && !editingShift) {
+            setShiftForm({ name: '', start: '09:00', end: '18:00', grace: 0, otThreshold: 9.0, reqEntrySelfie: true, reqEntryGeofence: true, reqExitSelfie: false, reqExitGeofence: false });
+            setIsOtEnabled(false);
+        }
+    }, [showShiftForm, editingShift]);
 
-    // Helper: Convert float hours (e.g. 8.5) to "HH:MM" ("08:30")
-    const floatToTime = (val) => {
-        if (!val && val !== 0) return "00:00";
-        const hours = Math.floor(val);
-        const minutes = Math.round((val - hours) * 60);
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    };
-
-    // Helper: Convert "HH:MM" ("08:30") to float hours (8.5)
-    const timeToFloat = (timeStr) => {
-        if (!timeStr) return 0;
-        const [h, m] = timeStr.split(':').map(Number);
-        return h + (m / 60);
-    };
-
+    // ── HANDLERS ─────────────────────────────────────────────────────────────
     const handleSaveShift = async (e) => {
         e.preventDefault();
-        
-        // Preserve existing rules structure (accuracy etc) if editing
-        let baseRules = editingShift ? (editingShift.policy_rules || {}) : {};
-
+        const baseRules = editingShift ? (editingShift.policy_rules || {}) : {};
         const policies = {
             ...baseRules,
-            // Ensure core fields are synced
             shift_timing: { start_time: shiftForm.start, end_time: shiftForm.end },
             grace_period: { minutes: parseInt(shiftForm.grace) || 0 },
             overtime: { enabled: isOtEnabled, threshold: parseFloat(shiftForm.otThreshold) || 0 },
-            entry_requirements: {
-                selfie: shiftForm.reqEntrySelfie,
-                geofence: shiftForm.reqEntryGeofence
-            },
-            exit_requirements: {
-                selfie: shiftForm.reqExitSelfie,
-                geofence: shiftForm.reqExitGeofence
-            }
+            entry_requirements: { selfie: shiftForm.reqEntrySelfie, geofence: shiftForm.reqEntryGeofence },
+            exit_requirements: { selfie: shiftForm.reqExitSelfie, geofence: shiftForm.reqExitGeofence }
         };
-
-        const shiftData = {
-            shift_name: shiftForm.name,
-            policy_rules: policies
-        };
-
         try {
             if (editingShift) {
-                await adminService.updateShift(editingShift.id, shiftData);
-                toast.success("Shift updated successfully");
+                await adminService.updateShift(editingShift.id, { shift_name: shiftForm.name, policy_rules: policies });
+                toast.success('Shift updated');
             } else {
-                await adminService.createShift(shiftData);
-                toast.success("Shift created successfully");
+                await adminService.createShift({ shift_name: shiftForm.name, policy_rules: policies });
+                toast.success('Shift created');
             }
-            setIsShiftModalOpen(false);
-            setEditingShift(null);
-            loadShifts(); // Reload data
-        } catch (error) {
-            console.error(error);
-            toast.error(error.message || "Failed to save shift");
-        }
+            setShowShiftForm(false); setEditingShift(null);
+            loadShifts();
+        } catch (err) { toast.error(err.message || 'Failed to save shift'); }
     };
 
     const handleDeleteShift = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this shift?")) return;
+        if (!window.confirm('Are you sure you want to delete this shift?')) return;
         try {
             await adminService.deleteShift(id);
-            toast.success("Shift deleted successfully");
+            toast.success('Shift deleted');
+            if (selectedShift?.id === id) setSelectedShift(null);
             loadShifts();
-        } catch (error) {
-            console.error(error);
-            toast.error(error.message || "Failed to delete shift");
+        } catch (err) { toast.error(err.message || 'Failed to delete shift'); }
+    };
+
+    const handleToggleUserShift = async (userId, isAssigned) => {
+        if (!selectedShift) return;
+        const newShiftId = isAssigned ? null : selectedShift.id;
+        // Optimistic update
+        setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, shift_id: newShiftId } : u));
+        try {
+            await adminService.assignUserShift(userId, newShiftId);
+        } catch (err) {
+            toast.error(err.message || 'Failed to update assignment');
+            loadUsers(); // rollback
         }
     };
 
-    const openEditShift = (shift) => {
-        setEditingShift(shift);
-        setIsShiftModalOpen(true);
-    }
+    const filteredShifts = shifts.filter(s => s.name.toLowerCase().includes(shiftSearch.toLowerCase()));
+    const filteredUsers = users.filter(u =>
+        u.user_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.desg_name?.toLowerCase().includes(userSearch.toLowerCase())
+    );
 
+    const Toggle = ({ label, subLabel, checked, onChange }) => (
+        <div className="flex items-center justify-between py-2">
+            <div>
+                <p className="text-sm font-medium text-slate-800 dark:text-white">{label}</p>
+                {subLabel && <p className="text-[11px] text-slate-500">{subLabel}</p>}
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={checked} onChange={onChange} />
+                <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+        </div>
+    );
 
-    const calculateDuration = (start, end) => {
-        if (!start || !end) return "0h 00m";
-        const [startH, startM] = start.split(':').map(Number);
-        const [endH, endM] = end.split(':').map(Number);
-
-        let diffM = (endH * 60 + endM) - (startH * 60 + startM);
-        if (diffM < 0) diffM += 24 * 60; // Handle overnight shifts
-
-        const hours = Math.floor(diffM / 60);
-        const minutes = diffM % 60;
-        return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
-    };
+    const Checkbox = ({ label, checked, onChange }) => (
+        <label className="flex items-center gap-2.5 cursor-pointer py-1.5 group">
+            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600 group-hover:border-indigo-400'}`}
+                onClick={onChange}>
+                {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+            </div>
+            <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+        </label>
+    );
 
     return (
         <DashboardLayout title="Policy Engine">
-            {/* Tab Navigation */}
-            <div className="flex items-center gap-6 mb-6 border-b border-slate-200 dark:border-slate-700">
+            {/* ── Tab Navigation ── */}
+            <div className="flex items-center gap-6 mb-5 border-b border-slate-200 dark:border-slate-700">
                 <button
                     onClick={() => setActiveTab('shifts')}
-                    className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'shifts'
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
+                    className={`pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 ${activeTab === 'shifts' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
                 >
-                    <div className="flex items-center gap-2">
-                        <Briefcase size={18} />
-                        Shift Configuration
-                    </div>
-                    {activeTab === 'shifts' && (
-                        <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>
-                    )}
+                    <Briefcase size={16} /> Shift Configuration
+                    {activeTab === 'shifts' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full" />}
                 </button>
-                <button
-                    onClick={() => setActiveTab('automation')}
-                    className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'automation'
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                >
-                    <div className="flex items-center gap-2">
-                        <Zap size={18} />
-                        Automation Rules
-                    </div>
-                    {activeTab === 'automation' && (
-                        <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>
-                    )}
-                </button>
-            </div>
-
-
-            {/* ==================== AUTOMATION TAB ==================== */}
-            {activeTab === 'automation' && (
-                <div className="h-[calc(100vh-220px)] flex gap-6 animate-in fade-in duration-300">
-                    {/* Left: Toolbox */}
-                    <div className="w-64 flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
-                        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                            <h3 className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-                                <Plus size={18} /> Toolbox
-                            </h3>
-                        </div>
-                        <div className="p-4 space-y-6 overflow-y-auto flex-1">
-                            <div>
-                                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Conditions</h4>
-                                <div className="space-y-2">
-                                    {blockTypes.filter(b => b.type === 'condition').map((block, idx) => (
-                                        <div
-                                            key={idx}
-                                            onClick={() => addBlock(block)}
-                                            className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg cursor-pointer transition-colors group"
-                                        >
-                                            <div className="text-amber-500 dark:text-amber-400">
-                                                <block.icon size={18} />
-                                            </div>
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{block.title}</span>
-                                            <Plus size={14} className="ml-auto opacity-0 group-hover:opacity-100 text-slate-400" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div>
-                                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Actions</h4>
-                                <div className="space-y-2">
-                                    {blockTypes.filter(b => b.type === 'action').map((block, idx) => (
-                                        <div
-                                            key={idx}
-                                            onClick={() => addBlock(block)}
-                                            className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg cursor-pointer transition-colors group"
-                                        >
-                                            <div className="text-indigo-500 dark:text-indigo-400">
-                                                <block.icon size={18} />
-                                            </div>
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{block.title}</span>
-                                            <Plus size={14} className="ml-auto opacity-0 group-hover:opacity-100 text-slate-400" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Center: Canvas (Mock) */}
-                    <div className="flex-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 relative overflow-hidden flex flex-col">
-                        <div className="h-14 bg-white dark:bg-dark-card border-b border-slate-200 dark:border-slate-700 px-4 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-4">
-                                <h2 className="font-semibold text-slate-800 dark:text-white">Late Arrival Policy</h2>
-                                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded uppercase">Active</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setIsTestMode(!isTestMode)}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isTestMode ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
-                                >
-                                    <Play size={16} /> {isTestMode ? 'Stop Test' : 'Test Policy'}
-                                </button>
-                                <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-all active:scale-95">
-                                    <Save size={16} /> Save
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 relative overflow-auto p-10 cursor-grab active:cursor-grabbing bg-dots-slate-200 dark:bg-dots-slate-700">
-                            <div className="min-h-full min-w-full relative">
-                                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible">
-                                    <defs>
-                                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                            <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" className="dark:fill-slate-600" />
-                                        </marker>
-                                    </defs>
-                                    {connections.map((conn, idx) => {
-                                        const fromBlock = blocks.find(b => b.id === conn.from);
-                                        const toBlock = blocks.find(b => b.id === conn.to);
-                                        if (!fromBlock || !toBlock) return null;
-
-                                        return (
-                                            <line
-                                                key={idx}
-                                                x1={fromBlock.x + 140} y1={fromBlock.y + 40}
-                                                x2={toBlock.x + 140} y2={toBlock.y + 40}
-                                                stroke="#cbd5e1"
-                                                strokeWidth="2"
-                                                strokeDasharray="5,5"
-                                                markerEnd="url(#arrowhead)"
-                                                className="dark:stroke-slate-600"
-                                            />
-                                        );
-                                    })}
-                                </svg>
-
-                                <div className="relative z-10 w-full h-full">
-                                    {blocks.map((block) => (
-                                        <div
-                                            key={block.id}
-                                            onClick={(e) => { e.stopPropagation(); setSelectedBlock(block.id); }}
-                                            style={{
-                                                top: block.y,
-                                                left: block.x
-                                            }}
-                                            className={`absolute w-72 bg-white dark:bg-dark-card rounded-xl border-2 shadow-sm transition-all cursor-pointer group ${selectedBlock === block.id
-                                                ? 'border-indigo-500 ring-4 ring-indigo-500/10 z-20'
-                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 z-10'
-                                                }`}
-                                        >
-                                            <div className={`p-4 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-3 ${block.type === 'trigger' ? 'bg-indigo-50/50 dark:bg-indigo-900/10' :
-                                                block.type === 'condition' ? 'bg-amber-50/50 dark:bg-amber-900/10' :
-                                                    'bg-emerald-50/50 dark:bg-emerald-900/10'
-                                                }`}>
-                                                <div className={`p-2 rounded-lg ${block.type === 'trigger' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' :
-                                                    block.type === 'condition' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
-                                                        'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                                                    }`}>
-                                                    <block.icon size={18} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold uppercase text-slate-400">{block.type}</p>
-                                                    <h4 className="font-semibold text-slate-800 dark:text-white">{block.title}</h4>
-                                                </div>
-                                                {selectedBlock === block.id && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                                                        className="ml-auto text-slate-400 hover:text-red-500 transition-colors p-1"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="p-4">
-                                                {block.type === 'trigger' && <p className="text-sm text-slate-500">Starts when user checks in.</p>}
-                                                {block.type === 'condition' && <p className="text-sm text-slate-500">Check if time &gt; 15 mins past shift start.</p>}
-                                                {block.type === 'action' && <p className="text-sm text-slate-500">Set status to "Late".</p>}
-                                            </div>
-                                            {/* Connectors */}
-                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-dark-card border-2 border-slate-300 dark:border-slate-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
-                                            </div>
-                                            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-dark-card border-2 border-slate-300 dark:border-slate-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: Properties / Test Panel */}
-                    <div className="w-80 flex-shrink-0 flex flex-col gap-6">
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex-1">
-                            <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                                <h3 className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-                                    <Settings size={18} /> {selectedBlock ? 'Block Properties' : 'Policy Settings'}
-                                </h3>
-                            </div>
-                            <div className="p-5">
-                                {selectedBlock ? (
-                                    <div className="space-y-4">
-                                        <div className="p-3 bg-indigo-50 dark:bg-indigo-900/10 rounded-lg border border-indigo-100 dark:border-indigo-900/30 mb-4">
-                                            <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400">Selected Block ID: {selectedBlock}</p>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Block Title</label>
-                                            <input type="text" className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200" defaultValue="Is Late?" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Threshold (mins)</label>
-                                            <input type="number" className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200" defaultValue="15" />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8 text-slate-400">
-                                        <Move size={48} className="mx-auto mb-3 opacity-20" />
-                                        <p className="text-sm">Select a block on the canvas to edit its properties.</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {isTestMode && (
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex-1 animate-in slide-in-from-right duration-300">
-                                <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/10">
-                                    <h3 className="font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-2">
-                                        <Play size={18} /> Test & Simulation
-                                    </h3>
-                                </div>
-                                <div className="p-5 space-y-4">
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Simulate an attendance event to verify this policy.</p>
-                                    <button
-                                        onClick={runTest}
-                                        className="w-full py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors"
-                                    >
-                                        Run Simulation
-                                    </button>
-
-                                    {testResult && (
-                                        <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg animate-in fade-in zoom-in duration-200">
-                                            <div className="flex gap-2">
-                                                <CheckCircle size={16} className="text-emerald-500 mt-0.5 shrink-0" />
-                                                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{testResult.message}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                {/* Disabled Automation Tab */}
+                <div className="relative group">
+                    <button
+                        className="pb-3 text-sm font-medium flex items-center gap-2 text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                        disabled
+                    >
+                        <Zap size={16} /> Automation Rules
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 ml-1">Soon</span>
+                    </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-50">
+                        Not available yet — coming soon
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* ==================== SHIFTS TAB ==================== */}
+            {/* ── SHIFTS TAB — 3-Panel Layout ── */}
             {activeTab === 'shifts' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                    {/* Header Actions */}
-                    <div className="flex justify-between items-center bg-white dark:bg-dark-card p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <div>
-                            <h2 className="font-semibold text-lg text-slate-800 dark:text-white">Active Shifts</h2>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Manage work timings and grace periods</p>
-                        </div>
-                        <button
-                            onClick={() => {
-                                setEditingShift(null);
-                                setIsShiftModalOpen(true);
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
-                        >
-                            <Plus size={16} />
-                            Add Shift
-                        </button>
-                    </div>
+                <div className="flex h-[calc(100vh-185px)] gap-5 animate-in fade-in duration-300">
 
-                    {/* Loading State */}
-                    {isLoadingShifts && (
-                        <div className="p-12 text-center text-slate-400">
-                            Loading shifts...
-                        </div>
-                    )}
-
-                    {/* Shifts Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {shifts.map((shift) => (
-                            <div key={shift.id} className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow group">
-                                <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-start">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2.5 rounded-lg bg-${shift.color}-100 dark:bg-${shift.color}-900/30 text-${shift.color}-600 dark:text-${shift.color}-400`}>
-                                            <Clock size={20} />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold text-slate-800 dark:text-white">{shift.name}</h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => openEditShift(shift)}
-                                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1"
-                                            title="Edit Shift"
-                                        >
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteShift(shift.id)}
-                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1"
-                                            title="Delete Shift"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-5 space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">Timing</span>
-                                        <span className="text-sm font-semibold text-slate-800 dark:text-white font-mono">{shift.start} - {shift.end}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">Duration</span>
-                                        <span className="text-sm font-semibold text-slate-800 dark:text-white">
-                                            {calculateDuration(shift.start, shift.end)}
-                                        </span>
-
-                                    </div>
-                                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                                            <AlertTriangle size={14} />
-                                            <span className="text-xs font-medium">Grace Period</span>
-                                        </div>
-                                        <span className="text-sm font-bold text-slate-800 dark:text-white">{shift.grace} mins</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-                                            <Zap size={14} />
-                                            <span className="text-xs font-medium">Overtime</span>
-                                        </div>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${shift.overtime ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                                            {shift.overtime ? `On (> ${shift.otThreshold}h)` : 'Off'}
-                                        </span>
-                                    </div>
-                                </div>
+                    {/* LEFT: Shift List */}
+                    <div className="w-80 flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-semibold text-slate-800 dark:text-white">Shifts</h3>
+                                <button
+                                    onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
+                                    className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                                    title="Create new shift"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
-                        ))}
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <input
+                                    type="text"
+                                    placeholder="Search shifts..."
+                                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
+                                    value={shiftSearch}
+                                    onChange={e => setShiftSearch(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                            {isLoadingShifts && (
+                                <div className="py-10 text-center text-slate-400 text-sm">Loading shifts...</div>
+                            )}
+                            {!isLoadingShifts && filteredShifts.length === 0 && (
+                                <div className="py-10 text-center space-y-2">
+                                    <Briefcase size={32} className="mx-auto text-slate-300 dark:text-slate-600" />
+                                    <p className="text-sm text-slate-400">No shifts found</p>
+                                    <button
+                                        onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
+                                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                    >+ Create first shift</button>
+                                </div>
+                            )}
+                            {filteredShifts.map(shift => (
+                                <div
+                                    key={shift.id}
+                                    onClick={() => { setSelectedShift(shift); setShowShiftForm(false); }}
+                                    className={`p-3 rounded-lg border transition-all cursor-pointer group ${selectedShift?.id === shift.id
+                                        ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/50 shadow-sm'
+                                        : 'bg-white dark:bg-dark-card border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                        }`}
+                                >
+                                    <div className="flex justify-between items-start mb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full bg-${shift.color}-500`} />
+                                            <h4 className={`font-semibold text-sm ${selectedShift?.id === shift.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                {shift.name}
+                                            </h4>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mb-2">
+                                        {shift.start} → {shift.end}
+                                    </p>
+                                    <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+                                        <span className="flex items-center gap-1"><Clock size={10} />{calculateDuration(shift.start, shift.end)}</span>
+                                        <span className="flex items-center gap-1"><Users size={10} />{users.filter(u => u.shift_id === shift.id).length} Staff</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Add/Edit Modal */}
-                    {isShiftModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-                                <div className="flex justify-between items-center p-5 border-b border-slate-200 dark:border-slate-700">
-                                    <h3 className="font-semibold text-lg text-slate-800 dark:text-white text-[16px]">
-                                        {editingShift ? 'Edit Shift Configuration' : 'Create New Shift'}
+                    {/* CENTER: Shift Details / Edit Form */}
+                    <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                        {!selectedShift && !showShiftForm ? (
+                            <div className="flex-1 flex items-center justify-center flex-col gap-4 text-slate-400">
+                                <Briefcase size={48} className="opacity-20" />
+                                <p className="text-sm">Select a shift to view details</p>
+                                <button
+                                    onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    <Plus size={16} /> New Shift
+                                </button>
+                            </div>
+                        ) : showShiftForm ? (
+                            /* ── Shift Form ── */
+                            <>
+                                <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                                    <h3 className="font-semibold text-slate-800 dark:text-white">
+                                        {editingShift ? 'Edit Shift' : 'Create New Shift'}
                                     </h3>
-                                    <button onClick={() => setIsShiftModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                    <button onClick={() => { setShowShiftForm(false); setEditingShift(null); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded">
                                         <X size={20} />
                                     </button>
                                 </div>
-                                <form onSubmit={handleSaveShift} className="p-5 space-y-4">
+                                <form onSubmit={handleSaveShift} className="flex-1 overflow-y-auto p-5 space-y-5">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Shift Name</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Shift Name</label>
                                         <input
-                                            type="text"
-                                            value={shiftForm.name}
-                                            onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
-                                            required
+                                            type="text" required value={shiftForm.name}
+                                            onChange={e => setShiftForm({ ...shiftForm, name: e.target.value })}
                                             placeholder="e.g. Morning Shift A"
-                                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200"
+                                            className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
                                         />
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start Time</label>
-                                            <input
-                                                type="time"
-                                                value={shiftForm.start}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, start: e.target.value })}
-                                                required
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200"
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Start Time</label>
+                                            <input type="time" required value={shiftForm.start}
+                                                onChange={e => setShiftForm({ ...shiftForm, start: e.target.value })}
+                                                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End Time</label>
-                                            <input
-                                                type="time"
-                                                value={shiftForm.end}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, end: e.target.value })}
-                                                required
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200"
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">End Time</label>
+                                            <input type="time" required value={shiftForm.end}
+                                                onChange={e => setShiftForm({ ...shiftForm, end: e.target.value })}
+                                                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
                                             />
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Grace Period (Minutes)</label>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Grace Period</label>
                                         <div className="relative">
-                                            <input
-                                                type="number"
-                                                value={shiftForm.grace}
-                                                onChange={(e) => setShiftForm({ ...shiftForm, grace: e.target.value })}
-                                                required
-                                                min="0"
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            <input type="number" required min="0" value={shiftForm.grace}
+                                                onChange={e => setShiftForm({ ...shiftForm, grace: e.target.value })}
+                                                className="w-full pl-3 pr-14 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">mins</span>
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">minutes</span>
                                         </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">Time allowed after start time before marking as "Late".</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">Time allowed after shift start before marking as "Late".</p>
                                     </div>
 
-                                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h4 className="text-sm font-medium text-slate-800 dark:text-white">Overtime Calculation</h4>
-                                                <p className="text-[10px] text-slate-500">Enable automatic OT tracking</p>
+                                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1 divide-y divide-slate-100 dark:divide-slate-700/50">
+                                        <Toggle
+                                            label="Overtime Calculation" subLabel="Enable automatic OT tracking"
+                                            checked={isOtEnabled} onChange={e => setIsOtEnabled(e.target.checked)}
+                                        />
+                                        {isOtEnabled && (
+                                            <div className="pt-3">
+                                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Minimum Hours for OT</label>
+                                                <div className="relative">
+                                                    <input type="number" step="0.1" value={shiftForm.otThreshold}
+                                                        onChange={e => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
+                                                        className="w-full pl-3 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                                </div>
                                             </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="sr-only peer"
-                                                    checked={isOtEnabled}
-                                                    onChange={(e) => setIsOtEnabled(e.target.checked)}
-                                                />
-                                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                                            </label>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Minimum Hours for OT</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={shiftForm.otThreshold}
-                                                    onChange={(e) => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
-                                                    disabled={!isOtEnabled}
-                                                    className={`w-full pl-3 pr-8 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 dark:text-slate-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${!isOtEnabled ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`}
-                                                />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Hr</span>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
 
-                                    {/* Attendance Requirements */}
-                                    <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
-                                        <h4 className="text-sm font-medium text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                                            <MapPin size={16} className="text-slate-400"/>
-                                            Attendance Validation
+                                    <div className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                                            <MapPin size={15} className="text-slate-400" /> Attendance Validation
                                         </h4>
-                                        
-                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="grid grid-cols-2 gap-x-6">
                                             <div>
-                                                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Check-In</p>
-                                                <div className="space-y-2">
-                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={shiftForm.reqEntryGeofence}
-                                                            onChange={e => setShiftForm({...shiftForm, reqEntryGeofence: e.target.checked})}
-                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">GPS Required</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={shiftForm.reqEntrySelfie}
-                                                            onChange={e => setShiftForm({...shiftForm, reqEntrySelfie: e.target.checked})}
-                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Selfie Required</span>
-                                                    </label>
-                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-In</p>
+                                                <Checkbox label="GPS Required" checked={shiftForm.reqEntryGeofence} onChange={() => setShiftForm(p => ({ ...p, reqEntryGeofence: !p.reqEntryGeofence }))} />
+                                                <Checkbox label="Selfie Required" checked={shiftForm.reqEntrySelfie} onChange={() => setShiftForm(p => ({ ...p, reqEntrySelfie: !p.reqEntrySelfie }))} />
                                             </div>
                                             <div>
-                                                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Check-Out</p>
-                                                <div className="space-y-2">
-                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={shiftForm.reqExitGeofence}
-                                                            onChange={e => setShiftForm({...shiftForm, reqExitGeofence: e.target.checked})}
-                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">GPS Required</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 p-1 rounded -ml-1">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={shiftForm.reqExitSelfie}
-                                                            onChange={e => setShiftForm({...shiftForm, reqExitSelfie: e.target.checked})}
-                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Selfie Required</span>
-                                                    </label>
-                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
+                                                <Checkbox label="GPS Required" checked={shiftForm.reqExitGeofence} onChange={() => setShiftForm(p => ({ ...p, reqExitGeofence: !p.reqExitGeofence }))} />
+                                                <Checkbox label="Selfie Required" checked={shiftForm.reqExitSelfie} onChange={() => setShiftForm(p => ({ ...p, reqExitSelfie: !p.reqExitSelfie }))} />
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="pt-4 flex gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsShiftModalOpen(false)}
-                                            className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                                        >
+                                    <div className="flex gap-3 pt-2">
+                                        <button type="button" onClick={() => { setShowShiftForm(false); setEditingShift(null); }}
+                                            className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                                             Cancel
                                         </button>
-                                        <button
-                                            type="submit"
-                                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
-                                        >
-                                            Save Shift
+                                        <button type="submit"
+                                            className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors flex items-center justify-center gap-2">
+                                            <Save size={15} /> Save Shift
                                         </button>
                                     </div>
                                 </form>
+                            </>
+                        ) : (
+                            /* ── Shift Detail View ── */
+                            <>
+                                <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2.5 rounded-xl bg-${selectedShift.color}-100 dark:bg-${selectedShift.color}-900/30 text-${selectedShift.color}-600 dark:text-${selectedShift.color}-400`}>
+                                            <Clock size={20} />
+                                        </div>
+                                        <div>
+                                            <h2 className="font-bold text-lg text-slate-900 dark:text-white">{selectedShift.name}</h2>
+                                            <p className="text-xs text-slate-500 font-mono">{selectedShift.start} → {selectedShift.end} • {calculateDuration(selectedShift.start, selectedShift.end)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => { setEditingShift(selectedShift); setShowShiftForm(true); }}
+                                            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
+                                        ><Edit2 size={15} /> Edit</button>
+                                        <button
+                                            onClick={() => handleDeleteShift(selectedShift.id)}
+                                            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
+                                        ><Trash2 size={15} /> Delete</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                    {/* Summary Cards */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {[
+                                            { label: 'Start Time', value: selectedShift.start, icon: <ArrowRight size={14} className="text-indigo-500" />, bg: 'indigo' },
+                                            { label: 'Grace Period', value: `${selectedShift.grace || 0} min`, icon: <AlertTriangle size={14} className="text-amber-500" />, bg: 'amber' },
+                                            { label: 'Duration', value: calculateDuration(selectedShift.start, selectedShift.end), icon: <Clock size={14} className="text-teal-500" />, bg: 'teal' },
+                                        ].map(card => (
+                                            <div key={card.label} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl p-4">
+                                                <div className="flex items-center gap-1.5 mb-1">{card.icon}<p className="text-xs text-slate-500">{card.label}</p></div>
+                                                <p className="text-base font-bold text-slate-800 dark:text-white font-mono">{card.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Policy Rules */}
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-5 space-y-3">
+                                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <Settings size={15} className="text-slate-400" /> Attendance Policies
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Check-In Requirements</p>
+                                                {[
+                                                    { label: 'GPS Required', val: selectedShift.policy_rules?.entry_requirements?.geofence },
+                                                    { label: 'Selfie Required', val: selectedShift.policy_rules?.entry_requirements?.selfie },
+                                                ].map(r => (
+                                                    <div key={r.label} className="flex items-center gap-2 py-1">
+                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${r.val ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                            {r.val ? <Check size={10} strokeWidth={3} /> : <X size={10} strokeWidth={3} />}
+                                                        </div>
+                                                        <span className="text-sm text-slate-600 dark:text-slate-400">{r.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Check-Out Requirements</p>
+                                                {[
+                                                    { label: 'GPS Required', val: selectedShift.policy_rules?.exit_requirements?.geofence },
+                                                    { label: 'Selfie Required', val: selectedShift.policy_rules?.exit_requirements?.selfie },
+                                                ].map(r => (
+                                                    <div key={r.label} className="flex items-center gap-2 py-1">
+                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${r.val ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                            {r.val ? <Check size={10} strokeWidth={3} /> : <X size={10} strokeWidth={3} />}
+                                                        </div>
+                                                        <span className="text-sm text-slate-600 dark:text-slate-400">{r.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {selectedShift.overtime && (
+                                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700/50 flex items-center gap-2">
+                                                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600"><Zap size={13} /></div>
+                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Overtime enabled after {selectedShift.otThreshold}h</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* RIGHT: User Assignment */}
+                    <div className="w-80 flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Users size={16} className="text-slate-500" />
+                                <h3 className="font-semibold text-slate-800 dark:text-white">Assigned Staff</h3>
+                                {selectedShift && (
+                                    <span className="ml-auto text-xs font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                                        {users.filter(u => u.shift_id === selectedShift.id).length}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <input
+                                    type="text" placeholder="Search staff..."
+                                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-white"
+                                    value={userSearch}
+                                    onChange={e => setUserSearch(e.target.value)}
+                                />
                             </div>
                         </div>
-                    )}
+
+                        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                            {loadingUsers && <p className="text-sm text-slate-400 px-3 py-4 text-center">Loading users...</p>}
+                            {!loadingUsers && filteredUsers.map(user => {
+                                const isAssigned = selectedShift && user.shift_id === selectedShift.id;
+                                const hasOtherShift = user.shift_id && (!selectedShift || user.shift_id !== selectedShift.id);
+                                const otherShift = hasOtherShift ? shifts.find(s => s.id === user.shift_id) : null;
+                                return (
+                                    <div key={user.user_id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors group">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-400 overflow-hidden flex-shrink-0">
+                                                {user.profile_image_url ? (
+                                                    <img src={`${user.profile_image_url}?t=${avatarTimestamp}`} alt={user.user_name} className="w-full h-full object-cover" />
+                                                ) : user.user_name?.charAt(0)}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{user.user_name}</p>
+                                                <p className="text-[11px] text-slate-400 truncate">
+                                                    {otherShift ? <span className="text-amber-500">{otherShift.name}</span> : user.desg_name}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => selectedShift && handleToggleUserShift(user.user_id, isAssigned)}
+                                            disabled={!selectedShift}
+                                            title={!selectedShift ? 'Select a shift first' : isAssigned ? 'Remove from shift' : 'Assign to shift'}
+                                            className={`p-1.5 rounded-md transition-all flex-shrink-0 ${!selectedShift ? 'cursor-not-allowed opacity-30' : isAssigned
+                                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                                : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600'
+                                                }`}
+                                        >
+                                            {isAssigned ? <Check size={16} /> : <Plus size={16} />}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── AUTOMATION TAB (disabled / future) ── */}
+            {activeTab === 'automation' && (
+                <div className="h-[calc(100vh-220px)] flex gap-6 animate-in fade-in duration-300 relative">
+                    <div className="absolute inset-0 z-20 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                        <div className="text-center space-y-3">
+                            <Zap size={40} className="mx-auto text-slate-300 dark:text-slate-600" />
+                            <h3 className="font-semibold text-slate-600 dark:text-slate-400">Automation Rules — Coming Soon</h3>
+                            <p className="text-sm text-slate-400">This feature is not yet integrated.</p>
+                        </div>
+                    </div>
+                    {/* Ghost content behind blur */}
+                    <div className="w-64 flex-shrink-0 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700 pointer-events-none" />
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 pointer-events-none" />
+                    <div className="w-80 flex-shrink-0 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700 pointer-events-none" />
                 </div>
             )}
         </DashboardLayout>
