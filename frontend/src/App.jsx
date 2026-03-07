@@ -1,6 +1,7 @@
 import { Routes, Route, Outlet } from "react-router-dom";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
+import ErrorBoundary from "./ErrorBoundary";
 
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -50,32 +51,33 @@ function App() {
     <AuthProvider>
       <NotificationProvider>
         <ToastContainer position="top-right" autoClose={3000} />
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
 
-          {/* Public Route: Login */}
-          <Route element={<PublicRoute />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-          </Route>
-
-          {/* Test Routes - Only available in Development */}
-          <Route element={<TestRoute />}>
-            <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
-            <Route path="/test-api" element={<TestAPI />} />
-            <Route path="/visual-scripting" element={<VisualScripting />} />
-          </Route>
-
-          <Route element={<ProtectedRoute />}>
-            <Route path="/unauthorized" element={<Unauthorized />} />
-            {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
-            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee']} />}>
-              <Route path="/" element={<DashboardHandler />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/holidays" element={<HolidayManagement />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/daily-activity" element={<DailyActivity />} />
-              <Route path="/apply-leave" element={<LeaveApplication />} />
+            {/* Public Route: Login */}
+            <Route element={<PublicRoute />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
             </Route>
+
+            {/* Test Routes - Only available in Development */}
+            <Route element={<TestRoute />}>
+              <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
+              <Route path="/test-api" element={<TestAPI />} />
+              <Route path="/visual-scripting" element={<VisualScripting />} />
+            </Route>
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/unauthorized" element={<Unauthorized />} />
+              {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
+              <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee']} />}>
+                <Route path="/" element={<DashboardHandler />} />
+                <Route path="/attendance" element={<Attendance />} />
+                <Route path="/holidays" element={<HolidayManagement />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/daily-activity" element={<DailyActivity />} />
+                <Route path="/apply-leave" element={<LeaveApplication />} />
+              </Route>
 
             {/* Admin & HR Only Routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
@@ -90,14 +92,15 @@ function App() {
               <Route path="/holidays/bulk" element={<BulkHolidayImport />} />
             </Route>
 
-            {/* Admin Only Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="/subscription" element={<Subscription />} />
-              <Route path="/dar-admin" element={<DARAdmin />} />
+              {/* Admin Only Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                <Route path="/subscription" element={<Subscription />} />
+                <Route path="/dar-admin" element={<DARAdmin />} />
+              </Route>
             </Route>
-          </Route>
 
-        </Routes>
+          </Routes>
+        </ErrorBoundary>
       </NotificationProvider>
     </AuthProvider>
   )

@@ -62,21 +62,19 @@ const HolidayCalendarView = ({ holidays, onDelete, isAdmin, currentDate, onDateC
         <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in duration-300">
             {/* Header */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-                        {displayDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h2>
-                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                        <button onClick={prevMonth} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500 dark:text-slate-400">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <button onClick={goToToday} className="px-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors">
-                            Today
-                        </button>
-                        <button onClick={nextMonth} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500 dark:text-slate-400">
-                            <ChevronRight size={20} />
-                        </button>
-                    </div>
+                <h2 className="text-lg font-bold text-slate-800 dark:text-white">
+                    {displayDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </h2>
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                    <button onClick={prevMonth} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500 dark:text-slate-400">
+                        <ChevronLeft size={20} />
+                    </button>
+                    <button onClick={goToToday} className="px-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors">
+                        Today
+                    </button>
+                    <button onClick={nextMonth} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500 dark:text-slate-400">
+                        <ChevronRight size={20} />
+                    </button>
                 </div>
             </div>
 

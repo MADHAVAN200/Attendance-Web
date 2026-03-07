@@ -1266,8 +1266,9 @@ const Attendance = () => {
 
                 {/* --- CORRECTION DETAILS MODAL --- */}
                 {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                        <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={() => setSelectedRequest(null)} />
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
                                 <div>
@@ -1387,8 +1388,9 @@ const Attendance = () => {
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
-                    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
-                        <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 transition-all duration-200">
+                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={closeCamera} />
+                        <div className="relative w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-center px-4">
                                 <h3 className="text-2xl font-bold text-white tracking-tight">
                                     {cameraMode === 'IN' ? 'Check In' : 'Check Out'}
