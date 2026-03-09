@@ -1,6 +1,7 @@
 import catchAsync from '../../utils/catchAsync.js';
 import AppError from '../../utils/AppError.js';
 import * as userService from '../../services/users/userService.js';
+import * as dashboardService from '../../services/admin/dashboardService.js';
 
 // GET all users
 export const getAllUsers = catchAsync(async (req, res, next) => {
@@ -51,12 +52,14 @@ export const createUser = catchAsync(async (req, res, next) => {
         userAgent: req.get("User-Agent")
     };
 
-    const newUserId = await userService.createUser(req.body, authInfo);
+    const profileImageBuffer = req.file ? req.file.buffer : null;
+    const { newUserId, profileImageUrl } = await userService.createUser(req.body, authInfo, profileImageBuffer);
 
     res.status(201).json({
         success: true,
         message: "User created successfully",
-        inserted_id: newUserId
+        inserted_id: newUserId,
+        profile_image_url: profileImageUrl
     });
 });
 
@@ -76,9 +79,10 @@ export const updateUser = catchAsync(async (req, res, next) => {
         userAgent: req.get("User-Agent")
     };
 
-    await userService.updateUser(user_id, req.body, authInfo);
+    const profileImageBuffer = req.file ? req.file.buffer : null;
+    const result = await userService.updateUser(user_id, req.body, authInfo, profileImageBuffer);
 
-    res.json({ success: true, message: "User updated successfully" });
+    res.json({ success: true, message: "User updated successfully", profile_image_url: result.profileImageUrl || null });
 });
 
 // DELETE user (Soft Delete)
@@ -235,4 +239,35 @@ export const bulkValidateUsers = catchAsync(async (req, res, next) => {
     }
     const validationReport = await userService.bulkValidateUsers(users, req.user.org_id);
     res.json({ success: true, validation: validationReport });
+});
+
+// Bulk create users from JSON
+export const bulkCreateUsersJson = catchAsync(async (req, res) => {
+    if (req.user.user_type !== 'admin') {
+        throw new AppError('Only admin can perform bulk operations', 403);
+    }
+
+    const { users } = req.body;
+    if (!users || !Array.isArray(users) || users.length === 0) {
+        throw new AppError('Invalid data provided', 400);
+    }
+
+    const authInfo = {
+        initiatorRole: req.user.user_type,
+        initiatorId: req.user.user_id,
+        orgId: req.user.org_id
+    };
+
+    const report = await userService.bulkCreateUsersFromJson(users, authInfo);
+    res.json({ ok: true, report });
+});
+
+// GET dashboard stats
+export const getDashboardStats = catchAsync(async (req, res) => {
+    const org_id = req.user.org_id;
+    const { range = 'weekly', year, month } = req.query;
+
+    const result = await dashboardService.getDashboardStats(org_id, { range, year, month });
+
+    res.json({ success: true, ...result });
 });

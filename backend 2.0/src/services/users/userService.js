@@ -2,7 +2,7 @@ import { attendanceDB } from '../../config/database.js';
 import bcrypt from 'bcrypt';
 import AppError from '../../utils/AppError.js';
 import EventBus from '../../utils/EventBus.js';
-import { deleteFile } from '../../../../backend/s3/s3Service.js';
+import { deleteFile, uploadCompressedImage } from '../s3/s3Service.js';
 import ExcelJS from 'exceljs';
 import { PassThrough } from 'stream';
 
@@ -78,7 +78,7 @@ export const getUserById = async (userId, orgId) => {
     return user;
 };
 
-export const createUser = async (userData, authInfo) => {
+export const createUser = async (userData, authInfo, profileImageBuffer = null) => {
     const { user_name, user_password, email, phone_no, desg_id, dept_id, shift_id, user_type } = userData;
 
     if (user_type === 'admin') throw new AppError("Cannot create Admin users via the panel", 403);
@@ -96,13 +96,14 @@ export const createUser = async (userData, authInfo) => {
 
     const hashedPassword = await bcrypt.hash(user_password, 12);
     let newUserId;
+    let userCode;
 
     await attendanceDB.transaction(async (trx) => {
         const org = await trx("organizations").where({ org_id: authInfo.orgId }).forUpdate().first();
         if (!org) throw new AppError("Organization not found", 404);
 
         const nextNumber = org.last_user_number + 1;
-        const userCode = `${org.org_code}-${String(nextNumber).padStart(3, "0")}`;
+        userCode = `${org.org_code}-${String(nextNumber).padStart(3, "0")}`;
 
         await trx("organizations").where({ org_id: authInfo.orgId }).update({ last_user_number: nextNumber });
 
@@ -127,10 +128,30 @@ export const createUser = async (userData, authInfo) => {
         }
     });
 
-    return newUserId;
+    // Upload profile picture AFTER user creation (outside transaction)
+    let profileImageUrl = null;
+    if (profileImageBuffer && newUserId) {
+        try {
+            const uploadResult = await uploadCompressedImage({
+                fileBuffer: profileImageBuffer,
+                key: userCode,
+                directory: 'public/profile_pics',
+                quality: 90
+            });
+            profileImageUrl = uploadResult.url;
+            await attendanceDB('users').where({ user_id: newUserId }).update({
+                profile_image_url: profileImageUrl
+            });
+        } catch (uploadErr) {
+            console.error("Profile image upload failed:", uploadErr);
+            // User is still created, just without a profile picture
+        }
+    }
+
+    return { newUserId, profileImageUrl };
 };
 
-export const updateUser = async (userId, updatesData, authInfo) => {
+export const updateUser = async (userId, updatesData, authInfo, profileImageBuffer = null) => {
     const updates = {};
     const targetUser = await attendanceDB("users").where({ user_id: userId, org_id: authInfo.orgId }).first();
 
@@ -176,7 +197,27 @@ export const updateUser = async (userId, updatesData, authInfo) => {
         }
     });
 
-    return true;
+    // Upload profile picture if provided
+    let profileImageUrl = null;
+    if (profileImageBuffer) {
+        try {
+            const userCode = targetUser.user_code || `user_${userId}`;
+            const uploadResult = await uploadCompressedImage({
+                fileBuffer: profileImageBuffer,
+                key: userCode,
+                directory: 'public/profile_pics',
+                quality: 90
+            });
+            profileImageUrl = uploadResult.url;
+            await attendanceDB('users').where({ user_id: userId }).update({
+                profile_image_url: profileImageUrl
+            });
+        } catch (uploadErr) {
+            console.error('Profile image upload failed:', uploadErr);
+        }
+    }
+
+    return { success: true, profileImageUrl };
 };
 
 export const softDeleteUser = async (userId, authInfo) => {
@@ -554,6 +595,132 @@ export const getWorkLocations = async (orgId) => {
     return await attendanceDB("work_locations").where({ org_id: orgId }).select(
         "location_id", "location_name", "latitude", "longitude", "radius", "is_active"
     );
+};
+
+export const bulkCreateUsersFromJson = async (users, authInfo) => {
+    const { orgId } = authInfo;
+    const results = {
+        total_processed: 0,
+        success_count: 0,
+        failure_count: 0,
+        errors: []
+    };
+
+    const uniqueDepts = new Set();
+    const uniqueDesgs = new Set();
+    const uniqueShifts = new Set();
+
+    for (const row of users) {
+        const dept = row["Department"] || row["department"] || row["dept"];
+        const desg = row["Designation"] || row["designation"] || row["role"] || row["Role"];
+        const shift = row["Shift"] || row["shift"];
+        if (dept) uniqueDepts.add(dept);
+        if (desg) uniqueDesgs.add(desg);
+        if (shift) uniqueShifts.add(shift);
+    }
+
+    const deptMap = {};
+    const desgMap = {};
+    const shiftMap = {};
+
+    await attendanceDB.transaction(async (trx) => {
+        for (const deptName of uniqueDepts) {
+            if (!deptName) continue;
+            let dept = await trx("departments").where({ dept_name: deptName, org_id: orgId }).first();
+            if (!dept) {
+                const [newId] = await trx("departments").insert({ dept_name: deptName, org_id: orgId });
+                deptMap[deptName.toLowerCase()] = newId;
+            } else {
+                deptMap[deptName.toLowerCase()] = dept.dept_id;
+            }
+        }
+
+        for (const desgName of uniqueDesgs) {
+            if (!desgName) continue;
+            let desg = await trx("designations").where({ desg_name: desgName, org_id: orgId }).first();
+            if (!desg) {
+                const [newId] = await trx("designations").insert({ desg_name: desgName, org_id: orgId });
+                desgMap[desgName.toLowerCase()] = newId;
+            } else {
+                desgMap[desgName.toLowerCase()] = desg.desg_id;
+            }
+        }
+
+        const allShifts = await trx("shifts").where({ org_id: orgId }).select('shift_id', 'shift_name');
+        for (const sh of allShifts) {
+            shiftMap[sh.shift_name.toLowerCase()] = sh.shift_id;
+        }
+
+        const org = await trx("organizations").where({ org_id: orgId }).forUpdate().first();
+        if (!org) throw new AppError("Organization not found", 404);
+
+        let nextUserNumber = org.last_user_number;
+        let rowNumber = 0;
+
+        for (const row of users) {
+            rowNumber++;
+            results.total_processed++;
+
+            const name = row['Name'] || row['name'] || row['user_name'];
+            const email = row['Email'] || row['email'];
+            const phoneRaw = row['Phone'] || row['phone'] || row['phone_no'];
+            const phone = phoneRaw ? phoneRaw.toString().trim() : null;
+            const deptName = row["Department"] || row["department"] || row["dept"];
+            const desgName = row["Designation"] || row["designation"] || row["role"] || row["Role"];
+            const shiftName = row["Shift"] || row["shift"];
+            const password = row["Password"] || row["password"] || `${name}-${orgId}`;
+
+            if (!name || !email) {
+                results.failure_count++;
+                results.errors.push(`Row ${rowNumber}: Missing Name or Email`);
+                continue;
+            }
+
+            try {
+                let duplicateQuery = trx("users").where({ email });
+                if (phone) duplicateQuery = duplicateQuery.orWhere({ phone_no: phone });
+                const existing = await duplicateQuery.first();
+
+                if (existing) {
+                    results.failure_count++;
+                    results.errors.push(`Row ${rowNumber}: Duplicate Email/Phone (${email})`);
+                    continue;
+                }
+
+                const hashedPassword = await bcrypt.hash(password, 10);
+                const deptId = deptName ? deptMap[deptName.toLowerCase()] : null;
+                const desgId = desgName ? desgMap[desgName.toLowerCase()] : null;
+                const shiftId = shiftName ? shiftMap[shiftName.toLowerCase()] : null;
+
+                nextUserNumber++;
+                const userCode = `${org.org_code}-${String(nextUserNumber).padStart(3, "0")}`;
+
+                await trx("users").insert({
+                    org_id: orgId,
+                    user_name: name,
+                    user_code: userCode,
+                    email,
+                    phone_no: phone,
+                    user_password: hashedPassword,
+                    user_type: 'employee',
+                    dept_id: deptId,
+                    desg_id: desgId,
+                    shift_id: shiftId
+                });
+
+                results.success_count++;
+            } catch (err) {
+                results.failure_count++;
+                results.errors.push(`Row ${rowNumber}: ${err.message}`);
+            }
+        }
+
+        await trx("organizations")
+            .where({ org_id: orgId })
+            .update({ last_user_number: nextUserNumber });
+    });
+
+    return results;
 };
 
 export const bulkValidateUsers = async (users, orgId) => {
