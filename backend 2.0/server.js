@@ -6,6 +6,8 @@ import './src/config/config.js';
 import './src/config/database.js';
 
 import app from './src/app.js';
+import { initAttendanceProcessor } from './src/cron/AttendanceProcessor.js';
+import { initCleanupScheduler } from './src/cron/cleanupScheduler.js';
 
 const PORT = 5003; // Using a different port initially for backend 2.0 to avoid conflicts
 
@@ -39,5 +41,7 @@ io.on('connection', (socket) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend 2.0 server listening at http://0.0.0.0:${PORT}`);
 
-    // TODO: Initialize Cron Jobs here later
+    // Initialize Cron Jobs
+    //initAttendanceProcessor();
+    //initCleanupScheduler();
 });
