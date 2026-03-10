@@ -1,4 +1,5 @@
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
 
@@ -34,6 +35,14 @@ import LeaveApplication from "./pages/holidays/LeaveApplication"
 
 import EmployeeDashboard from "./pages/dashboard/EmployeeDashboard";
 import { useAuth } from "./context/AuthContext";
+import ShowcaseNavbar from "./showcase/components/Navbar";
+import ShowcaseFooter from "./showcase/components/Footer";
+import ShowcaseMobileNavbar from "./showcase/components/MobileNavbar";
+import ShowcaseMobileFooter from "./showcase/components/MobileFooter";
+import ShowcaseHomePage from "./showcase/pages/HomePage";
+import ShowcaseMobileHomePage from "./showcase/pages/MobileHomePage";
+import useOrientation from "./showcase/hooks/useOrientation";
+import "./showcase/showcase.css";
 
 // Component to handle role-based dashboard view
 const DashboardHandler = () => {
@@ -44,12 +53,66 @@ const DashboardHandler = () => {
   return <AdminDashboard />;
 };
 
+function ShowcaseScrollToTop() {
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    if (!hash) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [pathname]);
+
+  return null;
+}
+
+const ShowcaseShell = ({ children }) => {
+  const isPortrait = useOrientation();
+  const NavComp = isPortrait ? ShowcaseMobileNavbar : ShowcaseNavbar;
+  const FootComp = isPortrait ? ShowcaseMobileFooter : ShowcaseFooter;
+
+  return (
+    <div className="showcase-root site-bg">
+      <ShowcaseScrollToTop />
+      <NavComp />
+      <main>{children}</main>
+      <FootComp />
+    </div>
+  );
+};
+
+const RootHandler = () => {
+  const { user, authChecked } = useAuth();
+  const isPortrait = useOrientation();
+
+  if (!authChecked) {
+    return null;
+  }
+
+  if (!user) {
+    return (
+      <ShowcaseShell>
+        {isPortrait ? <ShowcaseMobileHomePage /> : <ShowcaseHomePage />}
+      </ShowcaseShell>
+    );
+  }
+
+  return (
+    <ProtectedRoute allowedRoles={["admin", "hr", "employee"]}>
+      <DashboardHandler />
+    </ProtectedRoute>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
         <ToastContainer position="top-right" autoClose={3000} />
         <Routes>
+
+          {/* Website Landing (shown first when not logged in) */}
+          <Route path="/" element={<RootHandler />} />
+          <Route path="/get-started" element={<Navigate to="/login" replace />} />
 
           {/* Public Route: Login */}
           <Route element={<PublicRoute />}>
@@ -68,7 +131,6 @@ function App() {
             <Route path="/unauthorized" element={<Unauthorized />} />
             {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee']} />}>
-              <Route path="/" element={<DashboardHandler />} />
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/holidays" element={<HolidayManagement />} />
               <Route path="/profile" element={<Profile />} />
@@ -94,6 +156,8 @@ function App() {
               <Route path="/dar-admin" element={<DARAdmin />} />
             </Route>
           </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
       </NotificationProvider>
