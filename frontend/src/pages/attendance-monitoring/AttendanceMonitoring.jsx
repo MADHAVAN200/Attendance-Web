@@ -1478,9 +1478,9 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
 
     if (!user) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
+    return createPortal(
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={onClose} />
             <div className="relative bg-white dark:bg-dark-card w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
 
                 {/* Header */}
@@ -1634,7 +1634,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
             {/* Image Preview Lightbox */}
             {previewImage && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={() => setPreviewImage(null)}
                 >
                     <button
@@ -1652,7 +1652,8 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                 </div>,
                 document.body
             )}
-        </div>
+        </div>,
+        document.body
     );
 };
 

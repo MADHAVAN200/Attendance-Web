@@ -11,7 +11,8 @@ import {
     Briefcase,
     Clock,
     Shield,
-    Plus
+    Plus,
+    Camera
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
@@ -94,7 +95,8 @@ const EmployeeForm = () => {
         shift_id: '',
         user_type: 'employee',
         // work_locations: not handled in this form API
-        status: true // UI only for now, or map to user_type? 
+        status: true, // UI only for now, or map to user_type?
+        profile_image: null // For avatar upload
     });
 
     const [departments, setDepartments] = useState([]);
@@ -153,7 +155,8 @@ const EmployeeForm = () => {
                             dept_id: u.dept_id || '',
                             shift_id: u.shift_id || '',
                             user_type: u.user_type,
-                            status: true // Assume active
+                            status: true, // Assume active
+                            profile_image: u.profile_image_url || null
                         });
                     }
                 }
@@ -174,6 +177,21 @@ const EmployeeForm = () => {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({
+                    ...prev,
+                    profile_image: reader.result,
+                    profile_image_file: file
+                }));
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -219,10 +237,10 @@ const EmployeeForm = () => {
 
 
             if (isEditMode) {
-                await adminService.updateUser(id, payload);
+                await adminService.updateUser(id, payload, formData.profile_image_file || null);
                 toast.success("User updated successfully");
             } else {
-                await adminService.createUser(payload);
+                await adminService.createUser(payload, formData.profile_image_file || null);
                 toast.success("User created successfully");
             }
             navigate('/employees');
@@ -290,191 +308,219 @@ const EmployeeForm = () => {
                     </button>
                 </div>
 
-                {/* Main Card */}
-                <div className="bg-white dark:bg-dark-card p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                {/* Main Content Area: 2-Column Layout */}
+                <div className="flex flex-col md:flex-row-reverse gap-8 xl:gap-12">
 
-                        {/* Personal Info Section */}
-                        <div className="md:col-span-2">
-                            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <User size={16} /> Personal Information
-                            </h3>
+                    {/* Profile Picture Column (Right on Desktop) */}
+                    <div className="w-full md:w-1/3 lg:w-1/3 xl:w-1/4 flex flex-col items-center md:items-end justify-start pt-4 lg:pt-8 w-full">
+                        <div className="relative group flex flex-col items-center w-full">
+                            {/* Glowing background */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 md:w-64 md:h-64 rounded-full bg-gradient-to-tr from-pink-400 via-purple-400 to-indigo-400 blur-3xl opacity-30 dark:opacity-20 pointer-events-none"></div>
+
+                            {/* Profile Image Container */}
+                            <div className="relative w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 rounded-full border-8 border-white dark:border-dark-card shadow-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 z-10 transition-transform duration-500 group-hover:scale-[1.02]">
+                                {formData.profile_image ? (
+                                    <img src={formData.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={80} className="opacity-50" />
+                                )}
+                            </div>
+
+                            {/* Edit Image Button */}
+                            <label className="absolute top-[160px] right-[25%] md:top-[190px] md:right-[5%] lg:top-[210px] lg:right-[15%] z-20 w-12 h-12 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center cursor-pointer shadow-xl border border-slate-100 dark:border-slate-700 transition-all hover:scale-110">
+                                <Camera size={22} />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleImageChange}
+                                />
+                            </label>
+
+                            {/* User Info below picture on mobile/smaller screens, or just centered */}
+                            <div className="mt-8 text-center bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-white/50 dark:border-slate-700/50 shadow-sm w-full max-w-[260px] z-10">
+                                <h3 className="font-bold text-slate-800 dark:text-white text-xl">
+                                    {formData.user_name || "New Employee"}
+                                </h3>
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 capitalize">
+                                    {designations.find(d => d.desg_id === formData.desg_id)?.desg_name || formData.user_type || "Role"}
+                                </p>
+                            </div>
                         </div>
+                    </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
-                            <input
-                                type="text"
-                                name="user_name"
-                                value={formData.user_name}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
-                                required
-                            />
-                        </div>
+                    {/* Form Fields Column (Left on Desktop) */}
+                    <div className="w-full md:w-2/3 lg:w-2/3 xl:w-3/4 bg-white dark:bg-dark-card p-6 sm:p-8 xl:p-10 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-300">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                            <input
-                                type="password"
-                                name="user_password"
-                                value={formData.user_password}
-                                onChange={handleChange}
-                                placeholder={isEditMode ? "Leave blank to keep current" : "Enter password"}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
-                                required={!isEditMode}
-                            />
-                        </div>
+                            {/* Personal Info Section */}
+                            <div className="md:col-span-2">
+                                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <User size={16} /> Personal Information
+                                </h3>
+                            </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Mail size={14} className="text-slate-400" /> Email Address</label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
-                                required
-                            />
-                        </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
+                                <input
+                                    type="text"
+                                    name="user_name"
+                                    value={formData.user_name}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
+                                    required
+                                />
+                            </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Phone size={14} className="text-slate-400" /> Phone Number</label>
-                            <input
-                                type="tel"
-                                name="phone_no"
-                                value={formData.phone_no}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
-                            />
-                        </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                                <input
+                                    type="password"
+                                    name="user_password"
+                                    value={formData.user_password}
+                                    onChange={handleChange}
+                                    placeholder={isEditMode ? "Leave blank to keep current" : "Enter password"}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
+                                    required={!isEditMode}
+                                />
+                            </div>
 
-                        {/* Separator */}
-                        <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 my-2"></div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Mail size={14} className="text-slate-400" /> Email Address</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
+                                    required
+                                />
+                            </div>
 
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Phone size={14} className="text-slate-400" /> Phone Number</label>
+                                <input
+                                    type="tel"
+                                    name="phone_no"
+                                    value={formData.phone_no}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white"
+                                />
+                            </div>
 
-                        {/* Work Info Section */}
-                        <div className="md:col-span-2">
-                            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <Briefcase size={16} /> Work Details
-                            </h3>
-                        </div>
+                            {/* Separator */}
+                            <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 my-2"></div>
 
-                        <div className="space-y-1.5 relative" ref={deptContainerRef}>
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Department</label>
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActivePopover(activePopover === 'dept' ? null : 'dept')}
-                                        className={`
+                            {/* Work Info Section */}
+                            <div className="md:col-span-2">
+                                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-2 md:mb-0">
+                                    <Briefcase size={16} /> Work Details
+                                </h3>
+                            </div>
+
+                            <div className="space-y-1.5 relative" ref={deptContainerRef}>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Department</label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActivePopover(activePopover === 'dept' ? null : 'dept')}
+                                            className={`
                                             group relative flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300
                                             ${activePopover === 'dept'
-                                                ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)] scale-110'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-[0_0_10px_rgba(79,70,229,0.3)]'
-                                            }
+                                                    ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)] scale-110'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-[0_0_10px_rgba(79,70,229,0.3)]'
+                                                }
                                         `}
-                                        title="Quick Add Department"
-                                    >
-                                        <div className={`absolute inset-0 rounded-full bg-indigo-500/20 blur-md transition-opacity duration-300 ${activePopover === 'dept' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}></div>
-                                        <Plus size={14} className="relative z-10" strokeWidth={2.5} />
-                                    </button>
-                                    <QuickAddPopover
-                                        isOpen={activePopover === 'dept'}
-                                        title="New Department"
-                                        onAdd={handleAddDepartment}
-                                        onClose={() => setActivePopover(null)}
-                                    />
+                                            title="Quick Add Department"
+                                        >
+                                            <div className={`absolute inset-0 rounded-full bg-indigo-500/20 blur-md transition-opacity duration-300 ${activePopover === 'dept' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}></div>
+                                            <Plus size={14} className="relative z-10" strokeWidth={2.5} />
+                                        </button>
+                                        <QuickAddPopover
+                                            isOpen={activePopover === 'dept'}
+                                            title="New Department"
+                                            onAdd={handleAddDepartment}
+                                            onClose={() => setActivePopover(null)}
+                                        />
+                                    </div>
                                 </div>
+                                <select
+                                    name="dept_id"
+                                    value={formData.dept_id}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map(d => (
+                                        <option key={d.dept_id} value={d.dept_id}>{d.dept_name}</option>
+                                    ))}
+                                </select>
                             </div>
-                            <select
-                                name="dept_id"
-                                value={formData.dept_id}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
-                            >
-                                <option value="">Select Department</option>
-                                {departments.map(d => (
-                                    <option key={d.dept_id} value={d.dept_id}>{d.dept_name}</option>
-                                ))}
-                            </select>
-                        </div>
 
-                        <div className="space-y-1.5 relative" ref={desgContainerRef}>
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Designation / Role</label>
-                                <div className="relative">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActivePopover(activePopover === 'desg' ? null : 'desg')}
-                                        className={`
+                            <div className="space-y-1.5 relative" ref={desgContainerRef}>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Designation / Role</label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActivePopover(activePopover === 'desg' ? null : 'desg')}
+                                            className={`
                                             group relative flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300
                                             ${activePopover === 'desg'
-                                                ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)] scale-110'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-[0_0_10px_rgba(79,70,229,0.3)]'
-                                            }
+                                                    ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)] scale-110'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-[0_0_10px_rgba(79,70,229,0.3)]'
+                                                }
                                         `}
-                                        title="Quick Add Designation"
-                                    >
-                                        <div className={`absolute inset-0 rounded-full bg-indigo-500/20 blur-md transition-opacity duration-300 ${activePopover === 'desg' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}></div>
-                                        <Plus size={14} className="relative z-10" strokeWidth={2.5} />
-                                    </button>
-                                    <QuickAddPopover
-                                        isOpen={activePopover === 'desg'}
-                                        title="New Designation"
-                                        onAdd={handleAddDesignation}
-                                        onClose={() => setActivePopover(null)}
-                                    />
+                                            title="Quick Add Designation"
+                                        >
+                                            <div className={`absolute inset-0 rounded-full bg-indigo-500/20 blur-md transition-opacity duration-300 ${activePopover === 'desg' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}></div>
+                                            <Plus size={14} className="relative z-10" strokeWidth={2.5} />
+                                        </button>
+                                        <QuickAddPopover
+                                            isOpen={activePopover === 'desg'}
+                                            title="New Designation"
+                                            onAdd={handleAddDesignation}
+                                            onClose={() => setActivePopover(null)}
+                                        />
+                                    </div>
                                 </div>
+                                <select
+                                    name="desg_id"
+                                    value={formData.desg_id}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
+                                >
+                                    <option value="">Select Designation</option>
+                                    {designations.map(d => (
+                                        <option key={d.desg_id} value={d.desg_id}>{d.desg_name}</option>
+                                    ))}
+                                </select>
                             </div>
-                            <select
-                                name="desg_id"
-                                value={formData.desg_id}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
-                            >
-                                <option value="">Select Designation</option>
-                                {designations.map(d => (
-                                    <option key={d.desg_id} value={d.desg_id}>{d.desg_name}</option>
-                                ))}
-                            </select>
-                        </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Clock size={14} className="text-slate-400" /> Shift Time</label>
-                            <select
-                                name="shift_id"
-                                value={formData.shift_id}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
-                            >
-                                <option value="">Select Shift</option>
-                                {shifts.map(s => (
-                                    <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>
-                                ))}
-                            </select>
-                        </div>
+                            <div className="space-y-1.5 md:col-start-1">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">User Type</label>
+                                <select
+                                    name="user_type"
+                                    value={formData.user_type}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
+                                >
+                                    <option value="employee">Employee</option>
+                                    {currentUser?.user_type === 'admin' && (
+                                        <option value="hr">HR</option>
+                                    )}
+                                    {formData.user_type === 'admin' && (
+                                        <option value="admin">Admin</option>
+                                    )}
+                                </select>
+                            </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">User Type</label>
-                            <select
-                                name="user_type"
-                                value={formData.user_type}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-white appearance-none cursor-pointer"
-                            >
-                                <option value="employee">Employee</option>
-                                {currentUser?.user_type === 'admin' && (
-                                    <option value="hr">HR</option>
-                                )}
-                                {formData.user_type === 'admin' && (
-                                    <option value="admin">Admin</option>
-                                )}
-                            </select>
                         </div>
+                    </div>
 
-                        {/* Status Toggle */}
-                        {/* <div className="md:col-span-2 flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    {/* Status Toggle */}
+                    {/* <div className="md:col-span-2 flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-100 dark:border-slate-700/50">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
                                     <Shield size={20} />
@@ -496,7 +542,6 @@ const EmployeeForm = () => {
                                 <span className="ml-3 text-sm font-medium text-slate-700 dark:text-slate-300">{formData.status ? 'Active' : 'Inactive'}</span>
                             </label>
                         </div> */}
-                    </div>
                 </div>
 
             </form>

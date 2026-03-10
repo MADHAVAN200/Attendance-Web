@@ -5,9 +5,9 @@
 @tailwind utilities;
 
 @layer utilities {
-  .no-calendar-picker::-webkit-calendar-picker-indicator {
-    display: none !important;
-  }
+    .no-calendar-picker::-webkit-calendar-picker-indicator {
+        display: none !important;
+    }
 }
 
 @layer utilities {

@@ -27,9 +27,23 @@ export const adminService = {
     },
 
     // Create user
-    async createUser(userData) {
+    async createUser(userData, profileImageFile = null) {
         try {
-            const res = await api.post(`${ADMIN_API_URL}/user`, userData);
+            let res;
+            if (profileImageFile) {
+                const formData = new FormData();
+                Object.entries(userData).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        formData.append(key, value);
+                    }
+                });
+                formData.append('profile_image', profileImageFile);
+                res = await api.post(`${ADMIN_API_URL}/user`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                res = await api.post(`${ADMIN_API_URL}/user`, userData);
+            }
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create user");
@@ -37,9 +51,23 @@ export const adminService = {
     },
 
     // Update user
-    async updateUser(userId, userData) {
+    async updateUser(userId, userData, profileImageFile = null) {
         try {
-            const res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
+            let res;
+            if (profileImageFile) {
+                const formData = new FormData();
+                Object.entries(userData).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        formData.append(key, value);
+                    }
+                });
+                formData.append('profile_image', profileImageFile);
+                res = await api.put(`${ADMIN_API_URL}/user/${userId}`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
+            }
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update user");
