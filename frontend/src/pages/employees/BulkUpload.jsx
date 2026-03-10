@@ -8,14 +8,17 @@ import {
     AlertCircle,
     X,
     ChevronRight,
-    Download
+    Download,
+    ArrowLeft
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 const BulkUpload = () => {
     const navigate = useNavigate();
+    const { user: currentUser } = useAuth();
     const [step, setStep] = useState(1); // 1: Upload, 2: Preview, 3: Success
     const [file, setFile] = useState(null);
     const [previewData, setPreviewData] = useState([]);
@@ -54,14 +57,28 @@ const BulkUpload = () => {
                     const desg = row['Designation'] || row['designation'] || row['desg_name'] || row['Role'] || row['role'];
 
                     // Basic validation check for preview
-                    const status = (name && email) ? 'Valid' : 'Error';
+                    let status = (name && email) ? 'Valid' : 'Error';
+                    let errorMsg = !status === 'Valid' ? 'Missing Data' : '';
+
+                    // Role Restrictions
+                    const roleLower = desg ? desg.toString().toLowerCase() : '';
+                    if (roleLower === 'admin') {
+                        status = 'Error';
+                        errorMsg = 'Cannot create Admin';
+                    }
+                    if (currentUser?.user_type === 'hr' && (roleLower === 'hr' || roleLower === 'admin')) {
+                        status = 'Error';
+                        errorMsg = 'HR cannot create HR/Admin';
+                    }
+
                     return {
                         ...row,
                         name,
                         email,
                         dept: dept || '-',
                         desg: desg || '-',
-                        status
+                        status,
+                        errorMsg
                     };
                 });
                 setPreviewData(processed);
@@ -179,6 +196,16 @@ const BulkUpload = () => {
         <DashboardLayout title="Bulk Employee Upload">
             <div className="max-w-4xl mx-auto space-y-8">
 
+
+                {/* Back Button */}
+                <button
+                    onClick={() => navigate('/employees')}
+                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors mb-4"
+                >
+                    <ArrowLeft size={20} />
+                    <span>Back to Employees</span>
+                </button>
+
                 {/* Progress Steps */}
                 <div className="flex items-center justify-center mb-8">
                     <div className="flex items-center">
@@ -277,8 +304,8 @@ const BulkUpload = () => {
                                                         <CheckCircle size={12} /> Valid
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full">
-                                                        <AlertCircle size={12} /> Missing Data
+                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full whitespace-nowrap" title={row.errorMsg}>
+                                                        <AlertCircle size={12} /> {row.errorMsg || 'Missing Data'}
                                                     </span>
                                                 )}
                                             </td>

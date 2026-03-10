@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { deleteFile } from '../s3/s3Service.js';
 
 /**
@@ -17,12 +17,12 @@ async function cleanupRefreshTokens() {
         cutoffDate.setDate(cutoffDate.getDate() - gracePeriodDays);
 
         // Delete expired tokens (with grace period)
-        const expiredCount = await knexDB('refresh_tokens')
+        const expiredCount = await attendanceDB('refresh_tokens')
             .where('expires_at', '<', cutoffDate)
             .del();
 
         // Delete old revoked tokens
-        const revokedCount = await knexDB('refresh_tokens')
+        const revokedCount = await attendanceDB('refresh_tokens')
             .where('revoked', true)
             .where('created_at', '<', cutoffDate)
             .del();
@@ -46,7 +46,7 @@ async function cleanupAttendanceImages() {
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
         // Find old records with images
-        const oldRecords = await knexDB('attendance_records')
+        const oldRecords = await attendanceDB('attendance_records')
             .where('time_in', '<', cutoffDate)
             .where(function () {
                 this.whereNotNull('time_in_image_key')
@@ -62,7 +62,7 @@ async function cleanupAttendanceImages() {
                 try {
                     await deleteFile({ key: record.time_in_image_key });
                     console.log(`🗑️  Deleted: ${record.time_in_image_key}`);
-                    deletedCount++; 
+                    deletedCount++;
                 } catch (err) {
                     console.error(`Failed to delete ${record.time_in_image_key}:`, err.message);
                 }
@@ -80,12 +80,12 @@ async function cleanupAttendanceImages() {
             }
 
             // Update database record to null out the keys
-            await knexDB('attendance_records')
+            await attendanceDB('attendance_records')
                 .where('attendance_id', record.attendance_id)
                 .update({
                     time_in_image_key: null,
                     time_out_image_key: null,
-                    updated_at: knexDB.fn.now()
+                    updated_at: attendanceDB.fn.now()
                 });
         }
 
@@ -96,12 +96,44 @@ async function cleanupAttendanceImages() {
 }
 
 /**
+ * Cleanup Soft Deleted Users
+ * Permanently deletes users who have been in trash for more than 30 days
+ */
+async function cleanupDeletedUsers() {
+    try {
+        console.log("Running cleanupDeletedUsers...");
+        const retentionDays = 30;
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+        // Find users to delete
+        const usersToDelete = await attendanceDB('users')
+            .where('is_deleted', true)
+            .andWhere('deleted_at', '<', cutoffDate)
+            .select('user_id');
+
+        console.log(`Found ${usersToDelete.length} users to permanently delete.`);
+
+        for (const user of usersToDelete) {
+            await UserCleanupService.permanentlyDeleteUser(user.user_id);
+        }
+
+        if (usersToDelete.length > 0) {
+            console.log("Cleanup of deleted users completed.");
+        }
+    } catch (error) {
+        console.error("Error cleaning up deleted users:", error);
+    }
+}
+
+/**
  * Run all cleanup tasks
  */
 export async function runCleanup() {
     console.log('🚀 Running scheduled cleanup tasks...');
     await cleanupRefreshTokens();
     await cleanupAttendanceImages();
+    await cleanupDeletedUsers();
     console.log('✅ All cleanup tasks completed.');
 }
 

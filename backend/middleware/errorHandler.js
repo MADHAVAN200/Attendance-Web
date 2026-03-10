@@ -14,7 +14,7 @@ const errorHandler = (err, req, res, next) => {
             stack_trace: err.stack,
             request_method: req.method,
             request_path: req.originalUrl,
-            client_ip: req.ip
+            client_ip: req.clientIp || req.ip
         });
     }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
     Search,
@@ -40,6 +41,7 @@ const AttendanceMonitoring = () => {
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
     const [selectedRequest, setSelectedRequest] = useState(1); // For Detail View
+    const [selectedLiveUser, setSelectedLiveUser] = useState(null); // For Live Attendance Detail Modal
 
     const [loading, setLoading] = useState(true);
     const [attendanceData, setAttendanceData] = useState([]);
@@ -88,7 +90,7 @@ const AttendanceMonitoring = () => {
                 attendanceService.getRealTimeAttendance(selectedDate)
             ]);
 
-            const users = usersRes.users || [];
+            const users = (usersRes.users || []).filter(u => u.is_active && !u.is_deleted);
             const records = attendanceRes.data || [];
 
             // 2. Merge Data
@@ -104,38 +106,68 @@ const AttendanceMonitoring = () => {
                     // Process all sessions
                     sessions = userRecords.map(r => {
                         const inTime = new Date(r.time_in);
-                        const outTime = r.time_out ? new Date(r.time_out) : null;
+                        // Format Time HH:MM AM/PM
+                        const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                        let sessionHours = '-';
-                        if (outTime) {
-                            const diff = (outTime - inTime) / (1000 * 60);
-                            totalMin += diff;
-                            sessionHours = `${(diff / 60).toFixed(1)}h`;
+                        const inStr = formatTime(inTime);
+                        let outStr = '-';
+                        let isActive = true;
+
+                        if (r.time_out) {
+                            const outTime = new Date(r.time_out);
+                            outStr = formatTime(outTime);
+                            isActive = false;
                         }
 
+                        // Locations
+                        const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
+                        const outLoc = r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : null);
+
                         return {
-                            id: r.attendance_id,
-                            in: inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            out: outTime ? outTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active',
-                            hours: sessionHours,
-                            isLate: r.late_minutes > 0,
-                            isActive: !r.time_out,
                             rawIn: inTime,
-                            rawOut: outTime,
-                            inLocation: r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Location unknown'),
-                            outLocation: r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : (r.time_out ? 'Location unknown' : null))
+                            rawOut: r.time_out ? new Date(r.time_out) : null,
+                            in: inStr,
+                            out: outStr,
+                            date: inTime.toLocaleDateString(),
+                            isActive,
+                            inLocation: inLoc,
+                            outLocation: outLoc,
+                            lateMinutes: r.late_minutes || 0,
+                            isLate: (r.late_minutes || 0) > 0,
+                            lateReason: r.late_reason,
+                            inImage: r.time_in_image,
+                            outImage: r.time_out_image
                         };
                     });
 
                     // Determine overall status
-                    const latest = userRecords[0]; // records is sorted desc by time
+                    const latest = userRecords[0]; // records are typically ordered DESC by time_in in backend
                     lastLocation = latest.time_in_address || (latest.time_in_lat ? `${latest.time_in_lat}, ${latest.time_in_lng}` : '-');
 
-                    if (sessions.some(s => s.isActive)) {
-                        status = latest.late_minutes > 0 ? 'Late Active' : 'Active';
+                    // Extract late reason - prioritize the latest session if active, or just the latest record
+                    const lateReason = latest.late_reason || '';
+
+                    // Check if *currently* active
+                    const isCurrentlyActive = sessions.some(s => s.isActive);
+
+                    if (isCurrentlyActive) {
+                        status = (latest.late_minutes > 0) ? 'Late Active' : 'Active';
                     } else {
                         status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
                     }
+
+                    return {
+                        id: user.user_id,
+                        name: user.user_name || 'Unknown',
+                        role: user.desg_name || user.designation_title || 'Employee',
+                        avatar: (user.profile_image_url && user.profile_image_url.trim() !== '') ? user.profile_image_url : (user.user_name ? user.user_name.trim().charAt(0).toUpperCase() : 'U') || 'U',
+                        department: user.dept_name || user.department_title || 'General',
+                        sessions,
+                        status,
+                        totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-', // totalMin calculation usually happens in backend or needs simple diff sum here
+                        location: lastLocation,
+                        lateReason // Add to object
+                    };
                 }
 
                 return {
@@ -144,10 +176,11 @@ const AttendanceMonitoring = () => {
                     role: user.desg_name || user.designation_title || 'Employee',
                     avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
                     department: user.dept_name || user.department_title || 'General',
-                    sessions,
-                    status,
-                    totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
-                    location: lastLocation,
+                    sessions: [],
+                    status: 'Absent',
+                    totalHours: '-',
+                    location: '-',
+                    lateReason: ''
                 };
             });
 
@@ -196,7 +229,7 @@ const AttendanceMonitoring = () => {
             // Removed date filters as per user request
 
             const res = await attendanceService.getCorrectionRequests(params);
-            
+
             // Sort: Pending first, then by date (newest first)
             const sortedData = (res.data || []).sort((a, b) => {
                 if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -227,46 +260,15 @@ const AttendanceMonitoring = () => {
             const data = await attendanceService.getCorrectionDetails(acr_id);
             setSelectedRequestData(data);
             setReviewComment(data.review_comments || '');
-            
-            // Reset Override State
+
+            // Reset Override State — default sessions from proposed_data snapshot
             setOverrideMode(false);
-            setOverrideMethod(data.correction_method || 'add_session'); // default to add_session (Manual Correction)
-            
-            let correctionData = {};
-            try {
-                correctionData = typeof data.correction_data === 'string' 
-                    ? JSON.parse(data.correction_data) 
-                    : data.correction_data || {};
-            } catch (error) {
-                console.error("Error parsing correction data", error);
-            }
+            setOverrideMethod('add_session');
 
-            setOverrideIn(correctionData.time_in || '');
-            setOverrideOut(correctionData.time_out || '');
-            
-            // Parse sessions if available
-            try {
-                 let sessions = correctionData.sessions;
-
-                 // Fallback for fallback/legacy if sessions is empty but we have time_in/out
-                 if ((!sessions || sessions.length === 0) && correctionData.time_in && correctionData.time_out) {
-                     // Helper to extract HH:MM
-                     const getTime = (t) => {
-                         if (!t) return '';
-                         if (t.includes('T')) return t.split('T')[1].substring(0, 5);
-                         if (t.includes(' ')) return t.split(' ')[1].substring(0, 5);
-                         return t.substring(0, 5);
-                     };
-                     sessions = [{
-                         time_in: getTime(correctionData.time_in),
-                         time_out: getTime(correctionData.time_out)
-                     }];
-                 }
-
-                 setOverrideSessions(sessions || [{ time_in: '', time_out: '' }]);
-            } catch (e) {
-                 setOverrideSessions([{ time_in: '', time_out: '' }]);
-            }
+            const proposedSnap = Array.isArray(data.proposed_data) ? data.proposed_data : [];
+            setOverrideSessions(proposedSnap.length > 0 ? proposedSnap : [{ time_in: '', time_out: '' }]);
+            setOverrideIn('');
+            setOverrideOut('');
         } catch (error) {
             toast.error("Failed to fetch request details");
         }
@@ -339,26 +341,12 @@ const AttendanceMonitoring = () => {
         try {
             const overrides = {};
             if (status === 'approved' && overrideMode) {
-                overrides.correction_method = overrideMethod;
-                
-                if (overrideMethod === 'reset') {
-                     if (!overrideIn || !overrideOut) {
-                         toast.error("Both Start and End times are required for Reset override");
-                         return;
-                     }
-                     overrides.reset_time_in = overrideIn;
-                     overrides.reset_time_out = overrideOut;
-                } else if (overrideMethod === 'add_session' || overrideMethod === 'fix') {
-                     const valid = overrideSessions.filter(s => s.time_in && s.time_out);
-                     if (valid.length === 0) {
-                         toast.error("At least one valid session required for manual correction");
-                         return;
-                     }
-                     overrides.sessions = valid;
-                     // Ensure method sent is add_session if backend requires it, or we rely on backend handling 'fix' as 'add_session' logic (which we did).
-                     // However, to be safe and consistent with UI naming 'Manual Correction', we can force it or keep it as is.
-                     // Backend handles both.
+                const valid = overrideSessions.filter(s => s.time_in && s.time_out);
+                if (valid.length === 0) {
+                    toast.error("At least one valid session required for manual correction");
+                    return;
                 }
+                overrides.sessions = valid;
             }
 
             await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment, overrides);
@@ -584,7 +572,7 @@ const AttendanceMonitoring = () => {
                                     />
 
                                     <button
-                                        onClick={fetchData}
+                                        onClick={() => fetchData()}
                                         className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                         title={`Refresh (Last sync: ${lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
                                     >
@@ -619,7 +607,7 @@ const AttendanceMonitoring = () => {
                                                         </tr>
                                                     ) : (
                                                         filteredData.map((item) => (
-                                                            <tr key={item.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${item.status === 'Absent' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
+                                                            <tr key={item.id} onClick={() => setSelectedLiveUser(item)} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${item.status === 'Absent' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
                                                                 <td className="px-6 py-4">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
@@ -643,19 +631,37 @@ const AttendanceMonitoring = () => {
                                                                 </td>
                                                                 <td className="px-6 py-4">
                                                                     {item.sessions.length > 0 ? (
-                                                                        <div className="space-y-1">
-                                                                            {item.sessions.slice(0, 2).map((session, idx) => ( // Show only first 2 sessions in table to save space
-                                                                                <div key={idx} className="flex items-center gap-2 text-xs">
-                                                                                    <span className="font-mono text-emerald-600 dark:text-emerald-400">{session.in}</span>
-                                                                                    <span className="text-slate-300 dark:text-slate-600">→</span>
-                                                                                    <span className={`font-mono ${session.isActive ? 'text-indigo-500 font-bold animate-pulse' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                                                        {session.out}
-                                                                                    </span>
+                                                                        <div className="flex flex-col gap-1.5">
+                                                                            {/* Time Row */}
+                                                                            <div className="flex items-center gap-2 text-xs">
+                                                                                <span className="font-mono text-emerald-600 dark:text-emerald-400">{item.sessions[0].in}</span>
+                                                                                <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                                                <span className={`font-mono ${item.sessions[0].isActive ? 'text-indigo-500 font-bold animate-pulse' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                                                    {item.sessions[0].out}
+                                                                                </span>
+                                                                                {item.sessions.length > 1 && (
+                                                                                    <span className="text-[10px] text-slate-400 italic font-medium ml-1">+{item.sessions.length - 1} more</span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Location Row */}
+                                                                            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                                                                <div className="flex items-center gap-1" title={item.sessions[0].inLocation}>
+                                                                                    <MapPin size={10} className="text-emerald-500 shrink-0" />
+                                                                                    <span className="max-w-[120px] truncate">{item.sessions[0].inLocation}</span>
                                                                                 </div>
-                                                                            ))}
-                                                                            {item.sessions.length > 2 && (
-                                                                                <span className="text-[10px] text-slate-400 italic">+{item.sessions.length - 2} more sessions</span>
-                                                                            )}
+                                                                                {(item.sessions[0].outLocation || item.sessions[0].isActive) && (
+                                                                                    <>
+                                                                                        <span className="text-slate-300">→</span>
+                                                                                        <div className="flex items-center gap-1" title={item.sessions[0].outLocation || "Active"}>
+                                                                                            <MapPin size={10} className={`${item.sessions[0].isActive ? 'text-indigo-400 animate-pulse' : 'text-red-500'} shrink-0`} />
+                                                                                            <span className="max-w-[120px] truncate">
+                                                                                                {item.sessions[0].outLocation || "Current Location"}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     ) : (
                                                                         <span className="text-slate-400 text-xs italic">-</span>
@@ -703,7 +709,10 @@ const AttendanceMonitoring = () => {
                                                                 <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
                                                             </div>
                                                         )}
-                                                        <div className={`bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}>
+                                                        <div
+                                                            onClick={() => setSelectedLiveUser(item)}
+                                                            className={`bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
+                                                        >
                                                             {/* Card Header */}
                                                             <div className="p-5 flex items-start justify-between">
                                                                 <div className="flex gap-4">
@@ -725,74 +734,84 @@ const AttendanceMonitoring = () => {
                                                             </div>
 
                                                             {/* Status Badge Line */}
-                                                            <div className="px-5 pb-4">
+                                                            <div className="px-5 pb-4 flex items-center gap-2">
                                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
                                                                     <div className={`w-1.5 h-1.5 rounded-full mr-2 ${item.status === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
                                                                     {item.status}
                                                                 </span>
+                                                                {item.status.includes('Late') && item.lateReason && (
+                                                                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate max-w-[120px]" title={item.lateReason}>
+                                                                        — {item.lateReason}
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             {/* Divider */}
                                                             <div className="h-px bg-slate-100 dark:bg-slate-800 mx-5"></div>
 
-                                                            {/* Card Body - Sessions */}
+                                                            {/* Card Body - Latest Session Only */}
                                                             <div className="p-5 flex-1 overflow-hidden">
                                                                 {item.status === 'Absent' ? (
                                                                     <div className="h-full flex flex-col items-center justify-center text-slate-400 py-4 italic">
                                                                         <Clock size={20} className="mb-2 opacity-30" />
                                                                         <span className="text-xs">No activity yet</span>
                                                                     </div>
-                                                                ) : (
-                                                                    <div className="space-y-4">
-                                                                        {item.sessions.map((session, sIdx) => (
-                                                                            <div key={session.id} className={`relative pl-4 border-l-2 ${session.isActive ? 'border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                                                                                {/* Session Indicator Dot */}
-                                                                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${session.isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
+                                                                ) : item.sessions.length > 0 ? (
+                                                                    <div className="relative pl-4 border-l-2 border-indigo-500">
+                                                                        {/* Session Indicator Dot */}
+                                                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${item.sessions[0].isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
 
-                                                                                <div className="flex items-center justify-between mb-2">
-                                                                                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                                                                                        Session {item.sessions.length - sIdx}
-                                                                                    </span>
-                                                                                    {session.isActive && (
-                                                                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase animate-pulse">
-                                                                                            Active
-                                                                                        </span>
-                                                                                    )}
+                                                                        <div className="flex items-center justify-between mb-2">
+                                                                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                                                                Latest Session
+                                                                            </span>
+                                                                            {item.sessions[0].isActive && (
+                                                                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase animate-pulse">
+                                                                                    Active
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                                    In {item.sessions[0].in}
                                                                                 </div>
-
-                                                                                <div className="grid grid-cols-2 gap-4">
-                                                                                    <div className="space-y-1">
-                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
-                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                                                                            In {session.in}
-                                                                                        </div>
-                                                                                        <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                                                            <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
-                                                                                            <span className="line-clamp-2" title={session.inLocation}>{session.inLocation}</span>
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div className="space-y-1">
-                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
-                                                                                            <div className={`w-1.5 h-1.5 rounded-full ${session.isActive ? 'bg-slate-300 dark:bg-slate-600' : 'bg-red-500'}`}></div>
-                                                                                            Out {session.out}
-                                                                                        </div>
-                                                                                        {session.outLocation ? (
-                                                                                            <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                                                                <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
-                                                                                                <span className="line-clamp-2" title={session.outLocation}>{session.outLocation}</span>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <div className="h-full flex items-center p-1.5">
-                                                                                                <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
+                                                                                <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                    <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
+                                                                                    <span className="line-clamp-2" title={item.sessions[0].inLocation}>{item.sessions[0].inLocation}</span>
                                                                                 </div>
                                                                             </div>
-                                                                        ))}
+
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase">
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${item.sessions[0].isActive ? 'bg-slate-300 dark:bg-slate-600' : 'bg-red-500'}`}></div>
+                                                                                    Out {item.sessions[0].out}
+                                                                                </div>
+                                                                                {item.sessions[0].outLocation ? (
+                                                                                    <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                                                                        <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
+                                                                                        <span className="line-clamp-2" title={item.sessions[0].outLocation}>{item.sessions[0].outLocation}</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="h-full flex items-center p-1.5">
+                                                                                        <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* More Sessions Indicator */}
+                                                                        {item.sessions.length > 1 && (
+                                                                            <div className="mt-3 text-center">
+                                                                                <span className="text-[10px] text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-full cursor-pointer hover:bg-indigo-100 transition-colors">
+                                                                                    +{item.sessions.length - 1} more sessions
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                )}
+                                                                ) : null}
                                                             </div>
 
                                                             {/* Card Footer (Duration) */}
@@ -981,7 +1000,7 @@ const AttendanceMonitoring = () => {
                                 </div>
 
                                 {/* Date Navigation */}
-                                { /* Date Navigation Removed */ }
+                                { /* Date Navigation Removed */}
                             </div>
                             <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700">
                                 {requestsLoading ? (
@@ -1015,13 +1034,10 @@ const AttendanceMonitoring = () => {
                                                     {new Date(request.request_date).toLocaleDateString()}
                                                 </div>
                                                 <div className={`flex items-center gap-1 font-medium ${request.status === 'pending'
-                                                    ? (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000 ? 'text-rose-500' : 'text-amber-600')
+                                                    ? 'text-amber-600'
                                                     : request.status === 'approved' ? 'text-emerald-600' : 'text-red-600'
                                                     }`}>
-                                                    {request.status === 'pending' && (new Date() - new Date(request.submitted_at) > 24 * 60 * 60 * 1000)
-                                                        ? 'Expired'
-                                                        : (request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)
-                                                    }
+                                                    {(request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)}
                                                 </div>
                                             </div>
                                         </div>
@@ -1041,32 +1057,31 @@ const AttendanceMonitoring = () => {
                                                 By {selectedRequestData.user_name} ({selectedRequestData.designation})
                                             </p>
                                         </div>
-                                        {selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) < 24 * 60 * 60 * 1000) && (
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
-                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                                >
-                                                    <XCircle size={16} /> Reject
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
-                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
-                                                >
-                                                    <CheckCircle size={16} /> Approve
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
+                                                className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                            >
+                                                <XCircle size={16} /> Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
+                                            >
+                                                <CheckCircle size={16} /> Approve
+                                            </button>
+                                        </div>
+
                                     </div>
 
                                     {/* ADMIN OVERRIDE SECTION */}
                                     {selectedRequestData.status === 'pending' && (
                                         <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                                             <div className="flex items-center gap-3 mb-4">
-                                                <input 
-                                                    type="checkbox" 
-                                                    id="overrideToggle" 
-                                                    checked={overrideMode} 
+                                                <input
+                                                    type="checkbox"
+                                                    id="overrideToggle"
+                                                    checked={overrideMode}
                                                     onChange={(e) => {
                                                         const isChecked = e.target.checked;
                                                         setOverrideMode(isChecked);
@@ -1083,7 +1098,7 @@ const AttendanceMonitoring = () => {
                                                             setOverrideMethod(selectedRequestData.correction_method || 'fix');
                                                         }
                                                     }}
-                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" 
+                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                 />
                                                 <label htmlFor="overrideToggle" className="text-sm font-bold text-slate-700 dark:text-white select-none cursor-pointer">
                                                     Override Request Details
@@ -1092,48 +1107,70 @@ const AttendanceMonitoring = () => {
 
                                             {overrideMode && (
                                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                                     {/* Method Selector */}
-                                                    <div className="flex gap-2">
+                                                    {/* Method Selector */}
+                                                    <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg w-fit mb-4 border border-slate-200 dark:border-slate-800">
                                                         {['add_session', 'reset'].map(m => (
                                                             <button
                                                                 key={m}
                                                                 onClick={() => setOverrideMethod(m)}
-                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
-                                                                    ? 'bg-indigo-600 text-white border-indigo-600'
-                                                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                                                                className={`px-4 py-2 text-xs font-bold uppercase rounded-md transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
+                                                                    ? 'bg-white dark:bg-[#1e202e] text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-slate-700'
+                                                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-transparent'
                                                                     }`}
                                                             >
-                                                                {m === 'add_session' ? 'MANUAL CORRECTION' : 'RESET DAY'}
+                                                                {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
                                                             </button>
                                                         ))}
                                                     </div>
 
                                                     {/* Dynamic Inputs */}
                                                     {overrideMethod === 'add_session' || overrideMethod === 'fix' ? (
-                                                        <div className="space-y-2">
-                                                            {overrideSessions.map((s, idx) => (
-                                                                <div key={idx} className="flex gap-2 items-center">
-                                                                    <input type="time" value={s.time_in} onChange={(e) => {
-                                                                        const ns = [...overrideSessions]; ns[idx].time_in = e.target.value; setOverrideSessions(ns);
-                                                                    }} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
-                                                                    <span className="text-slate-400">-</span>
-                                                                    <input type="time" value={s.time_out} onChange={(e) => {
-                                                                        const ns = [...overrideSessions]; ns[idx].time_out = e.target.value; setOverrideSessions(ns);
-                                                                    }} className="px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
-                                                                    <button onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-red-500 hover:bg-red-50 p-1 rounded">X</button>
-                                                                </div>
-                                                            ))}
-                                                            <button onClick={() => setOverrideSessions([...overrideSessions, {time_in:'', time_out:''}])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">+ Add Session</button>
+                                                        <div className="space-y-4">
+                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                                {overrideSessions.map((s, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-4 bg-white dark:bg-[#13151f] p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative group w-full">
+                                                                        <div className="flex-1 flex items-center justify-between">
+                                                                            <div className="flex items-center gap-3 w-full">
+                                                                                <div className="relative flex-1">
+                                                                                    <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time In</label>
+                                                                                    <input type="time" value={s.time_in} onChange={(e) => {
+                                                                                        const ns = [...overrideSessions]; ns[idx].time_in = e.target.value; setOverrideSessions(ns);
+                                                                                    }}
+                                                                                        className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-white transition-all font-mono"
+                                                                                    />
+                                                                                </div>
+                                                                                <span className="text-slate-400 font-bold px-1">→</span>
+                                                                                <div className="relative flex-1">
+                                                                                    <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time Out</label>
+                                                                                    <input type="time" value={s.time_out} onChange={(e) => {
+                                                                                        const ns = [...overrideSessions]; ns[idx].time_out = e.target.value; setOverrideSessions(ns);
+                                                                                    }}
+                                                                                        className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-white transition-all font-mono"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        {overrideSessions.length > 1 && (
+                                                                            <button onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors" title="Remove session">
+                                                                                <XCircle size={18} />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <button onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 px-1 pt-1 transition-colors">
+                                                                <span className="text-lg leading-none">+</span> Add Session
+                                                            </button>
                                                         </div>
                                                     ) : (
-                                                        <div className="flex gap-4">
-                                                            <div className="flex-1">
-                                                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">New In</label>
-                                                                <input type="time" value={overrideIn} onChange={(e) => setOverrideIn(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                        <div className="flex gap-4 w-full md:w-3/4 lg:w-1/2">
+                                                            <div className="relative flex-1">
+                                                                <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-slate-800/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time In</label>
+                                                                <input type="time" value={overrideIn} onChange={(e) => setOverrideIn(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-white transition-all font-mono" />
                                                             </div>
-                                                            <div className="flex-1">
-                                                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">New Out</label>
-                                                                <input type="time" value={overrideOut} onChange={(e) => setOverrideOut(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800" />
+                                                            <div className="relative flex-1">
+                                                                <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-slate-800/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time Out</label>
+                                                                <input type="time" value={overrideOut} onChange={(e) => setOverrideOut(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-white transition-all font-mono" />
                                                             </div>
                                                         </div>
                                                     )}
@@ -1144,140 +1181,252 @@ const AttendanceMonitoring = () => {
 
                                     <div className="flex-1 overflow-y-auto p-6">
 
-                                        {/* Grid Layout for details */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                                            <div>
-                                                <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-3">Correction Details</h4>
-                                                <div className="space-y-4">
-                                                    <div className="flex gap-4">
-                                                        <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Request Type</span>
-                                                            <span className="font-semibold text-slate-800 dark:text-white">{selectedRequestData.correction_type.replace('_', ' ').toUpperCase()}</span>
-                                                        </div>
-                                                        <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
-                                                            <span className="text-sm text-indigo-600 dark:text-indigo-400 block mb-1">Method</span>
-                                                            <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                                                                {selectedRequestData.correction_method ? selectedRequestData.correction_method.toUpperCase() : 'FIX'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                        {/* Visual Timeline & Changelog Area */}
+                                        <div className="space-y-8 mb-8">
 
-                                                    {/* DETAILS DISPLAY BASED ON METHOD */}
-                                                    {selectedRequestData.correction_method === 'add_session' ? (
-                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-2">Requested Sessions</span>
-                                                            <div className="space-y-2">
-                                                                {(() => {
-                                                                    try {
-                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
-                                                                            ? JSON.parse(selectedRequestData.correction_data)
-                                                                            : selectedRequestData.correction_data || {};
-                                                                        
-                                                                        const sessions = correctionData.sessions || [];
+                                            {/* VISUAL TIMELINE SECTION */}
+                                            {(() => {
+                                                // Use stored snapshots — these NEVER change after submission
+                                                const originalSnap = Array.isArray(selectedRequestData.original_data)
+                                                    ? selectedRequestData.original_data
+                                                    : [];
+                                                const proposedSnap = Array.isArray(selectedRequestData.proposed_data)
+                                                    ? selectedRequestData.proposed_data
+                                                    : [];
 
-                                                                        const formatSessionTime = (t) => {
-                                                                            if (!t) return '--:--';
-                                                                            // Handle HH:MM or HH:MM:SS
-                                                                            const [h, m] = t.split(':');
-                                                                            const date = new Date();
-                                                                            date.setHours(parseInt(h), parseInt(m));
-                                                                            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                                                                        };
-                                                                        return (sessions).map((s, i) => (
-                                                                            <div key={i} className="flex justify-between text-sm font-mono border-b border-slate-200 dark:border-slate-700 pb-1 last:border-0 last:pb-0">
-                                                                                <span>{formatSessionTime(s.time_in)}</span>
-                                                                                <span className="text-slate-400">to</span>
-                                                                                <span>{formatSessionTime(s.time_out)}</span>
+                                                const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
+
+                                                const originalTasks = originalSnap.map((s, i) => ({
+                                                    id: `orig-${i}`,
+                                                    startTime: fmtTime(s.time_in),
+                                                    endTime: fmtTime(s.time_out)
+                                                })).filter(t => t.startTime && t.endTime);
+
+                                                const proposedTasks = proposedSnap.map((s, i) => ({
+                                                    id: `prop-${i}`,
+                                                    startTime: fmtTime(s.time_in),
+                                                    endTime: fmtTime(s.time_out)
+                                                })).filter(t => t.startTime && t.endTime);
+
+                                                const allTasks = [...originalTasks, ...proposedTasks];
+
+                                                if (allTasks.length === 0) return null;
+
+                                                const getMinutes = (t) => {
+                                                    const [h, m] = t.split(':').map(Number);
+                                                    return (h || 0) * 60 + (m || 0);
+                                                };
+
+                                                let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
+                                                let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
+
+                                                let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
+                                                let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
+                                                const span = Math.max(1, endHour - startHour);
+
+                                                const timeToPos = (time) => {
+                                                    if (!time) return 0;
+                                                    const [h, m] = time.split(':').map(Number);
+                                                    const totalMinutes = (h || 0) * 60 + (m || 0);
+                                                    return Math.max(0, Math.min(100, ((totalMinutes - (startHour * 60)) / (span * 60)) * 100));
+                                                };
+
+                                                const getDurationPct = (start, end) => {
+                                                    if (!start || !end) return 0;
+                                                    return Math.max(0, timeToPos(end) - timeToPos(start));
+                                                };
+
+                                                // Heuristic diff: compare originalTasks vs proposedTasks
+                                                const changesList = [];
+                                                proposedTasks.forEach(prop => {
+                                                    const match = originalTasks.find(orig => orig.startTime === prop.startTime && orig.endTime === prop.endTime);
+                                                    if (match) {
+                                                        match.matched = true;
+                                                    } else {
+                                                        const overlapping = originalTasks.find(orig => !orig.matched &&
+                                                            (Math.abs(getMinutes(orig.startTime) - getMinutes(prop.startTime)) < 120 ||
+                                                                Math.abs(getMinutes(orig.endTime) - getMinutes(prop.endTime)) < 120)
+                                                        );
+                                                        if (overlapping) {
+                                                            overlapping.matched = true;
+                                                            changesList.push({
+                                                                type: 'MODIFY',
+                                                                task: prop,
+                                                                original: overlapping,
+                                                                reason: `Time adjusted: ${fmtTime(overlapping.startTime)}-${fmtTime(overlapping.endTime)} → ${fmtTime(prop.startTime)}-${fmtTime(prop.endTime)}`
+                                                            });
+                                                        } else {
+                                                            changesList.push({ type: 'ADD', task: prop, reason: 'New session added' });
+                                                        }
+                                                    }
+                                                });
+                                                originalTasks.filter(o => !o.matched).forEach(orig => {
+                                                    changesList.push({ type: 'DELETE', task: orig, reason: 'Session removed' });
+                                                });
+
+                                                return (
+                                                    <>
+                                                        <div className="relative p-8 pt-12 pb-8 bg-slate-50 dark:bg-[#13151f] rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                                                            <div className="absolute top-4 left-6 z-10 flex items-center gap-3">
+                                                                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-[#13151f] m-0 leading-none">Visual Sync Timeline</h3>
+                                                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-200 dark:ring-indigo-800 leading-none">
+                                                                    METHOD: {(selectedRequestData.correction_type || selectedRequestData.correction_method || 'fix').toUpperCase().replace(/_/g, ' ')}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Timeline Container */}
+                                                            <div className="relative mt-2">
+                                                                {/* Timeline Scale */}
+                                                                <div className="absolute top-0 bottom-0 left-0 right-0 pointer-events-none">
+                                                                    {Array.from({ length: span + 1 }, (_, i) => startHour + i).map((h, i) => (
+                                                                        <div key={h} className="absolute top-0 bottom-0 border-r border-slate-300 dark:border-slate-700/50 dashed" style={{ left: `${(i / span) * 100}%` }}>
+                                                                            <span className="absolute -top-6 -right-3 text-[10px] text-slate-400 font-mono">{h}:00</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                <div className="relative space-y-12 pt-8 z-10">
+                                                                    {/* Original Timeline */}
+                                                                    <div className="relative h-12 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                                                                        {originalTasks.map((task, i) => (
+                                                                            <div
+                                                                                key={task.id}
+                                                                                className="absolute top-2 bottom-2 rounded-md bg-slate-400/20 border border-slate-400/30 flex items-center justify-center text-[10px] text-slate-500 whitespace-nowrap overflow-hidden shadow-sm"
+                                                                                style={{
+                                                                                    left: `${timeToPos(task.startTime)}%`,
+                                                                                    width: `${getDurationPct(task.startTime, task.endTime)}%`
+                                                                                }}
+                                                                                title={`${task.startTime} - ${task.endTime}`}
+                                                                            >
+                                                                                <span className="font-mono bg-white/50 dark:bg-black/20 px-1 rounded">{fmtTime(task.startTime)} - {fmtTime(task.endTime)}</span>
                                                                             </div>
-                                                                        ));
-                                                                    } catch (e) { return <span className="text-red-500 text-xs">Error parsing sessions</span>; }
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex gap-4">
-                                                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                                <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New In' : 'Time In'}</span>
-                                                                <span className="font-mono font-semibold text-slate-600 dark:text-slate-300">
-                                                                    {(() => {
-                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
-                                                                            ? JSON.parse(selectedRequestData.correction_data)
-                                                                            : selectedRequestData.correction_data || {};
-                                                                        const val = correctionData.time_in;
-                                                                        if (!val) return '-';
-                                                                        let d = new Date(val.replace(' ', 'T'));
-                                                                        if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
-                                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                                <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{selectedRequestData.correction_method === 'reset' ? 'New Out' : 'Time Out'}</span>
-                                                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                                                                    {(() => {
-                                                                        const correctionData = typeof selectedRequestData.correction_data === 'string'
-                                                                            ? JSON.parse(selectedRequestData.correction_data)
-                                                                            : selectedRequestData.correction_data || {};
-                                                                        const val = correctionData.time_out;
-                                                                        if (!val) return '-';
-                                                                        let d = new Date(val.replace(' ', 'T'));
-                                                                        if (isNaN(d.getTime())) d = new Date(`1970-01-01T${val}`);
-                                                                        return !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {selectedRequestData.location_name && (
-                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">Requested Location</span>
-                                                            <span className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-                                                                <MapPin size={14} className="text-indigo-500" />
-                                                                {selectedRequestData.location_name}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                                        ))}
+                                                                        {originalTasks.length === 0 && (
+                                                                            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                                No Original Records Found
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
 
-                                            <div>
-                                                <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-3">Justification & Comments</h4>
-                                                <div className="space-y-4 h-full">
-                                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                        <div className="flex items-start gap-3">
-                                                            <MessageSquare size={18} className="text-slate-400 mt-1" />
-                                                            <div>
-                                                                <p className="text-sm text-slate-700 dark:text-slate-300 italic">"{selectedRequestData.reason}"</p>
+                                                                    {/* SVG Connections Layer (Simplified Heuristic) */}
+                                                                    <div className="absolute inset-x-0 top-12 h-12 pointer-events-none z-0">
+                                                                        <svg className="w-full h-full overflow-visible">
+                                                                            <defs>
+                                                                                <linearGradient id="gradDiff" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                                                    <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.2" />
+                                                                                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                                                                                </linearGradient>
+                                                                            </defs>
+                                                                            {changesList.filter(c => c.type === 'MODIFY').map((change, i) => {
+                                                                                const x1 = timeToPos(change.original.startTime) + (getDurationPct(change.original.startTime, change.original.endTime) / 2);
+                                                                                const x2 = timeToPos(change.task.startTime) + (getDurationPct(change.task.startTime, change.task.endTime) / 2);
+                                                                                return (
+                                                                                    <path
+                                                                                        key={`conn-${i}`}
+                                                                                        d={`M ${x1}% 0 C ${x1}% 50, ${x2}% 50, ${x2}% 100`}
+                                                                                        fill="none"
+                                                                                        stroke="url(#gradDiff)"
+                                                                                        strokeWidth="2"
+                                                                                        strokeDasharray="4 2"
+                                                                                        className="opacity-50"
+                                                                                    />
+                                                                                );
+                                                                            })}
+                                                                        </svg>
+                                                                    </div>
+
+                                                                    {/* Proposed Timeline */}
+                                                                    <div className="relative h-12 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                                                                        {proposedTasks.map((task, i) => {
+                                                                            const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
+                                                                            const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
+
+                                                                            let colorClasses = isNew
+                                                                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                                                                : isChanged
+                                                                                    ? "bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
+                                                                                    : "bg-slate-300 dark:bg-slate-700 border border-slate-400/30 text-slate-600 dark:text-slate-300";
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={task.id}
+                                                                                    className={`absolute top-2 bottom-2 rounded-md flex items-center justify-center text-[10px] font-medium whitespace-nowrap overflow-hidden shadow-sm ${colorClasses}`}
+                                                                                    style={{
+                                                                                        left: `${timeToPos(task.startTime)}%`,
+                                                                                        width: `${getDurationPct(task.startTime, task.endTime)}%`
+                                                                                    }}
+                                                                                >
+                                                                                    {isNew && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />}
+                                                                                    <span className="font-mono bg-white/50 dark:bg-black/20 px-1 rounded">{fmtTime(task.startTime)} - {fmtTime(task.endTime)}</span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    {selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) < 24 * 60 * 60 * 1000) ? (
-                                                        <div className="bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                                            <textarea
-                                                                value={reviewComment}
-                                                                onChange={(e) => setReviewComment(e.target.value)}
-                                                                placeholder="Add a review comment..."
-                                                                className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-white"
-                                                            ></textarea>
+                                                        {/* CHANGES LIST SECTION & REASON */}
+                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                            {/* Split view for Original Records and Diff Changelog */}
+                                                            <div className="space-y-8 h-full bg-slate-50 dark:bg-[#1a1c26] p-5 rounded-xl border border-slate-200 dark:border-slate-800">
+                                                                <div className="space-y-4">
+                                                                    <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                                        Proposed Changes <span className="bg-slate-200 dark:bg-slate-800 text-xs px-2 py-0.5 rounded-full">{changesList.length} Modifications</span>
+                                                                    </h3>
+                                                                    <div className="space-y-3">
+                                                                        {changesList.map((change, idx) => (
+                                                                            <div key={idx} className="bg-white dark:bg-[#13151f] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-start gap-3">
+                                                                                {change.type === 'ADD' && <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600"><CheckCircle size={16} /></div>}
+                                                                                {change.type === 'DELETE' && <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-600"><XCircle size={16} /></div>}
+                                                                                {change.type === 'MODIFY' && <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600"><Clock size={16} /></div>}
+
+                                                                                <div>
+                                                                                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                                                                        {change.type === 'DELETE' ? `Session: ${fmtTime(change.task.startTime)}-${fmtTime(change.task.endTime)}` : `Session: ${fmtTime(change.task.startTime)}-${fmtTime(change.task.endTime)}`}
+                                                                                    </h4>
+                                                                                    <p className="text-xs text-slate-500 mt-1">{change.reason}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                        {changesList.length === 0 && (
+                                                                            <div className="text-center py-8 text-slate-400 text-sm italic">No significant time changes detected.</div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-6">
+                                                                <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-slate-800">
+                                                                    <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                                                        <MessageSquare size={16} /> Request Reason
+                                                                    </h3>
+                                                                    <p className="text-sm text-slate-600 dark:text-slate-400 italic">
+                                                                        "{selectedRequestData.reason || "No reason provided."}"
+                                                                    </p>
+                                                                </div>
+
+                                                                <div>
+                                                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Auditor Comments</h4>
+                                                                    <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                                                                        <textarea
+                                                                            value={reviewComment}
+                                                                            onChange={(e) => setReviewComment(e.target.value)}
+                                                                            placeholder="Add a review comment or explanation..."
+                                                                            className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-white resize-none"
+                                                                        ></textarea>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    ) : (selectedRequestData.review_comments || (selectedRequestData.status === 'pending' && (new Date() - new Date(selectedRequestData.submitted_at) > 24 * 60 * 60 * 1000))) && (
-                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                                            <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">
-                                                                {selectedRequestData.status === 'pending' ? 'Expiration Note' : "Reviewer's Comments"}
-                                                            </span>
-                                                            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                                                                {selectedRequestData.status === 'pending' ? 'This request has expired and cannot be reviewed.' : selectedRequestData.review_comments}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                    </>
+                                                );
+                                            })()
+                                            }
                                         </div>
 
                                         {/* Audit Trail */}
-                                        <div>
+                                        {/* <div>
                                             <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-4 flex items-center gap-2">
                                                 <Activity size={14} /> Audit Trail
                                             </h4>
@@ -1297,7 +1446,7 @@ const AttendanceMonitoring = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                        </div>
+                                        </div> */}
 
                                     </div>
                                 </>
@@ -1311,10 +1460,201 @@ const AttendanceMonitoring = () => {
                     </div>
                 )}
 
+                {/* --- Live Attendance Detail Modal --- */}
+                <UserAttendanceDetailsModal
+                    user={selectedLiveUser}
+                    onClose={() => setSelectedLiveUser(null)}
+                />
+
             </div>
         </DashboardLayout >
     );
-}
+};
 
+// --- Sub-components ---
+
+const UserAttendanceDetailsModal = ({ user, onClose }) => {
+    const [previewImage, setPreviewImage] = useState(null);
+
+    if (!user) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={onClose} />
+            <div className="relative bg-white dark:bg-dark-card w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between bg-slate-50/50 dark:bg-slate-800/50 rounded-t-2xl">
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl shadow-sm overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                            {user.avatar && user.avatar.startsWith('http') ? (
+                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                user.avatar
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-white">{user.name}</h2>
+                            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                <span>{user.role}</span>
+                                <span>•</span>
+                                <span>{user.department}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border shadow-sm ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                                    user.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                        user.status.includes('Late') ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                            'bg-slate-50 text-slate-500 border-slate-200'
+                                    }`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full mr-1.5 bg-current`}></div>
+                                    {user.status}
+                                </span>
+                                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                    {user.totalHours} Hrs Total
+                                </span>
+                            </div>
+
+                            {user.lateReason && (
+                                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 rounded-lg max-w-[300px]">
+                                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed break-words">
+                                        <span className="font-bold uppercase text-[10px] opacity-75 block mb-0.5">Late Reason</span>
+                                        {user.lateReason}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                    >
+                        <XCircle size={24} />
+                    </button>
+                </div>
+
+                {/* Body - Session Timeline */}
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Clock size={16} /> Today's Timeline
+                    </h3>
+
+                    <div className="relative pl-4 space-y-8 before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 dark:before:bg-slate-700">
+                        {user.sessions.length === 0 ? (
+                            <div className="text-center py-10 text-slate-400 italic">No activity recorded for today.</div>
+                        ) : (
+                            user.sessions.map((session, idx) => (
+                                <div key={idx} className="relative pl-8">
+                                    {/* Timeline Dot */}
+                                    <div className={`absolute left-0 top-1 w-10 h-10 rounded-full border-4 border-white dark:border-dark-card shadow-sm flex items-center justify-center z-10 ${session.isActive ? 'bg-indigo-500 text-white animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                        }`}>
+                                        <span className="text-xs font-bold">{user.sessions.length - idx}</span>
+                                    </div>
+
+                                    <div className={`bg-white dark:bg-slate-800/50 border ${session.isActive ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-700'} rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow`}>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock In</span>
+                                                    <span className="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                                        {session.in}
+                                                    </span>
+                                                </div>
+                                                <div className="w-8 h-0.5 bg-slate-100 dark:bg-slate-700"></div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock Out</span>
+                                                    <span className={`text-lg font-mono font-bold flex items-center gap-2 ${session.isActive ? 'text-indigo-500 animate-pulse' : 'text-slate-600 dark:text-slate-400'}`}>
+                                                        {session.out}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Duration</span>
+                                                <span className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300">{session.hours}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-50 dark:border-slate-700/50">
+                                            <div className="space-y-2">
+                                                <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                    <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-emerald-500" />
+                                                    <span className="line-clamp-2">{session.inLocation}</span>
+                                                </div>
+                                                {session.inImage && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
+                                                        <button
+                                                            onClick={() => setPreviewImage(session.inImage)}
+                                                            className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        >
+                                                            <img src={session.inImage} alt="In Selfie" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {session.outLocation && (
+                                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                        <MapPin size={14} className="mobile-hidden shrink-0 mt-0.5 text-red-500" />
+                                                        <span className="line-clamp-2">{session.outLocation}</span>
+                                                    </div>
+                                                )}
+                                                {session.outImage && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
+                                                        <button
+                                                            onClick={() => setPreviewImage(session.outImage)}
+                                                            className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        >
+                                                            <img src={session.outImage} alt="Out Selfie" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 rounded-b-2xl flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm font-bold text-slate-600 dark:text-white hover:bg-slate-50 transition-colors"
+                    >
+                        Close Details
+                    </button>
+                </div>
+            </div>
+
+            {/* Image Preview Lightbox */}
+            {previewImage && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setPreviewImage(null)}
+                >
+                    <button
+                        className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                        onClick={() => setPreviewImage(null)}
+                    >
+                        <XCircle size={32} />
+                    </button>
+                    <img
+                        src={previewImage}
+                        alt="Selfie Preview"
+                        className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>,
+                document.body
+            )}
+        </div>,
+        document.body
+    );
+};
 
 export default AttendanceMonitoring;

@@ -23,7 +23,11 @@ import {
 } from "../../services/userService";
 import { useMapEvents, useMap } from "react-leaflet";
 import DashboardLayout from '../../components/DashboardLayout';
-import { Map, MapPin, Plus, Search, Navigation, Users, Settings, ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check } from 'lucide-react';
+import {
+  Map, MapPin, Plus, Search, Navigation, Users, Settings,
+  ToggleLeft, ToggleRight, Crosshair, MoreVertical, Check,
+  Sun, Moon, Layers, ChevronDown, Edit2, Save, X
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const GeoFencing = () => {
@@ -41,6 +45,10 @@ const GeoFencing = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Edit location mode
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [editDraftCoords, setEditDraftCoords] = useState(null);
+
   // Debounce state for radius save
   const [radiusSaveTimer, setRadiusSaveTimer] = useState(null);
 
@@ -51,6 +59,16 @@ const GeoFencing = () => {
     longitude: null,
     radius: 100,
   });
+
+  const [activeTheme, setActiveTheme] = useState('voyager');
+
+  const MAP_THEMES = {
+    dark: { name: 'Night Mode', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
+    light: { name: 'Light Mode', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
+    voyager: { name: 'Day Mode', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
+    satellite: { name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
+    streets: { name: 'Streets', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
+  };
 
   const [mapPickEnabled, setMapPickEnabled] = useState(true);
   // Reverse geocoding helper
@@ -168,6 +186,84 @@ const GeoFencing = () => {
       },
     });
     return null;
+  };
+
+  // Map click handler for EDIT mode on main map
+  const EditMapClickHandler = () => {
+    useMapEvents({
+      click(e) {
+        if (!isEditingLocation || !editDraftCoords) return;
+        const { lat, lng } = e.latlng;
+        setEditDraftCoords(prev => ({ ...prev, latitude: lat, longitude: lng, address: '...' }));
+        reverseGeocode(lat, lng).then((address) => {
+          setEditDraftCoords(prev => prev ? { ...prev, address } : null);
+        });
+      },
+    });
+    return null;
+  };
+
+  // Start editing — initialize draft from selected location
+  const startEditing = () => {
+    if (!selectedLocation) return;
+    setEditDraftCoords({
+      location_name: selectedLocation.location_name,
+      latitude: Number(selectedLocation.latitude),
+      longitude: Number(selectedLocation.longitude),
+      address: selectedLocation.address,
+      radius: selectedLocation.radius,
+    });
+    setIsEditingLocation(true);
+  };
+
+  // Use my location in edit mode
+  const useMyLocationForEdit = () => {
+    if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setEditDraftCoords(prev => prev ? { ...prev, latitude: lat, longitude: lng } : null);
+        const address = await reverseGeocode(lat, lng);
+        setEditDraftCoords(prev => prev ? { ...prev, address } : null);
+      },
+      (err) => alert(err.message),
+      { enableHighAccuracy: true }
+    );
+  };
+
+  // Save all edited fields
+  const handleSaveEditedLocation = async () => {
+    if (!selectedLocation || !editDraftCoords) return;
+    if (!editDraftCoords.location_name || !editDraftCoords.latitude || !editDraftCoords.longitude) {
+      alert('Name and location are required');
+      return;
+    }
+    try {
+      await updateLocation(selectedLocation.location_id, {
+        location_name: editDraftCoords.location_name,
+        latitude: editDraftCoords.latitude,
+        longitude: editDraftCoords.longitude,
+        address: editDraftCoords.address,
+        radius: editDraftCoords.radius,
+      });
+      const updated = { ...selectedLocation, ...editDraftCoords };
+      setSelectedLocation(updated);
+      setLocations(prev => prev.map(loc =>
+        loc.location_id === selectedLocation.location_id ? updated : loc
+      ));
+      setRadiusDraft(editDraftCoords.radius);
+      setIsEditingLocation(false);
+      setEditDraftCoords(null);
+    } catch (err) {
+      console.error('Failed to update location', err);
+      alert('Failed to save location. Please retry.');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingLocation(false);
+    setEditDraftCoords(null);
   };
 
   // Map recenter helper to fly to selected geofence
@@ -428,7 +524,11 @@ const GeoFencing = () => {
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-slate-800 dark:text-white">Locations</h3>
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => {
+                  setIsEditingLocation(false);
+                  setEditDraftCoords(null);
+                  setShowCreateModal(true);
+                }}
                 className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
               >
                 <Plus size={18} />
@@ -494,89 +594,328 @@ const GeoFencing = () => {
 
         {/* Center: Real Map View */}
         <div className="flex-1 relative bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          {selectedLocation && (
+          {(selectedLocation || showCreateModal) && (
             <MapContainer
-              center={[
-                Number(selectedLocation.latitude),
-                Number(selectedLocation.longitude),
-              ]}
+              center={
+                showCreateModal && newGeo.latitude && newGeo.longitude
+                  ? [newGeo.latitude, newGeo.longitude]
+                  : selectedLocation
+                    ? [Number(selectedLocation.latitude), Number(selectedLocation.longitude)]
+                    : [20, 78]
+              }
               zoom={15}
               className="h-full w-full rounded-xl"
+              attributionControl={false}
             >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              />
-              <MapRecenter location={selectedLocation} />
-              <Marker
-                position={[
-                  Number(selectedLocation.latitude),
-                  Number(selectedLocation.longitude),
-                ]}
-              />
-              <Circle
-                center={[
-                  Number(selectedLocation.latitude),
-                  Number(selectedLocation.longitude),
-                ]}
-                radius={selectedLocation.radius}
-                pathOptions={{
-                  color: "#6366f1",
-                  fillColor: "#6366f1",
-                  fillOpacity: 0.25,
-                }}
-              />
+              <TileLayer url={MAP_THEMES[activeTheme].url} />
+              <div className="absolute top-4 right-4 z-[1001]">
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-2 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+                  <Layers size={18} className="text-indigo-500" />
+                  <select
+                    value={activeTheme}
+                    onChange={(e) => setActiveTheme(e.target.value)}
+                    className="bg-transparent text-sm font-medium focus:outline-none appearance-none pr-6 cursor-pointer"
+                  >
+                    {Object.entries(MAP_THEMES).map(([id, theme]) => (
+                      <option key={id} value={id} className="dark:bg-slate-800">{theme.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 pointer-events-none text-slate-400" />
+                </div>
+              </div>
+
+              {isEditingLocation && <EditMapClickHandler />}
+              {showCreateModal && <MapClickHandler />}
+              {!isEditingLocation && !showCreateModal && selectedLocation && <MapRecenter location={selectedLocation} />}
+
+              {/* Create Mode Marker */}
+              {showCreateModal && newGeo.latitude && newGeo.longitude && (
+                <>
+                  <Marker position={[newGeo.latitude, newGeo.longitude]} />
+                  <Circle
+                    center={[newGeo.latitude, newGeo.longitude]}
+                    radius={newGeo.radius}
+                    pathOptions={{ color: "#6366f1", fillColor: "#6366f1", fillOpacity: 0.25 }}
+                  />
+                </>
+              )}
+
+              {/* View/Edit Mode Marker */}
+              {!showCreateModal && selectedLocation && (
+                <>
+                  <Marker
+                    position={[
+                      editDraftCoords ? editDraftCoords.latitude : Number(selectedLocation.latitude),
+                      editDraftCoords ? editDraftCoords.longitude : Number(selectedLocation.longitude),
+                    ]}
+                  />
+                  <Circle
+                    center={[
+                      editDraftCoords ? editDraftCoords.latitude : Number(selectedLocation.latitude),
+                      editDraftCoords ? editDraftCoords.longitude : Number(selectedLocation.longitude),
+                    ]}
+                    radius={selectedLocation.radius}
+                    pathOptions={{
+                      color: "#6366f1",
+                      fillColor: "#6366f1",
+                      fillOpacity: 0.25,
+                    }}
+                  />
+                </>
+              )}
             </MapContainer>
           )}
 
-          {selectedLocation && (
-            <div className="absolute bottom-6 left-6 right-6 bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 flex flex-col md:flex-row gap-6 items-center justify-between text-white z-[1000]">
+          {selectedLocation && !isEditingLocation && !showCreateModal && (
+            <div className="absolute bottom-6 left-6 right-6 bg-white/90 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col md:flex-row gap-6 items-center justify-between text-slate-800 dark:text-white z-[1000] shadow-lg">
 
               {/* Location Info + Toggle */}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-lg font-bold">{selectedLocation.location_name}</h2>
+                  <h2 className="text-lg font-bold truncate">{selectedLocation.location_name}</h2>
                   <button
                     onClick={toggleLocationStatus}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${selectedLocation.is_active === 1
-                      ? "bg-indigo-600"
-                      : "bg-slate-600"
-                      }`}
+                    className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${selectedLocation.is_active === 1 ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"}`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${selectedLocation.is_active === 1
-                        ? "translate-x-6"
-                        : "translate-x-1"
-                        }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${selectedLocation.is_active === 1 ? "translate-x-6" : "translate-x-1"}`}
                     />
                   </button>
                 </div>
-
-                <p className="text-sm text-slate-300 flex items-center gap-1.5">
-                  <MapPin size={14} /> {selectedLocation.address}
+                <p className="text-sm text-slate-500 dark:text-slate-300 flex items-center gap-1.5 truncate">
+                  <MapPin size={14} className="flex-shrink-0" />
+                  {selectedLocation.address}
                 </p>
               </div>
 
-              {/* Radius Slider */}
-              <div className="w-full md:w-72">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <Crosshair size={14} className="text-indigo-400" />
-                    Geofence Radius
-                  </label>
-                  <span className="text-xs font-bold bg-indigo-600/20 px-2 py-0.5 rounded">
+              {/* Right side: static info + edit icon */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <Crosshair size={14} className="text-indigo-500 dark:text-indigo-400" />
+                  <span className="text-slate-600 dark:text-slate-300">Radius</span>
+                  <span className="font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-600/20 dark:text-white px-2 py-0.5 rounded text-xs">
                     {radiusDraft} m
                   </span>
                 </div>
+                <button
+                  onClick={startEditing}
+                  className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                  title="Edit location"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            </div>
+          )}
 
-                <input
-                  type="range"
-                  min={0}
-                  max={1000}
-                  step={10}
-                  value={radiusDraft}
-                  onChange={(e) => handleRadiusChange(Number(e.target.value))}
-                  className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
+          {/* Edit Mode: Expanded Form */}
+          {selectedLocation && isEditingLocation && editDraftCoords && !showCreateModal && (
+            <div className="absolute bottom-6 left-6 right-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl p-5 text-slate-800 dark:text-white z-[1000] shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <Edit2 size={14} className="text-indigo-500 dark:text-indigo-400" />
+                  Edit Geofence
+                </h3>
+                <span className="text-xs text-slate-500 dark:text-slate-400 animate-pulse">Click map to relocate pin</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Name */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Location Name</label>
+                  <input
+                    type="text"
+                    value={editDraftCoords.location_name}
+                    onChange={(e) => setEditDraftCoords(prev => ({ ...prev, location_name: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Geofence Name"
+                  />
+                </div>
+
+                {/* Latitude */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Latitude</label>
+                  <input
+                    type="text"
+                    value={editDraftCoords.latitude ?? ''}
+                    onChange={(e) => setEditDraftCoords(prev => ({ ...prev, latitude: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Latitude"
+                  />
+                </div>
+
+                {/* Longitude */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Longitude</label>
+                  <input
+                    type="text"
+                    value={editDraftCoords.longitude ?? ''}
+                    onChange={(e) => setEditDraftCoords(prev => ({ ...prev, longitude: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Longitude"
+                  />
+                </div>
+
+                {/* Radius */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs text-slate-500 dark:text-slate-400">Radius</label>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{editDraftCoords.radius} m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={10}
+                    value={editDraftCoords.radius}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setEditDraftCoords(prev => ({ ...prev, radius: val }));
+                    }}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-500 mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Address preview */}
+              {editDraftCoords.address && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 flex items-center gap-1.5 truncate">
+                  <MapPin size={12} className="flex-shrink-0" /> {editDraftCoords.address}
+                </p>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={useMyLocationForEdit}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg transition-colors"
+                >
+                  <Navigation size={12} /> Use my location
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-4 py-1.5 text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEditedLocation}
+                    className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Create Mode: Expanded Form */}
+          {showCreateModal && (
+            <div className="absolute bottom-6 left-6 right-6 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl p-5 text-slate-800 dark:text-white z-[1000] shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <Plus size={14} className="text-indigo-500 dark:text-indigo-400" />
+                  Create New Geofence
+                </h3>
+                <span className="text-xs text-slate-500 dark:text-slate-400 animate-pulse">Click map to drop pin</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Name */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Location Name</label>
+                  <input
+                    type="text"
+                    value={newGeo.location_name}
+                    onChange={(e) => setNewGeo({ ...newGeo, location_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Geofence Name"
+                  />
+                </div>
+
+                {/* Latitude */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Latitude</label>
+                  <input
+                    type="text"
+                    value={newGeo.latitude ?? ''}
+                    onChange={(e) => setNewGeo({ ...newGeo, latitude: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Latitude"
+                  />
+                </div>
+
+                {/* Longitude */}
+                <div>
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Longitude</label>
+                  <input
+                    type="text"
+                    value={newGeo.longitude ?? ''}
+                    onChange={(e) => setNewGeo({ ...newGeo, longitude: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    placeholder="Longitude"
+                  />
+                </div>
+
+                {/* Radius */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs text-slate-500 dark:text-slate-400">Radius</label>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{newGeo.radius} m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1000}
+                    step={10}
+                    value={newGeo.radius}
+                    onChange={(e) => setNewGeo({ ...newGeo, radius: Number(e.target.value) })}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-500 mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Address preview */}
+              {newGeo.address && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 flex items-center gap-1.5 truncate">
+                  <MapPin size={12} className="flex-shrink-0" /> {newGeo.address}
+                </p>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div className="flex gap-2">
+                  <button
+                    onClick={useMyLocation}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg transition-colors"
+                  >
+                    <Navigation size={12} /> Use my location
+                  </button>
+                  <button
+                    onClick={resetNewGeo}
+                    className="px-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      resetNewGeo();
+                      setShowCreateModal(false);
+                    }}
+                    className="px-4 py-1.5 text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateGeofence}
+                    className="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Create Geofence
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -639,124 +978,6 @@ const GeoFencing = () => {
         </div>
 
       </div>
-      {/* Create Geofence Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[2000] bg-black/60 flex items-center justify-center">
-          <div className="bg-slate-900 text-white w-full max-w-5xl rounded-xl border border-slate-700 overflow-hidden">
-            <div className="grid grid-cols-1 md:grid-cols-2">
-              {/* LEFT: Form */}
-              <div className="p-6 space-y-5">
-                <h2 className="text-xl font-bold">Create New Geofence</h2>
-
-                <input
-                  placeholder="Geofence Name"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded"
-                  value={newGeo.location_name}
-                  onChange={(e) =>
-                    setNewGeo({ ...newGeo, location_name: e.target.value })
-                  }
-                />
-
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    placeholder="Latitude"
-                    className="px-4 py-2 bg-slate-800 border border-slate-700 rounded"
-                    value={newGeo.latitude ?? ""}
-                    onChange={(e) =>
-                      setNewGeo({ ...newGeo, latitude: Number(e.target.value) })
-                    }
-                  />
-                  <input
-                    placeholder="Longitude"
-                    className="px-4 py-2 bg-slate-800 border border-slate-700 rounded"
-                    value={newGeo.longitude ?? ""}
-                    onChange={(e) =>
-                      setNewGeo({ ...newGeo, longitude: Number(e.target.value) })
-                    }
-                  />
-                </div>
-
-                {newGeo.address && (
-                  <div className="text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded px-3 py-2">
-                    📍 {newGeo.address}
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-sm">Radius (meters)</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1000}
-                    step={10}
-                    value={newGeo.radius}
-                    onChange={(e) =>
-                      setNewGeo({ ...newGeo, radius: Number(e.target.value) })
-                    }
-                    className="w-full accent-indigo-500"
-                  />
-                  <p className="text-xs text-slate-400">{newGeo.radius} m</p>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={useMyLocation}
-                      className="px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white hover:bg-gray-600 transition-colors text-sm flex-1"
-                    >
-                      Use my location
-                    </button>
-
-                    <button
-                      onClick={resetNewGeo}
-                      className="px-3 py-2 rounded-md border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors text-sm"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {/* RIGHT: Map */}
-              <div className="h-[520px] border-l border-slate-700">
-                <MapContainer
-                  center={
-                    newGeo.latitude && newGeo.longitude
-                      ? [newGeo.latitude, newGeo.longitude]
-                      : [20, 78]
-                  }
-                  zoom={5}
-                  className="h-full w-full"
-                >
-                  <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                  {mapPickEnabled && <MapClickHandler />}
-
-                  {newGeo.latitude && newGeo.longitude && (
-                    <>
-                      <Marker position={[newGeo.latitude, newGeo.longitude]} />
-                      <Circle
-                        center={[newGeo.latitude, newGeo.longitude]}
-                        radius={newGeo.radius}
-                        pathOptions={{ color: "#6366f1", fillOpacity: 0.25 }}
-                      />
-                    </>
-                  )}
-                </MapContainer>
-              </div>
-            </div> {/* end grid */}
-            <div className="flex justify-end gap-3 p-4 border-t border-slate-700 bg-slate-900">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 rounded bg-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateGeofence}
-                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700"
-              >
-                Create GeoFence
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   );
 };

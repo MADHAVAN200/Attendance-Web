@@ -1,5 +1,5 @@
 
-import { knexDB } from "../database.js";
+import { attendanceDB } from "../database.js";
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -56,7 +56,7 @@ export function isWithinGeofence(userLat, userLng, validLocations) {
  * @returns {Promise<boolean>}
  */
 export async function verifyUserGeofence(user_id, latitude, longitude) {
-    const validLocations = await knexDB("user_work_locations")
+    const validLocations = await attendanceDB("user_work_locations")
         .join("work_locations", "user_work_locations.location_id", "work_locations.location_id")
         .where("user_work_locations.user_id", user_id)
         .where("work_locations.is_active", true)

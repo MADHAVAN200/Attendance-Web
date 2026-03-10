@@ -1,5 +1,5 @@
 import express from 'express';
-import { knexDB } from '../database.js';
+import { attendanceDB } from '../database.js';
 import { authenticateJWT } from '../middleware/auth.js';
 import catchAsync from "../utils/catchAsync.js";
 
@@ -11,12 +11,12 @@ router.get('/list', authenticateJWT, catchAsync(async (req, res) => {
     const { org_id } = req.user;
 
     // Ensure settings exist (migration should have handled it, but safe fallback)
-    let settings = await knexDB("dar_settings").where({ org_id }).first();
+    let settings = await attendanceDB("dar_settings").where({ org_id }).first();
 
     if (!settings) {
         // Init default if missing
         const defaultCats = JSON.stringify(["Site Visit", "Inspection", "Office Work", "Material Check", "Meeting", "Safety", "Documentation"]);
-        await knexDB("dar_settings").insert({
+        await attendanceDB("dar_settings").insert({
             org_id,
             buffer_minutes: 30,
             categories: defaultCats
@@ -57,11 +57,11 @@ router.post('/update', authenticateJWT, catchAsync(async (req, res) => {
         updates.categories = JSON.stringify(categories);
     }
 
-    await knexDB("dar_settings")
+    await attendanceDB("dar_settings")
         .where({ org_id })
         .update({
             ...updates,
-            updated_at: knexDB.fn.now()
+            updated_at: attendanceDB.fn.now()
         });
 
     res.json({ ok: true, message: "Settings updated successfully" });

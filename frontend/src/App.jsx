@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
+import ErrorBoundary from "./ErrorBoundary";
 
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -114,18 +115,18 @@ function App() {
           <Route path="/" element={<RootHandler />} />
           <Route path="/get-started" element={<Navigate to="/login" replace />} />
 
-          {/* Public Route: Login */}
-          <Route element={<PublicRoute />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-          </Route>
+            {/* Public Route: Login */}
+            <Route element={<PublicRoute />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+            </Route>
 
-          {/* Test Routes - Only available in Development */}
-          <Route element={<TestRoute />}>
-            <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
-            <Route path="/test-api" element={<TestAPI />} />
-            <Route path="/visual-scripting" element={<VisualScripting />} />
-          </Route>
+            {/* Test Routes - Only available in Development */}
+            <Route element={<TestRoute />}>
+              <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
+              <Route path="/test-api" element={<TestAPI />} />
+              <Route path="/visual-scripting" element={<VisualScripting />} />
+            </Route>
 
           <Route element={<ProtectedRoute />}>
             <Route path="/unauthorized" element={<Unauthorized />} />
@@ -138,24 +139,24 @@ function App() {
               <Route path="/apply-leave" element={<LeaveApplication />} />
             </Route>
 
-            {/* Admin & HR Only Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
-              <Route path="/attendance-monitoring" element={<AttendanceMonitoring />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/policy-builder" element={<PolicyBuilder />} />
-              <Route path="/geofencing" element={<GeoFencing />} />
-              <Route path="/employees" element={<EmployeeList />} />
-              <Route path="/employees/add" element={<EmployeeForm />} />
-              <Route path="/employees/edit/:id" element={<EmployeeForm />} />
-              <Route path="/employees/bulk" element={<BulkUpload />} />
-            </Route>
+              {/* Admin & HR Only Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
+                <Route path="/attendance-monitoring" element={<AttendanceMonitoring />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/policy-builder" element={<PolicyBuilder />} />
+                <Route path="/geofencing" element={<GeoFencing />} />
+                <Route path="/employees" element={<EmployeeList />} />
+                <Route path="/employees/add" element={<EmployeeForm />} />
+                <Route path="/employees/edit/:id" element={<EmployeeForm />} />
+                <Route path="/employees/bulk" element={<BulkUpload />} />
+              </Route>
 
-            {/* Admin Only Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="/subscription" element={<Subscription />} />
-              <Route path="/dar-admin" element={<DARAdmin />} />
+              {/* Admin Only Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                <Route path="/subscription" element={<Subscription />} />
+                <Route path="/dar-admin" element={<DARAdmin />} />
+              </Route>
             </Route>
-          </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
 

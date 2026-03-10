@@ -13,14 +13,15 @@ body,
 }
 
 @layer utilities {
-  .no-calendar-picker::-webkit-calendar-picker-indicator {
-    display: none !important;
-  }
+    .no-calendar-picker::-webkit-calendar-picker-indicator {
+        display: none !important;
+    }
 }
 
 @layer utilities {
     .custom-scrollbar::-webkit-scrollbar {
         width: 5px;
+        height: 5px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
