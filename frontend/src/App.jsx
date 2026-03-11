@@ -40,9 +40,12 @@ import ShowcaseNavbar from "./showcase/components/Navbar";
 import ShowcaseFooter from "./showcase/components/Footer";
 import ShowcaseMobileNavbar from "./showcase/components/MobileNavbar";
 import ShowcaseMobileFooter from "./showcase/components/MobileFooter";
+import ShowcaseTabletNavbar from "./showcase/components/TabletNavbar";
+import ShowcaseTabletFooter from "./showcase/components/TabletFooter";
 import ShowcaseHomePage from "./showcase/pages/HomePage";
 import ShowcaseMobileHomePage from "./showcase/pages/MobileHomePage";
-import useOrientation from "./showcase/hooks/useOrientation";
+import ShowcaseTabletHomePage from "./showcase/pages/TabletHomePage";
+import useDeviceType from "./showcase/hooks/useDeviceType";
 import "./showcase/showcase.css";
 
 // Component to handle role-based dashboard view
@@ -67,9 +70,9 @@ function ShowcaseScrollToTop() {
 }
 
 const ShowcaseShell = ({ children }) => {
-  const isPortrait = useOrientation();
-  const NavComp = isPortrait ? ShowcaseMobileNavbar : ShowcaseNavbar;
-  const FootComp = isPortrait ? ShowcaseMobileFooter : ShowcaseFooter;
+  const { device } = useDeviceType();
+  const NavComp = device === "mobile" ? ShowcaseMobileNavbar : device === "tablet" ? ShowcaseTabletNavbar : ShowcaseNavbar;
+  const FootComp = device === "mobile" ? ShowcaseMobileFooter : device === "tablet" ? ShowcaseTabletFooter : ShowcaseFooter;
 
   return (
     <div className="showcase-root site-bg">
@@ -83,16 +86,17 @@ const ShowcaseShell = ({ children }) => {
 
 const RootHandler = () => {
   const { user, authChecked } = useAuth();
-  const isPortrait = useOrientation();
+  const { device } = useDeviceType();
 
   if (!authChecked) {
     return null;
   }
 
   if (!user) {
+    const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
     return (
       <ShowcaseShell>
-        {isPortrait ? <ShowcaseMobileHomePage /> : <ShowcaseHomePage />}
+        <PageComp />
       </ShowcaseShell>
     );
   }
