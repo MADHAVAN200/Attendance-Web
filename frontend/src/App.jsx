@@ -1,4 +1,5 @@
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
 import ErrorBoundary from "./ErrorBoundary";
@@ -40,6 +41,17 @@ import SystemLogs from "./pages/super-admin/SystemLogs"
 import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
 import EmployeeDashboard from "./pages/dashboard/EmployeeDashboard";
 import { useAuth } from "./context/AuthContext";
+import ShowcaseNavbar from "./showcase/components/Navbar";
+import ShowcaseFooter from "./showcase/components/Footer";
+import ShowcaseMobileNavbar from "./showcase/components/MobileNavbar";
+import ShowcaseMobileFooter from "./showcase/components/MobileFooter";
+import ShowcaseTabletNavbar from "./showcase/components/TabletNavbar";
+import ShowcaseTabletFooter from "./showcase/components/TabletFooter";
+import ShowcaseHomePage from "./showcase/pages/HomePage";
+import ShowcaseMobileHomePage from "./showcase/pages/MobileHomePage";
+import ShowcaseTabletHomePage from "./showcase/pages/TabletHomePage";
+import useDeviceType from "./showcase/hooks/useDeviceType";
+import "./showcase/showcase.css";
 
 // Component to handle role-based dashboard view
 const DashboardHandler = () => {
@@ -53,13 +65,67 @@ const DashboardHandler = () => {
   return <AdminDashboard />;
 };
 
+function ShowcaseScrollToTop() {
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    if (!hash) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [pathname]);
+
+  return null;
+}
+
+const ShowcaseShell = ({ children }) => {
+  const { device } = useDeviceType();
+  const NavComp = device === "mobile" ? ShowcaseMobileNavbar : device === "tablet" ? ShowcaseTabletNavbar : ShowcaseNavbar;
+  const FootComp = device === "mobile" ? ShowcaseMobileFooter : device === "tablet" ? ShowcaseTabletFooter : ShowcaseFooter;
+
+  return (
+    <div className="showcase-root site-bg">
+      <ShowcaseScrollToTop />
+      <NavComp />
+      <main>{children}</main>
+      <FootComp />
+    </div>
+  );
+};
+
+const RootHandler = () => {
+  const { user, authChecked } = useAuth();
+  const { device } = useDeviceType();
+
+  if (!authChecked) {
+    return null;
+  }
+
+  if (!user) {
+    const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
+    return (
+      <ShowcaseShell>
+        <PageComp />
+      </ShowcaseShell>
+    );
+  }
+
+  return (
+    <ProtectedRoute allowedRoles={["admin", "hr", "employee"]}>
+      <DashboardHandler />
+    </ProtectedRoute>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
         <ToastContainer position="top-right" autoClose={3000} />
-        <ErrorBoundary>
-          <Routes>
+        <Routes>
+
+          {/* Website Landing (shown first when not logged in) */}
+          <Route path="/" element={<RootHandler />} />
+          <Route path="/get-started" element={<Navigate to="/login" replace />} />
 
           {/* Public Route: Login */}
           <Route element={<PublicRoute />}>
