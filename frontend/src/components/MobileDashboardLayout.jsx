@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, Bell, Moon, Sun } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import MobileSidebar from './MobileSidebar';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
 const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = false }) => {
+    const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const { unreadCount } = useNotification();
 
@@ -52,12 +54,17 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                         >
                             {theme === 'light' ? <Moon size={22} fill="currentColor" /> : <Moon size={22} fill="currentColor" />}
                         </button>
-                        <button className="relative text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
-                            <Bell size={22} />
-                            {unreadCount > 0 && (
-                                <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-[#111827]"></span>
-                            )}
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => navigate('/mobile-view/notifications')}
+                                className="relative text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+                            >
+                                <Bell size={22} />
+                                {unreadCount > 0 && (
+                                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-[#111827]"></span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </header>
             )}

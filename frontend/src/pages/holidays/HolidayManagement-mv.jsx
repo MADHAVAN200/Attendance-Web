@@ -32,9 +32,10 @@ const AttachmentModal = ({ file, onClose }) => {
     const isImage = file.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.file_key || file.name);
     const isPdf = file.file_type === 'application/pdf' || /\.pdf$/i.test(file.file_key || file.name);
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+    return createPortal(
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+            <div className="absolute -inset-10 bg-black/80 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
@@ -63,7 +64,8 @@ const AttachmentModal = ({ file, onClose }) => {
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -90,6 +92,13 @@ const HolidayManagement = () => {
     const [requestStatusFilter, setRequestStatusFilter] = useState('All');
 
     // --- FORMS ---
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newHoliday, setNewHoliday] = useState({
+        name: '',
+        date: '',
+        type: 'Public',
+    });
+
     const [applyForm, setApplyForm] = useState({
         leave_type: 'Casual Leave',
         start_date: '',
@@ -157,6 +166,27 @@ const HolidayManagement = () => {
             }
         } catch (error) {
             toast.error(error.response?.data?.message || "Failed to apply");
+        }
+    };
+
+    const handleAddHoliday = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                holiday_name: newHoliday.name,
+                holiday_date: newHoliday.date,
+                holiday_type: newHoliday.type,
+                applicable_json: ['All Locations']
+            };
+
+            await holidayService.addHoliday(payload);
+            toast.success("Holiday added successfully");
+            setIsAddModalOpen(false);
+            setNewHoliday({ name: '', date: '', type: 'Public' });
+            loadData();
+        } catch (error) {
+            console.error("Add holiday error", error);
+            toast.error(error.message || "Failed to add holiday");
         }
     };
 
@@ -250,7 +280,10 @@ const HolidayManagement = () => {
 
                         {/* FAB */}
                         {user?.user_type === 'admin' && (
-                            <button className="fixed bottom-24 right-4 w-14 h-14 bg-indigo-600 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform z-10">
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="fixed bottom-24 right-4 w-14 h-14 bg-indigo-600 rounded-full text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform z-10"
+                            >
                                 <Plus size={24} />
                             </button>
                         )}
@@ -385,10 +418,69 @@ const HolidayManagement = () => {
 
             {/* --- MODALS --- */}
 
+            {/* Add Holiday Modal */}
+            {isAddModalOpen && createPortal(
+                <div className="fixed inset-0 z-[600] flex items-end justify-center">
+                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setIsAddModalOpen(false)}></div>
+                    <div className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl p-6 animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-center mb-6">
+                            <span className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full"></span>
+                        </div>
+                        <h3 className="text-lg font-bold text-center mb-6 text-slate-900 dark:text-white">Add New Holiday</h3>
+
+                        <form onSubmit={handleAddHoliday} className="space-y-4">
+                            <div className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-800">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Holiday Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newHoliday.name}
+                                    onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                                    className="w-full text-sm font-bold bg-transparent outline-none dark:text-white"
+                                    placeholder="e.g. Christmas Day"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-800">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Date</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={newHoliday.date}
+                                        onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
+                                        className="w-full text-xs font-bold bg-transparent outline-none dark:text-white"
+                                    />
+                                </div>
+                                <div className="relative border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1 bg-white dark:bg-slate-800">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase block">Type</label>
+                                    <select
+                                        className="w-full bg-transparent text-sm font-bold text-slate-800 dark:text-white outline-none py-1 appearance-none"
+                                        value={newHoliday.type}
+                                        onChange={(e) => setNewHoliday({ ...newHoliday, type: e.target.value })}
+                                    >
+                                        <option value="Public" className="bg-white dark:bg-slate-900">Public</option>
+                                        <option value="Optional" className="bg-white dark:bg-slate-900">Optional</option>
+                                        <option value="Observance" className="bg-white dark:bg-slate-900">Observance</option>
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none mt-2" />
+                                </div>
+                            </div>
+
+                            <button type="submit" className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none mt-4">
+                                Add Holiday
+                            </button>
+                        </form>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {/* Apply Modal - Bottom Sheet */}
-            {showApplyModal && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
-                    <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl p-6 animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
+            {showApplyModal && createPortal(
+                <div className="fixed inset-0 z-[600] flex items-end justify-center">
+                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setShowApplyModal(false)}></div>
+                    <div className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl p-6 animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-center mb-6">
                             <span className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full"></span>
                         </div>
@@ -478,13 +570,15 @@ const HolidayManagement = () => {
                             </button>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Details Modal */}
-            {selectedLeaf && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-0 overflow-hidden shadow-2xl relative">
+            {selectedLeaf && createPortal(
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setSelectedLeaf(null)}></div>
+                    <div className="relative z-10 w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-0 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                         {/* Header */}
                         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
                             <div className="flex justify-between items-start mb-1">
@@ -563,13 +657,15 @@ const HolidayManagement = () => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Holiday Details Modal */}
-            {selectedHoliday && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-in fade-in">
-                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            {selectedHoliday && createPortal(
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-6">
+                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setSelectedHoliday(null)}></div>
+                    <div className="relative z-10 w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
                         {/* Header */}
                         <div className="flex justify-between items-start mb-6">
                             <div>
@@ -636,7 +732,8 @@ const HolidayManagement = () => {
                             Close
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Attachment Viewing Modal */}

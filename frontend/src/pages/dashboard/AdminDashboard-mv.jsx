@@ -228,7 +228,7 @@ const AdminDashboard = () => {
                         <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
                     </div>
 
-                    <div className="p-2">
+                    <div className="p-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                         {isLoading ? (
                             <div className="p-4 space-y-4">
                                 {[1, 2, 3].map(i => (

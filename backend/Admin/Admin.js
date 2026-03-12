@@ -9,6 +9,7 @@ import { getEventSource } from "../utils/clientInfo.js";
 import multer from "multer";
 import ExcelJS from "exceljs";
 import { PassThrough } from "stream";
+import { uploadCompressedImage, deleteFile } from '../s3/s3Service.js';
 
 const router = express.Router();
 const upload = multer(); // memory storage
@@ -720,6 +721,59 @@ router.get("/dashboard-stats", authenticateJWT, catchAsync(async (req, res) => {
   });
 }));
 
+
+// UPLOAD user avatar by admin
+router.post("/user/:user_id/avatar", authenticateJWT, upload.single('avatar'), catchAsync(async (req, res, next) => {
+  if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+    throw new AppError("Only admin and HR can update user avatar", 403);
+  }
+
+  const { user_id } = req.params;
+  const file = req.file;
+
+  if (!file) {
+      return res.status(400).json({ ok: false, message: 'No image file provided' });
+  }
+
+  const targetUser = await attendanceDB("users")
+    .where({ user_id, org_id: req.user.org_id })
+    .first();
+
+  if (!targetUser) {
+    throw new AppError("User not found", 404);
+  }
+
+  // Same permission rules
+  if (targetUser.user_type === 'admin' && req.user.user_id !== targetUser.user_id) {
+    throw new AppError("Admins can only be edited by themselves", 403);
+  }
+  if (req.user.user_type === 'hr' && (targetUser.user_type === 'admin' || targetUser.user_type === 'hr')) {
+    throw new AppError("HR can only edit Employees", 403);
+  }
+
+  const userCode = targetUser.user_code || `user_${user_id}`;
+  const key = `${userCode}`;
+
+  const uploadResult = await uploadCompressedImage({
+      fileBuffer: file.buffer,
+      key: key,
+      directory: "public/profile_pics",
+      quality: 90
+  });
+
+  await attendanceDB('users')
+      .where({ user_id })
+      .update({
+          profile_image_url: uploadResult.url,
+          updated_at: attendanceDB.fn.now()
+      });
+
+  res.json({
+      success: true,
+      message: 'Profile picture updated successfully',
+      profile_image_url: uploadResult.url
+  });
+}));
 
 // UPDATE user by user_id
 router.put("/user/:user_id", authenticateJWT, catchAsync(async (req, res, next) => {

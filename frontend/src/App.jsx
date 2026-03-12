@@ -46,6 +46,8 @@ import MobileAttendanceMonitoring from "./pages/attendance-monitoring/Attendance
 import MobileShiftManagement from "./pages/shift-management/ShiftManagement-mv";
 import MobileGeoFencing from "./pages/geofencing/GeoFencing-mv";
 import MobileReports from "./pages/reports/Reports-mv";
+import MobileNotifications from "./pages/notifications/Notifications-mv";
+import MobileFeedback from "./pages/feedback/Feedback-mv";
 
 
 
@@ -147,6 +149,8 @@ function App() {
               <Route path="/mobile-view/shifts" element={<MobileShiftManagement />} />
               <Route path="/mobile-view/geofencing" element={<MobileGeoFencing />} />
               <Route path="/mobile-view/reports" element={<MobileReports />} />
+              <Route path="/mobile-view/notifications" element={<MobileNotifications />} />
+              <Route path="/mobile-view/feedback" element={<MobileFeedback />} />
             </Route>
           </Route>
 

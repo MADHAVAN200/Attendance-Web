@@ -75,9 +75,10 @@ const AttendanceMonitoring = () => {
 
                     sessions = userRecords.map((r, index) => ({
                         id: index + 1,
-                        in: new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), // 24h format as per image option? Or 12h? Image shows 11:36 / 03:36. Let's assume 12h for now or HH:mm. Image shows 11:36 (could be AM) and 03:36. Let's stick to 12h with spacing.
+                        in: new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                         out: r.time_out ? new Date(r.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : null,
-                        location: r.time_in_address || 'Manual Reset', // Fallback as per image
+                        locationIn: r.time_in_address || 'Unknown Location',
+                        locationOut: r.time_out_address || null,
                         reason: r.late_reason || r.manual_entry_reason || '',
                         isLate: r.late_minutes > 0
                     }));
@@ -149,39 +150,40 @@ const AttendanceMonitoring = () => {
     const filteredEmployees = attendanceData.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = selectedDept === 'All Departments' || item.department === selectedDept;
-        // Also ensure department is one of the allowed ones if strict? 
-        // "Under All Departments, only show: Engineering, Design, Sales"
-        // If the user is in "HR", should they be hidden? 
-        // I will trust the 'selectedDept' filter logic.
         return matchesSearch && matchesDept;
     });
+
+    const timedInEmployees = filteredEmployees.filter(e => e.status !== 'Absent');
+    const notTimedInEmployees = filteredEmployees.filter(e => e.status === 'Absent');
 
     return (
         <MobileDashboardLayout title="Live Attendance">
             <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors relative pb-20">
 
                 {/* --- TABS --- */}
-                <div className="w-full">
-                    <div className="bg-slate-100 dark:bg-slate-800 p-1 flex">
-                        <button
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
-                            ${activeTab === 'dashboard'
-                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                                    : 'text-slate-500 dark:text-slate-400'}`}
-                        >
-                            <Activity size={16} /> Dashboard
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('requests')}
-                            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
-                            ${activeTab === 'requests'
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                    : 'text-slate-500 dark:text-slate-400'}`}
-                        >
-                            <FileText size={16} /> Requests
-                        </button>
-                    </div>
+                <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-none flex shadow-sm mb-4">
+                    <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
+                        ${activeTab === 'dashboard'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                    >
+                        <Activity size={18} className={activeTab === 'dashboard' ? 'text-slate-900 dark:text-white' : 'text-slate-400'} />
+                        Dashboard
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('requests')}
+                        className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
+                        ${activeTab === 'requests'
+                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                    >
+                        <FileText size={18} className={activeTab === 'requests' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
+                        Requests
+                    </button>
                 </div>
 
                 {/* --- DASHBOARD --- */}
@@ -237,31 +239,31 @@ const AttendanceMonitoring = () => {
                             {loading ? (
                                 <div className="py-8 text-center text-slate-400 text-xs">Loading...</div>
                             ) : filteredEmployees.length > 0 ? (
-                                filteredEmployees.map(emp => (
-                                    <div
-                                        key={emp.id}
-                                        onClick={() => emp.status !== 'Absent' && setSelectedEmployee(emp)}
-                                        className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm relative group active:scale-[0.99] transition-transform ${emp.status === 'Absent' ? 'opacity-60' : 'cursor-pointer'}`}
-                                    >
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-600">
-                                                    {emp.avatar ? (
-                                                        <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <span className="text-slate-500 font-bold text-sm">{emp.name.charAt(0)}</span>
-                                                    )}
+                                <>
+                                    {/* Timed In Employees */}
+                                    {timedInEmployees.map(emp => (
+                                        <div
+                                            key={emp.id}
+                                            onClick={() => setSelectedEmployee(emp)}
+                                            className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm relative group active:scale-[0.99] transition-transform cursor-pointer"
+                                        >
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-600">
+                                                        {emp.avatar ? (
+                                                            <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <span className="text-slate-500 font-bold text-sm">{emp.name.charAt(0)}</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{emp.name}</h4>
+                                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{emp.role}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">{emp.name}</h4>
-                                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{emp.role}</p>
-                                                </div>
+                                                <StatusBadge status={emp.status} />
                                             </div>
-                                            {/* Status Badge */}
-                                            <StatusBadge status={emp.status} />
-                                        </div>
 
-                                        {emp.status !== 'Absent' && (
                                             <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700/50">
                                                 <div>
                                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time In</p>
@@ -276,9 +278,43 @@ const AttendanceMonitoring = () => {
                                                     </span>
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                ))
+                                        </div>
+                                    ))}
+
+                                    {/* Divider */}
+                                    {notTimedInEmployees.length > 0 && timedInEmployees.length > 0 && (
+                                        <div className="flex items-center gap-3 py-2">
+                                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Not Timed In</span>
+                                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+                                        </div>
+                                    )}
+
+                                    {/* Not Timed In Employees */}
+                                    {notTimedInEmployees.map(emp => (
+                                        <div
+                                            key={emp.id}
+                                            className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm opacity-60"
+                                        >
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-600">
+                                                        {emp.avatar ? (
+                                                            <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <span className="text-slate-500 font-bold text-sm">{emp.name.charAt(0)}</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{emp.name}</h4>
+                                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{emp.role}</p>
+                                                    </div>
+                                                </div>
+                                                <StatusBadge status={emp.status} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
                             ) : (
                                 <div className="py-10 text-center text-slate-400 text-sm">No employees found</div>
                             )}
@@ -398,15 +434,22 @@ const RequestsView = () => {
         const load = async () => {
             setLoading(true);
             try {
-                // Fetch all and filter client side for now to match strict requirements
                 const res = await attendanceService.getCorrectionRequests();
                 const all = res.data || [];
 
-                // Pending: Correction/Late requests pending
-                // History: Approved/Rejected
+                // Parse correction_data if it's a string
+                const parsed = all.map(r => {
+                    let correctionData = r.correction_data;
+                    if (typeof correctionData === 'string') {
+                        try { correctionData = JSON.parse(correctionData); } catch { correctionData = {}; }
+                    }
+                    return { ...r, correction_data_parsed: correctionData || {} };
+                });
+
+                // Case-insensitive filter
                 const filtered = subTab === 'pending'
-                    ? all.filter(r => r.status === 'Pending')
-                    : all.filter(r => ['Approved', 'Rejected'].includes(r.status));
+                    ? parsed.filter(r => (r.status || '').toLowerCase() === 'pending')
+                    : parsed.filter(r => ['approved', 'rejected'].includes((r.status || '').toLowerCase()));
 
                 setRequests(filtered);
             } catch (e) {
@@ -468,12 +511,14 @@ const RequestsView = () => {
                             </div>
                             <div className="text-right">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                    ${req.status === 'Approved' ? 'bg-emerald-100 text-emerald-600' :
-                                        req.status === 'Rejected' ? 'bg-red-100 text-red-500' :
-                                            'bg-amber-100 text-amber-600'}`}>
-                                    {req.status}
+                                    ${(req.status || '').toLowerCase() === 'approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
+                                        (req.status || '').toLowerCase() === 'rejected' ? 'bg-red-100 text-red-500 dark:bg-red-900/20 dark:text-red-400' :
+                                            'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>
+                                    {(req.status || 'PENDING').toUpperCase()}
                                 </span>
-                                <p className="text-[10px] text-slate-400 mt-1">12:00 AM</p>
+                                {req.submitted_at && (
+                                    <p className="text-[10px] text-slate-400 mt-1">{new Date(req.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
+                                )}
                             </div>
                         </div>
                     ))
@@ -486,8 +531,9 @@ const RequestsView = () => {
 
             {/* --- CORRECTION DETAILS VIEW MODAL --- */}
             {selectedRequest && createPortal(
-                <div className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4">
-                    <div className="bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setSelectedRequest(null)}></div>
+                    <div className="relative z-10 bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         {/* Header Pull Bar (Mobile) */}
                         <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
                             <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
@@ -496,12 +542,12 @@ const RequestsView = () => {
                         {/* Modal Header */}
                         <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-slate-800/60 shrink-0">
                             <div>
-                                <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id || Math.floor(Math.random() * 100) + 1}</h3>
+                                <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.acr_id || selectedRequest.request_id || selectedRequest.id}</h3>
                                 <div className="flex items-center gap-2 mt-2">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-                                        {(selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'U').charAt(0)}
+                                    <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                        {(selectedRequest.user_name || user?.user_name || 'U').charAt(0)}
                                     </div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'Employee'}</p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.user_name || user?.user_name || 'Employee'}{selectedRequest.designation ? ` (${selectedRequest.designation})` : ''}</p>
                                 </div>
                             </div>
                             <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-slate-800 sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
@@ -518,27 +564,28 @@ const RequestsView = () => {
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
                                         <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">Request Type</span>
-                                        <span className="font-bold text-slate-800 dark:text-white text-sm uppercase">{selectedRequest.correction_type || selectedRequest.type}</span>
+                                        <span className="font-bold text-slate-800 dark:text-white text-sm uppercase">{selectedRequest.correction_type || 'CORRECTION'}</span>
                                     </div>
                                     <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
                                         <span className="text-xs text-indigo-500/70 dark:text-indigo-400/70 mb-1">Method</span>
-                                        <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.details?.method || 'MANUAL'}</span>
+                                        <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.correction_method || selectedRequest.correction_data_parsed?.method || 'FIX TIMINGS'}</span>
                                     </div>
                                 </div>
                                 <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
                                     <span className="text-xs text-slate-500 dark:text-slate-400 mb-3 block">Requested Sessions</span>
                                     <div className="space-y-2">
-                                        {selectedRequest.details?.sessions?.map((s, i) => (
-                                            <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-white">
-                                                <span>In: {s.in || s.time_in || '--:--'}</span>
-                                                <span>Out: {s.out || s.time_out || '--:--'}</span>
-                                            </div>
-                                        )) || (
-                                                <div className="flex flex-col text-sm font-bold text-slate-800 dark:text-white">
-                                                    <span>In: {selectedRequest.time_in || '--:--'}</span>
-                                                    <span>Out: {selectedRequest.time_out || '--:--'}</span>
-                                                </div>
-                                            )}
+                                        {(() => {
+                                            const sessions = selectedRequest.correction_data_parsed?.sessions || selectedRequest.details?.sessions;
+                                            if (sessions && sessions.length > 0) {
+                                                return sessions.map((s, i) => (
+                                                    <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-white">
+                                                        <span>In: {s.in || s.time_in || '--:--'}</span>
+                                                        <span>Out: {s.out || s.time_out || '--:--'}</span>
+                                                    </div>
+                                                ));
+                                            }
+                                            return <p className="text-sm text-slate-400 italic">No sessions requested</p>;
+                                        })()}
                                     </div>
                                 </div>
                             </section>
@@ -591,8 +638,7 @@ const RequestsView = () => {
                         </div>
 
                         {/* Admin/HR Action Buttons (Bottom Fixed) */}
-                        {/* Only show if user is Admin/HR and request is PENDING */}
-                        {['admin', 'hr', 'manager'].includes((user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
+                        {['admin', 'hr', 'manager'].includes((user?.user_type || user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
                             <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
                                 <button
                                     onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'REJECTED')}
@@ -619,9 +665,10 @@ const RequestsView = () => {
 };
 
 const SessionDetailsModal = ({ employee, date, onClose }) => {
-    return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 pb-10 shadow-2xl transform transition-transform animate-in slide-in-from-bottom-10 duration-300 relative">
+    return createPortal(
+        <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center">
+            <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 pb-10 shadow-2xl transform transition-transform animate-in slide-in-from-bottom-10 duration-300">
 
                 {/* Drag Handle */}
                 <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
@@ -673,10 +720,25 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
                                     </div>
                                 </div>
 
-                                {session.location && (
+                                {/* Time In Location */}
+                                {session.locationIn && (
                                     <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 mt-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
-                                        <MapPin size={14} className="mt-0.5 text-slate-400 flex-shrink-0" />
-                                        <span className="leading-relaxed">{session.location}</span>
+                                        <LogIn size={14} className="mt-0.5 text-emerald-500 flex-shrink-0" />
+                                        <div>
+                                            <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">In Location</span>
+                                            <span className="leading-relaxed">{session.locationIn}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Time Out Location */}
+                                {session.locationOut && (
+                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1.5 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
+                                        <LogOut size={14} className="mt-0.5 text-red-400 flex-shrink-0" />
+                                        <div>
+                                            <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Out Location</span>
+                                            <span className="leading-relaxed">{session.locationOut}</span>
+                                        </div>
                                     </div>
                                 )}
 

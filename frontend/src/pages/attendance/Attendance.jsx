@@ -1048,8 +1048,8 @@ const Attendance = () => {
                                                             {new Date(req.attendance_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </span>
                                                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${req.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                                                                req.status === 'Rejected' ? 'bg-red-100 text-red-700' :
-                                                                    'bg-amber-100 text-amber-700'
+                                                            req.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                                                'bg-amber-100 text-amber-700'
                                                             }`}>
                                                             {req.status}
                                                         </span>

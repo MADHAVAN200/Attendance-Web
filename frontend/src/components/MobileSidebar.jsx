@@ -39,7 +39,7 @@ const MobileSidebar = ({ isOpen, onClose }) => {
             {/* Overlay */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/60 z-40 transition-opacity backdrop-blur-sm"
+                    className="fixed inset-0 bg-black/60 z-40 transition-opacity backdrop-blur-md"
                     onClick={onClose}
                 />
             )}
@@ -96,12 +96,17 @@ const MobileSidebar = ({ isOpen, onClose }) => {
 
                 {/* Footer */}
                 <div className="p-4 shrink-0 mb-4">
-                    <button
-                        className="flex items-center gap-3 px-4 py-3 w-full text-slate-600 dark:text-slate-400 hover:text-slate-200 text-[15px] font-medium transition-colors"
+                    <Link
+                        to="/mobile-view/feedback"
+                        onClick={onClose}
+                        className={`flex items-center gap-3 px-4 py-3 w-full rounded-xl text-[15px] font-medium transition-colors ${location.pathname === '/mobile-view/feedback'
+                            ? 'bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-400 dark:text-indigo-300'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-200'
+                            }`}
                     >
-                        <Bug size={20} className="text-slate-500" />
+                        <Bug size={20} className={location.pathname === '/mobile-view/feedback' ? "text-indigo-500" : "text-slate-500"} />
                         <span>Bugs & Feedback</span>
-                    </button>
+                    </Link>
                 </div>
             </aside>
         </>

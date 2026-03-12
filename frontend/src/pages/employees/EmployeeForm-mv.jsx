@@ -10,7 +10,9 @@ import {
     Briefcase,
     Clock,
     Plus,
-    ChevronDown
+    ChevronDown,
+    Camera,
+    Loader2
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
@@ -29,8 +31,13 @@ const EmployeeForm = () => {
         dept_id: '',
         shift_id: '',
         user_type: 'employee',
-        status: true
+        status: true,
+        profile_image_url: ''
     });
+
+    const fileInputRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+    const [imageTimestamp, setImageTimestamp] = useState(Date.now());
 
     const [departments, setDepartments] = useState([]);
     const [designations, setDesignations] = useState([]);
@@ -65,7 +72,8 @@ const EmployeeForm = () => {
                             dept_id: u.dept_id || '',
                             shift_id: u.shift_id || '',
                             user_type: u.user_type,
-                            status: true
+                            status: true,
+                            profile_image_url: u.profile_image_url || ''
                         });
                     }
                 }
@@ -86,6 +94,42 @@ const EmployeeForm = () => {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select an image file');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image size must be less than 5MB');
+            return;
+        }
+
+        const formDataPayload = new FormData();
+        formDataPayload.append('avatar', file);
+
+        setUploading(true);
+        try {
+            const res = await adminService.updateUserAvatar(id, formDataPayload);
+            if (res.success) {
+                toast.success('Profile picture updated!');
+                setImageTimestamp(Date.now());
+                setFormData(prev => ({
+                    ...prev,
+                    profile_image_url: res.profile_image_url
+                }));
+            }
+        } catch (error) {
+            console.error('Upload Error:', error);
+            toast.error(error.message || 'Failed to upload image');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -176,6 +220,43 @@ const EmployeeForm = () => {
 
                 {/* Form Card */}
                 <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+
+                    {/* PROFILE IMAGE (ONLY VISIBLE IN EDIT MODE) */}
+                    {isEditMode && (
+                        <div className="mb-8 flex flex-col items-center">
+                            <div className="relative group">
+                                <div
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-3xl font-bold border-4 border-white dark:border-slate-800 shadow-lg overflow-hidden cursor-pointer shrink-0"
+                                >
+                                    {formData.profile_image_url ? (
+                                        <img src={`${formData.profile_image_url}?t=${imageTimestamp}`} alt={formData.user_name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        (formData.user_name || 'U').charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center border-[3px] border-white dark:border-slate-800 shadow-md transition-transform active:scale-95"
+                                >
+                                    {uploading ? (
+                                        <Loader2 className="animate-spin" size={14} />
+                                    ) : (
+                                        <Camera size={14} />
+                                    )}
+                                </button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-3 font-medium text-center">Tap to change display picture</p>
+                        </div>
+                    )}
 
                     {/* PERSONAL INFORMATION */}
                     <div className="mb-6">

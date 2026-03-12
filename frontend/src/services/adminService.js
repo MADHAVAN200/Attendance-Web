@@ -44,6 +44,20 @@ export const adminService = {
         }
     },
 
+    // Update user avatar
+    async updateUserAvatar(userId, formData) {
+        try {
+            const res = await api.post(`${ADMIN_API_URL}/user/${userId}/avatar`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to update avatar");
+        }
+    },
+
     // Delete user
     async deleteUser(userId) {
         try {

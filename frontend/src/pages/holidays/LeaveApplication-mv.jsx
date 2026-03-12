@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -32,9 +33,10 @@ const AttachmentModal = ({ file, onClose }) => {
     const isImage = file.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.file_key || file.name);
     const isPdf = file.file_type === 'application/pdf' || /\.pdf$/i.test(file.file_key || file.name);
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+    return createPortal(
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+            <div className="absolute -inset-10 bg-black/80 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative z-10 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
@@ -71,7 +73,8 @@ const AttachmentModal = ({ file, onClose }) => {
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -395,12 +398,12 @@ const LeaveApplication = () => {
                         <div className="p-5 space-y-6">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-                                    <span className="text-xs text-slate-500 block mb-1">From</span>
-                                    <span className="font-mono text-sm font-semibold">{new Date(selectedLeave.start_date).toLocaleDateString()}</span>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">From</span>
+                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-white">{new Date(selectedLeave.start_date).toLocaleDateString()}</span>
                                 </div>
                                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-                                    <span className="text-xs text-slate-500 block mb-1">To</span>
-                                    <span className="font-mono text-sm font-semibold">{new Date(selectedLeave.end_date).toLocaleDateString()}</span>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">To</span>
+                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-white">{new Date(selectedLeave.end_date).toLocaleDateString()}</span>
                                 </div>
                             </div>
 
@@ -437,7 +440,7 @@ const LeaveApplication = () => {
                                         value={adminAction.remarks}
                                         onChange={(e) => setAdminAction({ ...adminAction, remarks: e.target.value })}
                                         placeholder="Enter remarks..."
-                                        className="w-full p-3 text-sm bg-slate-50 border rounded-lg mb-3 min-h-[80px]"
+                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-lg mb-3 min-h-[80px]"
                                     ></textarea>
                                     <div className="grid grid-cols-2 gap-3">
                                         <button onClick={() => handleAdminAction('rejected')} className="py-2.5 bg-red-100 text-red-700 font-bold rounded-lg text-sm">Reject</button>
@@ -449,8 +452,8 @@ const LeaveApplication = () => {
                             {/* Details for User (Remarks) */}
                             {(!isAdmin || selectedLeave.status !== 'pending') && (
                                 <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                    <span className="text-xs text-slate-500 block mb-1">Admin Remarks</span>
-                                    <p className="text-sm font-medium">{selectedLeave.admin_comment || "No remarks provided."}</p>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Admin Remarks</span>
+                                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{selectedLeave.admin_comment || "No remarks provided."}</p>
                                 </div>
                             )}
 

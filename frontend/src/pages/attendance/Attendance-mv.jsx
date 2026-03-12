@@ -604,22 +604,22 @@ const Attendance = () => {
                                                     </div>
 
                                                     {/* Times - 3 Columns Layout */}
-                                                    <div className="grid grid-cols-3 gap-3 text-right shrink-0 min-w-[140px]">
+                                                    <div className="grid grid-cols-3 gap-1.5 text-right shrink-0 min-w-[120px]">
                                                         <div className="flex flex-col items-end">
-                                                            <span className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">IN</span>
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                            <span className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">IN</span>
+                                                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
                                                                 {new Date(session.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                                                             </span>
                                                         </div>
                                                         <div className="flex flex-col items-end">
-                                                            <span className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">OUT</span>
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                            <span className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">OUT</span>
+                                                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
                                                                 {session.time_out ? new Date(session.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '--:--'}
                                                             </span>
                                                         </div>
                                                         <div className="flex flex-col items-end">
-                                                            <span className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">HRS</span>
-                                                            <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                                            <span className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">HRS</span>
+                                                            <span className="text-[10px] font-bold text-slate-800 dark:text-white">
                                                                 {session.time_out ? calculateHours(session.time_in, session.time_out) : '0h 0m'}
                                                             </span>
                                                         </div>
@@ -854,10 +854,10 @@ const Attendance = () => {
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-                                                        {item.employee_name ? item.employee_name.charAt(0) : (user?.name ? user.name.charAt(0) : 'U')}
+                                                        {item.user_name ? item.user_name.charAt(0) : (user?.user_name ? user.user_name.charAt(0) : 'U')}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate max-w-[150px]">{item.employee_name || user?.name || 'You'}</h4>
+                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate max-w-[150px]">{item.user_name || user?.user_name || 'You'}</h4>
                                                         <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{item.correction_type} • {new Date(item.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                                                     </div>
                                                 </div>
@@ -882,40 +882,40 @@ const Attendance = () => {
 
                 {/* --- CORRECTION POPUP MODAL --- */}
                 {isCorrectionOpen && createPortal(
-                    <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-slate-900 w-11/12 max-w-[320px] rounded-3xl p-5 shadow-2xl animate-in zoom-in-95 duration-200">
                             {/* Header */}
-                            <div className="flex justify-between items-center mb-6">
-                                <div className="flex items-center gap-2 text-indigo-600 font-bold text-lg">
-                                    <AlertCircle size={20} />
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-2 text-indigo-600 font-bold text-base">
+                                    <AlertCircle size={18} />
                                     <h3>Apply Correction</h3>
                                 </div>
                                 <button onClick={() => setIsCorrectionOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                    <X size={20} />
+                                    <X size={18} />
                                 </button>
                             </div>
 
                             {/* Form */}
-                            <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
+                            <div className="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                                 {/* Date */}
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Date</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Date</label>
                                     <input
                                         type="date"
                                         value={correctionForm.date}
                                         onChange={(e) => setCorrectionForm({ ...correctionForm, date: e.target.value })}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-semibold outline-none focus:border-indigo-500 transition-colors dark:text-white"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors dark:text-white"
                                     />
                                 </div>
 
                                 {/* Type */}
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Type</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Type</label>
                                     <div className="relative">
                                         <select
                                             value={correctionForm.type}
                                             onChange={(e) => setCorrectionForm({ ...correctionForm, type: e.target.value })}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-semibold outline-none focus:border-indigo-500 transition-colors appearance-none dark:text-white"
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors appearance-none dark:text-white"
                                         >
                                             <option value="Missed Punch">Missed Punch</option>
                                             <option value="Late Arrival">Late Arrival</option>
@@ -993,12 +993,12 @@ const Attendance = () => {
 
                                 {/* Reason */}
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Reason</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Reason</label>
                                     <textarea
                                         placeholder="Why is this correction needed?"
                                         value={correctionForm.reason}
                                         onChange={(e) => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:border-indigo-500 transition-colors min-h-[80px] dark:text-white"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-indigo-500 transition-colors min-h-[60px] dark:text-white"
                                     ></textarea>
                                 </div>
 
@@ -1013,9 +1013,9 @@ const Attendance = () => {
                                 <button
                                     onClick={handleCorrectionSubmit}
                                     disabled={isSubmitting}
-                                    className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] transition-all text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2"
+                                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] transition-all text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 mt-2"
                                 >
-                                    {isSubmitting ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : <CheckCircle size={18} />}
+                                    {isSubmitting ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : <CheckCircle size={16} />}
                                     Submit Request
                                 </button>
                             </div>
@@ -1070,7 +1070,7 @@ const Attendance = () => {
 
                 {/* --- CORRECTION DETAILS VIEW MODAL --- */}
                 {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4">
                         <div className="bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                             {/* Header Pull Bar (Mobile) */}
                             <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
@@ -1083,9 +1083,9 @@ const Attendance = () => {
                                     <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.request_id || selectedRequest.id || Math.floor(Math.random() * 100) + 1}</h3>
                                     <div className="flex items-center gap-2 mt-2">
                                         <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-                                            {(selectedRequest.employee_name || user?.name || 'U').charAt(0)}
+                                            {(selectedRequest.user_name || user?.user_name || 'U').charAt(0)}
                                         </div>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.employee_name || user?.name || 'Employee'}</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.user_name || user?.user_name || 'Employee'}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-slate-800 sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
@@ -1152,7 +1152,7 @@ const Attendance = () => {
                                             <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 border-indigo-500"></div>
                                             <h5 className="font-bold text-sm text-slate-800 dark:text-white">Submitted</h5>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                                {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.employee_name || user?.name || 'User'}
+                                                {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.user_name || user?.user_name || 'User'}
                                             </p>
                                         </div>
 

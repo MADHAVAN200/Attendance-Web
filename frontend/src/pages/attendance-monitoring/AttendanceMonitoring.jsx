@@ -158,7 +158,7 @@ const AttendanceMonitoring = () => {
 
                     // Check if *currently* active
                     const isCurrentlyActive = sessions.some(s => s.isActive);
-                    
+
                     if (isCurrentlyActive) {
                         status = (latest.late_minutes > 0) ? 'Late Active' : 'Active';
                     } else {
@@ -1424,7 +1424,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 <span>•</span>
                                 <span>{user.department}</span>
                             </div>
-                            
+
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border shadow-sm ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
                                     user.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
@@ -1507,7 +1507,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 {session.inImage && (
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
-                                                        <button 
+                                                        <button
                                                             onClick={() => setPreviewImage(session.inImage)}
                                                             className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                         >
@@ -1527,7 +1527,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 {session.outImage && (
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selfie</span>
-                                                        <button 
+                                                        <button
                                                             onClick={() => setPreviewImage(session.outImage)}
                                                             className="block w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                         >
@@ -1557,21 +1557,21 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
 
             {/* Image Preview Lightbox */}
             {previewImage && createPortal(
-                <div 
+                <div
                     className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={() => setPreviewImage(null)}
                 >
-                    <button 
+                    <button
                         className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
                         onClick={() => setPreviewImage(null)}
                     >
                         <XCircle size={32} />
                     </button>
-                    <img 
-                        src={previewImage} 
-                        alt="Selfie Preview" 
+                    <img
+                        src={previewImage}
+                        alt="Selfie Preview"
                         className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()} 
+                        onClick={(e) => e.stopPropagation()}
                     />
                 </div>,
                 document.body

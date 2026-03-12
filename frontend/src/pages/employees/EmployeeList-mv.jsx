@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
 import {
@@ -23,9 +24,9 @@ import { useAuth } from '../../context/AuthContext';
 const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
     if (!user) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClose}></div>
             <div className="relative bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-slate-700">
                 <button
                     onClick={onClose}
@@ -73,7 +74,8 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

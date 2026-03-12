@@ -536,7 +536,7 @@ const LeaveApplication = () => {
                                                         value={adminAction.remarks}
                                                         onChange={(e) => setAdminAction({ ...adminAction, remarks: e.target.value })}
                                                         placeholder="Add remarks (required for rejection)..."
-                                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none min-h-[80px] mb-3"
+                                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none min-h-[80px] mb-3"
                                                     ></textarea>
 
                                                     <div className="flex gap-2">

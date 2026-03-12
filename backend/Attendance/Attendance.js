@@ -422,7 +422,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
     .join("users as u", "u.user_id", "acr.user_id")
     .where("acr.org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("acr.user_id", user_id);
+      if (user_type !== "admin" && user_type !== "hr") qb.where("acr.user_id", user_id);
       if (status) qb.where("acr.status", status);
       if (date) qb.where("acr.request_date", date);
       if (month) qb.whereRaw('MONTH(acr.request_date) = ?', [month]);
@@ -447,7 +447,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
   const countResult = await attendanceDB("attendance_correction_requests")
     .where("org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("user_id", user_id);
+      if (user_type !== "admin" && user_type !== "hr") qb.where("user_id", user_id);
       if (status) qb.where("status", status);
       if (date) qb.where("request_date", date);
       if (month) qb.whereRaw('MONTH(request_date) = ?', [month]);
@@ -494,7 +494,7 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
     .andWhere("acr.org_id", org_id);
 
   // 🔐 Access control
-  if (role !== "admin") {
+  if (role !== "admin" && role !== "hr") {
     query.andWhere("acr.user_id", user_id);
   }
 
@@ -530,7 +530,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
   const reviewer_id = req.user.user_id;
   const role = req.user.user_type;
 
-  if (role !== "admin") {
+  if (role !== "admin" && role !== "hr") {
     return res.status(403).json({ error: "Access denied" });
   }
 
