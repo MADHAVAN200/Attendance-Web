@@ -182,7 +182,6 @@ function App() {
           </Route>
 
           </Routes>
-        </ErrorBoundary>
       </NotificationProvider>
     </AuthProvider>
   )
