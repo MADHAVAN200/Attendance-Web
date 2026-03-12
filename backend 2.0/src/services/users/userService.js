@@ -102,6 +102,16 @@ export const createUser = async (userData, authInfo, profileImageBuffer = null) 
         const org = await trx("organizations").where({ org_id: authInfo.orgId }).forUpdate().first();
         if (!org) throw new AppError("Organization not found", 404);
 
+        const currentUsersResult = await trx("users")
+            .where({ org_id: authInfo.orgId, is_deleted: false })
+            .count('user_id as count')
+            .first();
+        const currentCount = parseInt(currentUsersResult.count || 0, 10);
+
+        if (currentCount >= org.max_users) {
+            throw new AppError(`Organization has reached its user limit (${org.max_users}). Please upgrade your plan or delete users to add more.`, 403);
+        }
+
         const nextNumber = org.last_user_number + 1;
         userCode = `${org.org_code}-${String(nextNumber).padStart(3, "0")}`;
 
@@ -412,6 +422,12 @@ export const bulkCreateUsers = async (file, authInfo) => {
         if (!org) throw new AppError("Organization not found", 404);
         let nextUserNumber = org.last_user_number;
 
+        const currentUsersResult = await trx("users")
+            .where({ org_id: authInfo.orgId, is_deleted: false })
+            .count('user_id as count')
+            .first();
+        let currentCount = parseInt(currentUsersResult.count || 0, 10);
+
         for (const deptName of uniqueDepts) {
             let dept = await trx("departments").where({ dept_name: deptName, org_id: authInfo.orgId }).first();
             if (!dept) {
@@ -458,6 +474,10 @@ export const bulkCreateUsers = async (file, authInfo) => {
                 results.failure_count++; results.errors.push(`Row ${rowNumber}: Duplicate Email/Phone`); continue;
             }
 
+            if (currentCount >= org.max_users) {
+                results.failure_count++; results.errors.push(`Row ${rowNumber}: Organization user limit reached (${org.max_users})`); continue;
+            }
+
             const hashedPassword = await bcrypt.hash(password, 10);
             nextUserNumber++;
             const userCode = `${org.org_code || org.org_name}-${String(nextUserNumber).padStart(3, "0")}`;
@@ -470,6 +490,7 @@ export const bulkCreateUsers = async (file, authInfo) => {
                 shift_id: shiftMap[getVal(row, "shift")?.toLowerCase()]
             });
 
+            currentCount++;
             results.success_count++;
         }
 

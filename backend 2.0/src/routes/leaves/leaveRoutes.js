@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateJWT } from '../../middleware/auth.js';
+import { authenticateJWT, requireActiveOrg } from '../../middleware/auth.js';
 import multer from 'multer';
 import * as LeaveController from '../../controllers/leaves/leaveController.js';
 import ensureAdmin from '../../middleware/ensureAdmin.js';
@@ -21,14 +21,17 @@ const upload = multer({
 
 const router = express.Router();
 
+// Apply common middleware to all routes in this file
+router.use(authenticateJWT, requireActiveOrg);
+
 // Employee Routes
-router.get('/my-history', authenticateJWT, LeaveController.getMyHistory);
-router.post('/request', authenticateJWT, upload.array('attachments', 5), LeaveController.submitLeaveRequest);
-router.delete('/request/:id', authenticateJWT, LeaveController.withdrawLeaveRequest);
+router.get('/my-history', LeaveController.getMyHistory);
+router.post('/request', upload.array('attachments', 5), LeaveController.submitLeaveRequest);
+router.delete('/request/:id', LeaveController.withdrawLeaveRequest);
 
 // Admin Routes
-router.get('/admin/pending', authenticateJWT, ensureAdmin, LeaveController.getPendingRequests);
-router.get('/admin/history', authenticateJWT, ensureAdmin, LeaveController.getAdminHistory);
-router.put('/admin/status/:id', authenticateJWT, ensureAdmin, LeaveController.updateLeaveStatus);
+router.get('/admin/pending', ensureAdmin, LeaveController.getPendingRequests);
+router.get('/admin/history', ensureAdmin, LeaveController.getAdminHistory);
+router.put('/admin/status/:id', ensureAdmin, LeaveController.updateLeaveStatus);
 
 export default router;

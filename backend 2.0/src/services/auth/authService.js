@@ -14,16 +14,24 @@ export const authenticateUser = async (userInput, password, reqInfo) => {
         .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
         .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
         .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
+        .leftJoin('organizations', 'users.org_id', 'organizations.org_id')
         .select(
             'users.user_id', 'users.user_code', 'users.user_name', 'users.user_password', 'users.email', 'users.phone_no', 'users.org_id', 'users.user_type',
             'users.profile_image_url', 'users.is_active', 'users.is_deleted',
-            'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id'
+            'departments.dept_name', 'designations.desg_name', 'shifts.shift_name', 'shifts.shift_id',
+            'organizations.status as org_status'
         )
         .where('users.email', userInput)
         .orWhere('users.phone_no', userInput)
         .first();
 
     if (!user) throw new AppError('User not found', 401);
+
+    // Check Organization Status (Bypass for admin users so they can renew subs)
+    if (user.org_id && user.org_status !== 'active' && user.user_type !== 'admin') {
+        throw new AppError(`Login blocked: Your organization account is currently ${user.org_status}. Please contact support.`, 403);
+    }
+
     if (user.is_deleted) throw new AppError('Your account has been deleted. Please contact support.', 403);
     if (!user.is_active) throw new AppError('Your account is inactive. Please contact HR.', 403);
 
@@ -78,8 +86,74 @@ export const authenticateUser = async (userInput, password, reqInfo) => {
     };
 };
 
+export const authenticateSuperAdmin = async (email, password, reqInfo) => {
+    const admin = await attendanceDB('super_admins').where('email', email).first();
+    if (!admin) throw new AppError('Invalid credentials', 401);
+    if (!admin.is_active) throw new AppError('Your account is inactive.', 403);
+
+    const isMatch = await bcrypt.compare(password, admin.password_hash);
+    if (!isMatch) throw new AppError('Invalid credentials', 401);
+
+    const tokenPayload = {
+        user_id: admin.id,
+        user_name: admin.name,
+        email: admin.email,
+        user_type: 'super_admin'
+    };
+
+    const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+    const refreshTokenPayload = { id: admin.id, user_type: 'super_admin_refresh' };
+    const refreshToken = jwt.sign(refreshTokenPayload, process.env.JWT_REFRESH_SECRET, { expiresIn: '12h' });
+
+    try {
+        EventBus.emitActivityLog({
+            user_id: admin.id,
+            org_id: null,
+            event_type: "LOGIN",
+            event_source: "API",
+            object_type: "ADMIN",
+            object_id: admin.id,
+            description: "Super Admin logged in",
+            request_ip: reqInfo.ip,
+            user_agent: reqInfo.userAgent
+        });
+    } catch (err) { }
+
+    return {
+        accessToken,
+        refreshToken,
+        user: {
+            id: admin.id,
+            user_name: admin.name,
+            email: admin.email,
+            user_type: 'super_admin',
+        }
+    };
+};
+
 export const refreshAuthTokens = async (refreshToken, reqInfo) => {
     if (!refreshToken) throw new AppError("No refresh token provided", 401);
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        if (decoded.user_type === 'super_admin_refresh') {
+            const admin = await attendanceDB('super_admins').where('id', decoded.id).first();
+            if (!admin || !admin.is_active) throw new AppError('Admin inactive or deleted', 403);
+
+            const tokenPayload = {
+                user_id: admin.id,
+                user_name: admin.name,
+                email: admin.email,
+                user_type: 'super_admin'
+            };
+            const newAccessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+            const newRefreshToken = jwt.sign({ id: admin.id, user_type: 'super_admin_refresh' }, process.env.JWT_REFRESH_SECRET, { expiresIn: '12h' });
+            return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+        }
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') throw new AppError("Session expired. Please re-login.", 403);
+        // Important: if jwt.verify failed for other reasons (e.g standard user's non-jwt token), let it fall through
+    }
 
     const result = await TokenService.verifyRefreshToken(refreshToken);
 
@@ -113,7 +187,20 @@ export const refreshAuthTokens = async (refreshToken, reqInfo) => {
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 };
 
-export const getCurrentUser = async (userId) => {
+export const getCurrentUser = async (userId, userType) => {
+    if (userType === 'super_admin') {
+        const admin = await attendanceDB('super_admins').where('id', userId).first();
+        if (!admin) throw new AppError("Admin not found", 404);
+        return {
+            user_id: admin.id,
+            user_name: admin.name,
+            email: admin.email,
+            user_type: 'super_admin',
+            org_id: null,
+            profile_image_url: null
+        };
+    }
+
     const user = await attendanceDB('users')
         .where('user_id', userId)
         .select('user_code', 'user_name', 'email', 'user_type', 'org_id', 'profile_image_url')

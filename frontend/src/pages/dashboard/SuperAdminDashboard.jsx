@@ -1,10 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { Users, Building, AlertCircle, Activity, Briefcase, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 
 const SuperAdminDashboard = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalOrgs: 0,
+    totalUsers: 0,
+    activeSubscriptions: 0,
+    pendingRequests: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/super-admin/dashboard-stats');
+      if (res.data.success) {
+        setStats(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch super admin stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <DashboardLayout title="Super Admin Dashboard">
@@ -27,39 +53,31 @@ const SuperAdminDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <StatCard 
             title="Total Organizations" 
-            value="12" 
+            value={stats.totalOrgs} 
             total="Registered"
             icon={<Building className="text-blue-500" size={24} />} 
-            trend="+2"
-            trendUp={true}
-            period="this month"
+            loading={loading}
           />
           <StatCard 
             title="Total Users" 
-            value="1,234" 
+            value={stats.totalUsers} 
             total="Active"
             icon={<Users className="text-emerald-500" size={24} />} 
-            trend="+120"
-            trendUp={true}
-             period="this month"
+            loading={loading}
           />
           <StatCard 
             title="Active Subscriptions" 
-            value="10" 
+            value={stats.activeSubscriptions} 
             total="Paid"
             icon={<Activity className="text-violet-500" size={24} />} 
-            trend="+1"
-            trendUp={true}
-             period="this month"
+            loading={loading}
           />
           <StatCard 
             title="Pending Requests" 
-            value="5" 
-            total="Action Needed"
+            value={stats.pendingRequests} 
+            total="Alerts"
             icon={<AlertCircle className="text-amber-500" size={24} />} 
-            trend="Urgent"
-            trendUp={false}
-             period="Tasks"
+            loading={loading}
           />
         </div>
 

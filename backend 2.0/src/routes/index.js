@@ -16,6 +16,11 @@ import attendanceRoutes from './attendance/attendanceRoutes.js';
 import feedbackRoutes from './feedback/feedbackRoutes.js';
 import paymentRoutes from './payment/paymentRoutes.js';
 import profileRoutes from './profile/profileRoutes.js';
+import orgRoutes from './organizations/orgRoutes.js';
+import systemMonitorRoutes from './admin/systemMonitorRoutes.js';
+import superAdminRoutes from './superAdmin/superAdminRoutes.js';
+
+import { requireActiveOrg } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -28,9 +33,10 @@ router.use('/policies', shiftRoutes); // Shift management
 router.use('/notifications', notificationRoutes);
 router.use('/leaves', leaveRoutes);
 router.use('/attendance', attendanceRoutes);
+router.use('/organizations', orgRoutes);
+router.use('/super-admin', superAdminRoutes);
 router.use('/admin/reports', reportsRoutes);
-router.use('/attendance/reports', reportsRoutes);
-router.use('/', adminRoutes); // For /locations which hits 
+router.use('/super-admin/monitor', systemMonitorRoutes); // Moved from /admin/monitor
 router.use('/locations', workLocationsRoutes); // For work location management
 router.use('/dar/activities', darActivityRoutes); // For DAR activities
 router.use('/dar/events', darEventRoutes); // For DAR events

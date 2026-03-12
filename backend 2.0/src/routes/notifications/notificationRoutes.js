@@ -1,13 +1,15 @@
 import express from 'express';
-import { authenticateJWT } from '../../middleware/auth.js';
-import { getNotifications,markAsRead,markAllAsRead } 
-from '../../controllers/notifications/notificationController.js';
+import { authenticateJWT, requireActiveOrg } from '../../middleware/auth.js';
+import { getNotifications, markAsRead, markAllAsRead }
+    from '../../controllers/notifications/notificationController.js';
 
 
 const router = express.Router();
 
-router.get('/',authenticateJWT,getNotifications);
-router.put('/:id/read',authenticateJWT,markAsRead);
-router.put('/read-all',authenticateJWT,markAllAsRead);
+router.use(authenticateJWT, requireActiveOrg);
+
+router.get('/', getNotifications);
+router.put('/:id/read', markAsRead);
+router.put('/read-all', markAllAsRead);
 
 export default router;

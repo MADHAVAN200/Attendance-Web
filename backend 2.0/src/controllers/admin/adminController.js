@@ -2,6 +2,7 @@ import catchAsync from '../../utils/catchAsync.js';
 import AppError from '../../utils/AppError.js';
 import * as userService from '../../services/users/userService.js';
 import * as dashboardService from '../../services/admin/dashboardService.js';
+import { attendanceDB } from '../../config/database.js';
 
 // GET all users
 export const getAllUsers = catchAsync(async (req, res, next) => {
@@ -241,28 +242,6 @@ export const bulkValidateUsers = catchAsync(async (req, res, next) => {
     res.json({ success: true, validation: validationReport });
 });
 
-// Bulk create users from JSON
-export const bulkCreateUsersJson = catchAsync(async (req, res) => {
-    if (req.user.user_type !== 'admin') {
-        throw new AppError('Only admin can perform bulk operations', 403);
-    }
-
-    const { users } = req.body;
-    if (!users || !Array.isArray(users) || users.length === 0) {
-        throw new AppError('Invalid data provided', 400);
-    }
-
-    const authInfo = {
-        initiatorRole: req.user.user_type,
-        initiatorId: req.user.user_id,
-        orgId: req.user.org_id
-    };
-
-    const report = await userService.bulkCreateUsersFromJson(users, authInfo);
-    res.json({ ok: true, report });
-});
-
-// GET dashboard stats
 export const getDashboardStats = catchAsync(async (req, res) => {
     const org_id = req.user.org_id;
     const { range = 'weekly', year, month } = req.query;

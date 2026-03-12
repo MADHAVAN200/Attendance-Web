@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { authenticateJWT } from '../../middleware/auth.js';
+import { authenticateJWT, requireActiveOrg } from '../../middleware/auth.js';
 import * as adminController from '../../controllers/admin/adminController.js';
 import * as shiftController from '../../controllers/shifts/shiftController.js';
 
@@ -8,7 +8,7 @@ const router = express.Router();
 const upload = multer(); // memory storage
 
 // Protected by JWT
-router.use(authenticateJWT);
+router.use(authenticateJWT, requireActiveOrg);
 
 // User Operations
 router.get('/users', adminController.getAllUsers);
@@ -21,9 +21,10 @@ router.post('/user/:user_id/restore', adminController.restoreUser);
 router.put('/user/:user_id/status', adminController.toggleUserStatus);
 router.post('/users/bulk', upload.single('file'), adminController.bulkCreateUsers);
 router.post('/users/bulk-validate', adminController.bulkValidateUsers);
-router.post('/users/bulk-json', adminController.bulkCreateUsersJson);
 
 // Lookups
+router.get('/dashboard-stats', adminController.getDashboardStats);
+
 router.get('/departments', adminController.getDepartments);
 router.post('/departments', adminController.createDepartment);
 

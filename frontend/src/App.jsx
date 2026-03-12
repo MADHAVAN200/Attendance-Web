@@ -11,6 +11,7 @@ import Unauthorized from "./pages/Unauthorized";
 import TestRoute from "./context/TestRoute";
 import Login from "./pages/user-auth/Login";
 import ForgotPassword from "./pages/user-auth/ForgotPassword";
+import SuperAdminLogin from "./pages/user-auth/SuperAdminLogin";
 import WordCaptchaTest from "./pages/test/WordCaptchaTest"; // only for testing
 
 import AdminDashboard from "./pages/dashboard/AdminDashboard"
@@ -31,8 +32,10 @@ import VisualScripting from "./pages/test/VisualScripting"
 import DailyActivity from "./pages/dar/DailyActivity"
 import DARAdmin from "./pages/dar/DARAdmin"
 import LeaveApplication from "./pages/holidays/LeaveApplication"
-
-
+import OrganizationList from "./pages/organizations/OrganizationList"
+import SecurityAlerts from "./pages/super-admin/SecurityAlerts"
+import UserFeedback from "./pages/super-admin/UserFeedback"
+import SystemLogs from "./pages/super-admin/SystemLogs"
 
 import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
 import EmployeeDashboard from "./pages/dashboard/EmployeeDashboard";
@@ -58,11 +61,12 @@ function App() {
         <ErrorBoundary>
           <Routes>
 
-            {/* Public Route: Login */}
-            <Route element={<PublicRoute />}>
-              <Route path="/login" element={<Login />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-            </Route>
+          {/* Public Route: Login */}
+          <Route element={<PublicRoute />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/org-login" element={<SuperAdminLogin />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+          </Route>
 
             {/* Test Routes - Only available in Development */}
             <Route element={<TestRoute />}>
@@ -96,12 +100,20 @@ function App() {
               <Route path="/holidays/bulk" element={<BulkHolidayImport />} />
             </Route>
 
-              {/* Admin Only Routes */}
-              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-                <Route path="/subscription" element={<Subscription />} />
-                <Route path="/dar-admin" element={<DARAdmin />} />
-              </Route>
+            {/* Admin Only Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/subscription" element={<Subscription />} />
+              <Route path="/dar-admin" element={<DARAdmin />} />
             </Route>
+
+            {/* Super Admin Only Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
+              <Route path="/organizations" element={<OrganizationList />} />
+              <Route path="/super-admin/alerts" element={<SecurityAlerts />} />
+              <Route path="/super-admin/feedback" element={<UserFeedback />} />
+              <Route path="/super-admin/logs" element={<SystemLogs />} />
+            </Route>
+          </Route>
 
           </Routes>
         </ErrorBoundary>

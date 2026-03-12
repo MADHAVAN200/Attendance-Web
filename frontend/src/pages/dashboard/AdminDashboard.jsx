@@ -34,7 +34,7 @@ import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const { avatarTimestamp } = useAuth();
+    const { avatarTimestamp, user } = useAuth();
     const [stats, setStats] = React.useState({
         presentToday: 0,
         totalEmployees: 0,
@@ -59,12 +59,17 @@ const AdminDashboard = () => {
     const dataCache = React.useRef({});
 
     React.useEffect(() => {
+        if (!user || !['admin', 'hr'].includes(user.user_type)) {
+            setIsLoading(false);
+            return;
+        }
+
         if (viewMode === 'range') {
             fetchDashboardData(activeRange);
         } else {
             fetchDashboardData('custom', selectedMonth, selectedYear);
         }
-    }, [activeRange, viewMode, selectedMonth, selectedYear]);
+    }, [activeRange, viewMode, selectedMonth, selectedYear, user]);
 
     const fetchDashboardData = async (range, month = null, year = null, forceRefresh = false) => {
         const cacheKey = `${range}_${month || 'now'}_${year || 'now'}`;

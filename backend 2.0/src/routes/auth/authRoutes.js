@@ -11,6 +11,7 @@ router.get("/captcha/generate", generateCaptcha);
 
 // Public Routes (Rate-Limited)
 router.post('/login', loginIpLimiter, authLimiter, authController.login);
+router.post('/super-admin/login', loginIpLimiter, authLimiter, authController.superAdminLogin);
 router.post('/forgot-password', authLimiter, authController.requestPasswordReset);
 router.post('/verify-otp', authLimiter, authController.verifyOtp);
 router.post('/reset-password', authLimiter, authController.resetPassword);

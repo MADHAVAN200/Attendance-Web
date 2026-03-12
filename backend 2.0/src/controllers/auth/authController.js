@@ -32,6 +32,27 @@ export const login = catchAsync(async (req, res, next) => {
     res.status(200).json({ accessToken, user });
 });
 
+export const superAdminLogin = catchAsync(async (req, res, next) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        throw new AppError("Email and password are required.", 400);
+    }
+
+    const reqInfo = { ip: req.clientIp || req.ip, userAgent: req.get('User-Agent') || 'Unknown' };
+    const { accessToken, refreshToken, user } = await authService.authenticateSuperAdmin(email, password, reqInfo);
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: IS_PROD,
+        sameSite: 'Lax',
+        maxAge: 12 * 60 * 60 * 1000,
+        path: '/'
+    });
+
+    res.status(200).json({ accessToken, user });
+});
+
 export const requestPasswordReset = catchAsync(async (req, res, next) => {
     const { email } = req.body;
     if (!email) throw new AppError("Email is required", 400);
@@ -94,7 +115,7 @@ export const refreshToken = catchAsync(async (req, res, next) => {
 
 export const getCurrentUser = catchAsync(async (req, res, next) => {
     // `req.user` comes from authenticateJWT middleware
-    const user = await authService.getCurrentUser(req.user.user_id);
+    const user = await authService.getCurrentUser(req.user.user_id, req.user.user_type);
     res.json(user);
 });
 
