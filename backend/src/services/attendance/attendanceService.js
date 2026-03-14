@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { attendanceDB } from "../../config/database.js";
 import * as S3Service from "../s3/s3Service.js";
 import EventBus from "../../utils/EventBus.js";
-import { PolicyService } from "../../../../backend/Attendance/PolicyEngine.js";
+import { PolicyService } from "./policyEngine.js";
 
 // ========== HELPER FUNCTIONS ==========
 

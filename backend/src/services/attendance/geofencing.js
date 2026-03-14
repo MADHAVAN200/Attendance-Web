@@ -1,5 +1,4 @@
-
-import { attendanceDB } from "../database.js";
+import { attendanceDB } from "../../config/database.js";
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -62,7 +61,7 @@ export async function verifyUserGeofence(user_id, latitude, longitude) {
         .where("work_locations.is_active", true)
         .select("work_locations.latitude", "work_locations.longitude", "work_locations.radius");
 
-    // If user has NO assigned locations, we assume they are allowed everywhere (per user request)
+    // If user has NO assigned locations, we assume they are allowed everywhere
     if (!validLocations || validLocations.length === 0) {
         return true;
     }

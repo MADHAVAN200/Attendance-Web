@@ -1,6 +1,5 @@
-
-import { attendanceDB } from "../database.js";
-import { verifyUserGeofence } from "./Geofencing.js";
+import { attendanceDB } from "../../config/database.js";
+import { verifyUserGeofence } from "./geofencing.js";
 
 // --- TEMPLATES ---
 // Helpers to generate standard policy JSONs
@@ -219,13 +218,12 @@ export const PolicyService = {
         return "PRESENT"; // Default
     },
 
-
     /**
      * Check Location Compliance (Modular)
      * @returns {Promise<{ok: boolean, error?: string}>}
      */
     checkLocationCompliance: async (user_id, lat, lng, accuracy, requirements) => {
-        // 1. Basic Validation (Moved from Controller)
+        // 1. Basic Validation
         if (Number.isNaN(lat) || Number.isNaN(lng)) {
             return { ok: false, error: "Invalid or missing latitude/longitude" };
         }
@@ -260,7 +258,6 @@ export const PolicyService = {
         const selfiePolicy = reqs.selfie || {};
 
         // 1. Check if Selfie is required by policy
-        // Format: "selfie": { "required": true/false, ... }
         if (!selfiePolicy.required) return { ok: true };
 
         // 2. Check if file exists
@@ -282,22 +279,20 @@ export const PolicyService = {
         const startTimeStr = timing.start_time;
 
         if (startTimeStr) {
-            
-            const localDatePart = localTime.split('T')[0]; // YYYY-MM-DD
             const localTimePart = localTime.split('T')[1].split('.')[0]; // HH:MM:SS
-            
+
             const [curH, curM] = localTimePart.split(':').map(Number);
             const currentMinutes = curH * 60 + curM;
-            
+
             const [shiftH, shiftM] = startTimeStr.split(':').map(Number);
             const shiftMinutes = shiftH * 60 + shiftM;
-            
+
             if (currentMinutes > shiftMinutes) {
                 minutesLate = currentMinutes - shiftMinutes;
             }
         }
-        
-        const gracePeriod = rules.grace_period.minutes || 0; // Default 0 if undefined
+
+        const gracePeriod = rules.grace_period.minutes || 0;
         const isLate = minutesLate > gracePeriod;
 
         return {
@@ -307,10 +302,9 @@ export const PolicyService = {
         };
     },
 
-
     /**
      * Build session context for policy evaluation
-     * @param {number} user_id 
+     * @param {number} user_id
      * @param {string} localTime - Current local time
      * @param {string} eventType - "time_in" or "time_out"
      * @returns {Object} Session context data
