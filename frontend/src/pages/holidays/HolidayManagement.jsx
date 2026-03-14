@@ -19,6 +19,13 @@ import HolidayCalendarView from '../../components/HolidayCalendarView';
 
 const HolidayManagement = () => {
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/holidays'); // Or default to /mobile-view if no specific holiday route
+        }
+    }, [navigate]);
+
     const { user } = useAuth();
     const [holidays, setHolidays] = useState([]);
     const [isLoading, setIsLoading] = useState(true);

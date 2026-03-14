@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
@@ -37,6 +38,14 @@ import {
 } from 'recharts';
 
 const AttendanceMonitoring = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/attendance-monitoring');
+        }
+    }, [navigate]);
+
     const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
@@ -1633,8 +1642,8 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
 
             {/* Image Preview Lightbox */}
             {previewImage && createPortal(
-                <div
-                    className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+                <div 
+                    className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={() => setPreviewImage(null)}
                 >
                     <button

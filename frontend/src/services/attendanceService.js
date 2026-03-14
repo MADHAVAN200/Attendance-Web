@@ -157,4 +157,119 @@ export const attendanceService = {
             throw new Error(error.response?.data?.message || "Failed to fetch holidays");
         }
     },
+
+    // Employee Dashboard Stats
+    async getMyStats() {
+        try {
+            const today = new Date();
+            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            const res = await this.getMyRecords(startOfMonth, endOfMonth);
+            const records = res.data || [];
+
+            let daysPresent = 0;
+            let lateDays = 0;
+            let totalHours = 0;
+
+            records.forEach(record => {
+                if (record.time_in) daysPresent++;
+                if (record.status === 'Late' || record.late_minutes > 0) lateDays++;
+                if (record.duration) {
+                    const [hours, minutes] = record.duration.split(':').map(Number);
+                    totalHours += hours + (minutes / 60);
+                }
+            });
+
+            // Note: daysAbsent requires knowing total working days, 
+            // estimating for now or calculating if detailed schedule is available
+            const avgHours = daysPresent > 0 ? (totalHours / daysPresent).toFixed(1) : 0;
+
+            return {
+                success: true,
+                data: {
+                    daysPresent,
+                    daysAbsent: 0, // Mocked for simplicity without schedule logic
+                    lateDays,
+                    avgHours
+                }
+            };
+        } catch (error) {
+            return { success: false, data: { daysPresent: 0, daysAbsent: 0, lateDays: 0, avgHours: 0 } };
+        }
+    },
+
+    // Employee Today's Status
+    async getTodayStatus() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const res = await this.getMyRecords(today, today);
+
+            if (res.data && res.data.length > 0) {
+                return { success: true, data: res.data[0] };
+            }
+            return { success: true, data: null };
+        } catch (error) {
+            return { success: false, data: null };
+        }
+    },
+
+    // Upcoming Holidays
+    async getUpcomingHolidays() {
+        try {
+            const res = await this.getHolidays();
+            const holidays = res.data || [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const upcoming = holidays
+                .filter(holiday => new Date(holiday.date) >= today)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            return { success: true, data: upcoming };
+        } catch (error) {
+            return { success: false, data: [] };
+        }
+    },
+
+    // Recent Activity Feed
+    async getRecentActivity() {
+        try {
+            const today = new Date();
+            const lastWeek = new Date(today);
+            lastWeek.setDate(lastWeek.getDate() - 7);
+
+            const res = await this.getMyRecords(lastWeek.toISOString().split('T')[0], today.toISOString().split('T')[0]);
+            const records = res.data || [];
+
+            const activities = [];
+            records.forEach(record => {
+                if (record.time_in) {
+                    activities.push({
+                        id: `in-${record.acr_id}`,
+                        type: 'check-in',
+                        action: 'Checked In',
+                        time: new Date(`${record.date}T${record.time_in}`).toLocaleString(),
+                        status: record.status
+                    });
+                }
+                if (record.time_out) {
+                    activities.push({
+                        id: `out-${record.acr_id}`,
+                        type: 'check-out',
+                        action: 'Checked Out',
+                        time: new Date(`${record.date}T${record.time_out}`).toLocaleString(),
+                        status: record.status
+                    });
+                }
+            });
+
+            // Sort descending by time
+            activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+            return { success: true, data: activities };
+        } catch (error) {
+            return { success: false, data: [] };
+        }
+    }
 };

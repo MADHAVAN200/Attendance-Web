@@ -15,6 +15,12 @@ const EmployeeDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view');
+        }
+    }, [navigate]);
+
     // Mock data for quick stats - in a real app, fetch this from API
     const stats = {
         presentDays: 12,

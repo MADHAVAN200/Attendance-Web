@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
     FileText,
@@ -17,6 +18,14 @@ import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 
 const Reports = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/reports');
+        }
+    }, [navigate]);
+
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
     const [reportType, setReportType] = useState('matrix_monthly');

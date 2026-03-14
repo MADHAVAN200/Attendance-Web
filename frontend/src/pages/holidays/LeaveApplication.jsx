@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import DatePicker from '../../components/DatePicker';
@@ -76,6 +77,14 @@ const AttachmentModal = ({ file, onClose }) => {
 };
 
 const LeaveApplication = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/apply-leave');
+        }
+    }, [navigate]);
+
     const { user } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -527,7 +536,7 @@ const LeaveApplication = () => {
                                                         value={adminAction.remarks}
                                                         onChange={(e) => setAdminAction({ ...adminAction, remarks: e.target.value })}
                                                         placeholder="Add remarks (required for rejection)..."
-                                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none min-h-[80px] mb-3"
+                                                        className="w-full p-3 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none min-h-[80px] mb-3"
                                                     ></textarea>
 
                                                     <div className="flex gap-2">
