@@ -50,3 +50,18 @@ body,
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+/* Recharts Dark Mode Overrides */
+.dark .recharts-default-tooltip {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+.dark .recharts-tooltip-item,
+.dark .recharts-default-tooltip .recharts-tooltip-label {
+    color: #f8fafc !important;
+}
+
+.dark .recharts-tooltip-cursor {
+    fill: #334155 !important;
+}
