@@ -359,9 +359,11 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
   const {
     correction_type,
     request_date,
+    requested_time_in,
+    requested_time_out,
     reason,
-    original_data, // Snapshot of user's attendance records at time of request
-    proposed_data  // Snapshot of what the user wants the records to look like
+    correction_method, // 'fix', 'add_session', 'reset'
+    sessions // Array for add_session
   } = req.body;
 
   const user_id = req.user.user_id;
@@ -371,24 +373,30 @@ router.post("/correction-request", authenticateJWT, catchAsync(async (req, res) 
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  if (!proposed_data || !Array.isArray(proposed_data) || proposed_data.length === 0) {
-    return res.status(400).json({ error: "proposed_data (sessions array) is required" });
-  }
+  // Prepare metadata
+  const validMethods = ['fix', 'add_session', 'reset'];
+  const method = validMethods.includes(correction_method) ? correction_method : 'fix';
 
-  // ENFORCE SINGLE REQUEST PER DAY: Delete any existing request for this date
-  await attendanceDB("attendance_correction_requests")
-    .where({ user_id, org_id, request_date })
-    .del();
+  const correctionData = {};
+
+  if (method === 'add_session' || method === 'fix') {
+    if (sessions && Array.isArray(sessions)) {
+      correctionData.sessions = sessions;
+    }
+  } else if (method === 'reset') {
+    correctionData.time_in = requested_time_in;
+    correctionData.time_out = requested_time_out;
+  }
 
   const [id] = await attendanceDB("attendance_correction_requests").insert({
     org_id,
     user_id,
     correction_type,
     request_date,
-    original_data: JSON.stringify(original_data || []),
-    proposed_data: JSON.stringify(proposed_data),
+    correction_data: JSON.stringify(correctionData),
     reason,
     status: "pending",
+    correction_method: method,
     audit_trail: JSON.stringify([
       { action: "submitted", by: user_id, at: new Date() }
     ])
@@ -414,7 +422,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
     .join("users as u", "u.user_id", "acr.user_id")
     .where("acr.org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("acr.user_id", user_id);
+      if (user_type !== "admin" && user_type !== "hr") qb.where("acr.user_id", user_id);
       if (status) qb.where("acr.status", status);
       if (date) qb.where("acr.request_date", date);
       if (month) qb.whereRaw('MONTH(acr.request_date) = ?', [month]);
@@ -424,8 +432,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
       "acr.acr_id",
       "acr.correction_type",
       "acr.request_date",
-      "acr.original_data",
-      "acr.proposed_data",
+      "acr.correction_data",
       "acr.status",
       "acr.reason",
       "acr.submitted_at",
@@ -440,7 +447,7 @@ router.get("/correction-requests", authenticateJWT, catchAsync(async (req, res) 
   const countResult = await attendanceDB("attendance_correction_requests")
     .where("org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("user_id", user_id);
+      if (user_type !== "admin" && user_type !== "hr") qb.where("user_id", user_id);
       if (status) qb.where("status", status);
       if (date) qb.where("request_date", date);
       if (month) qb.whereRaw('MONTH(request_date) = ?', [month]);
@@ -470,8 +477,7 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
       "acr.acr_id",
       "acr.correction_type",
       "acr.request_date",
-      "acr.original_data",
-      "acr.proposed_data",
+      "acr.correction_data",
       "acr.reason",
       "acr.status",
       "acr.reviewed_by",
@@ -481,13 +487,14 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
       "acr.submitted_at",
       "u.user_id",
       "u.user_name",
-      "d.desg_name as designation"
+      "d.desg_name as designation",
+      "acr.correction_method"
     )
     .where("acr.acr_id", acr_id)
     .andWhere("acr.org_id", org_id);
 
   // 🔐 Access control
-  if (role !== "admin") {
+  if (role !== "admin" && role !== "hr") {
     query.andWhere("acr.user_id", user_id);
   }
 
@@ -497,18 +504,16 @@ router.get("/correction-request/:acr_id", authenticateJWT, catchAsync(async (req
     return res.status(404).json({ error: "Request not found" });
   }
 
-  // Parse JSON columns
-  const jsonCols = ['audit_trail', 'original_data', 'proposed_data'];
-  for (const col of jsonCols) {
-    if (correction[col] && typeof correction[col] === 'string') {
+  if (correction.audit_trail) {
+    if (typeof correction.audit_trail === "string") {
       try {
-        correction[col] = JSON.parse(correction[col]);
+        correction.audit_trail = JSON.parse(correction.audit_trail);
       } catch {
-        correction[col] = col === 'audit_trail' ? [] : null;
+        correction.audit_trail = [];
       }
-    } else if (!correction[col]) {
-      correction[col] = col === 'audit_trail' ? [] : null;
     }
+  } else {
+    correction.audit_trail = [];
   }
 
   res.json(correction);
@@ -525,7 +530,7 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
   const reviewer_id = req.user.user_id;
   const role = req.user.user_type;
 
-  if (role !== "admin") {
+  if (role !== "admin" && role !== "hr") {
     return res.status(403).json({ error: "Access denied" });
   }
 
@@ -541,14 +546,18 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
     return res.status(404).json({ error: "Request not found" });
   }
 
-  // Parse audit_trail
   let auditTrail = [];
+
   if (correction.audit_trail) {
-    try {
-      auditTrail = typeof correction.audit_trail === 'string'
-        ? JSON.parse(correction.audit_trail)
-        : correction.audit_trail;
-    } catch { auditTrail = []; }
+    if (typeof correction.audit_trail === "string") {
+      try {
+        auditTrail = JSON.parse(correction.audit_trail);
+      } catch {
+        auditTrail = [];
+      }
+    } else {
+      auditTrail = correction.audit_trail;
+    }
   }
 
   auditTrail.push({
@@ -558,96 +567,122 @@ router.patch("/correct-request/:acr_id", authenticateJWT, catchAsync(async (req,
     comments: review_comments || null
   });
 
-  // Determine the sessions to apply: admin override takes priority, else use proposed_data
-  // Admin override arrives as req.body.sessions (array of {time_in, time_out})
-  const adminOverrideSessions = req.body.sessions && Array.isArray(req.body.sessions) && req.body.sessions.length > 0
-    ? req.body.sessions
-    : null;
-
-  // Parse stored proposed_data
-  let proposedSessions = [];
-  try {
-    const raw = typeof correction.proposed_data === 'string'
-      ? JSON.parse(correction.proposed_data)
-      : correction.proposed_data;
-    proposedSessions = Array.isArray(raw) ? raw : [];
-  } catch { proposedSessions = []; }
-
-  // Use admin override if provided, otherwise fall back to the stored proposal
-  const sessionsToApply = adminOverrideSessions || proposedSessions;
-
-  // If admin provided an override, update proposed_data in DB to reflect what was ACTUALLY applied
-  // (original_data stays untouched forever)
-  let updatedProposedData = null;
-  if (adminOverrideSessions) {
-    updatedProposedData = JSON.stringify(adminOverrideSessions);
-  }
-
-  const dbUpdate = {
-    status,
-    reviewed_by: reviewer_id,
-    reviewed_at: new Date(),
-    review_comments: review_comments || null,
-    audit_trail: JSON.stringify(auditTrail)
-  };
-  if (updatedProposedData) dbUpdate.proposed_data = updatedProposedData;
-
   await attendanceDB("attendance_correction_requests")
     .where({ acr_id, org_id })
-    .update(dbUpdate);
+    .update({
+      status,
+      reviewed_by: reviewer_id,
+      reviewed_at: new Date(),
+      review_comments: review_comments || null,
+      audit_trail: JSON.stringify(auditTrail)
+    });
 
   // --- APPLY CORRECTION IF APPROVED ---
-  if (status === 'approved' && sessionsToApply.length > 0) {
-    // Resolve final date string (YYYY-MM-DD)
-    const targetDate = correction.request_date;
+  if (status === 'approved') {
+    // Allow Date Override from Body
+    // Allow Date Override from Body
+    const targetDate = req.body.request_date || correction.request_date;
+    // Fix for timezone issue: Create date from string or date object but reset to local YYYY-MM-DD
     const d = new Date(targetDate);
+    const dateStr = d.toLocaleDateString('en-CA'); // fast way to get YYYY-MM-DD in local time if system locale is standard, or just build it manually to be safe
+    // Actually, to be safer and avoid server locale dependency:
+    // We can use the offset method.
     const offset = d.getTimezoneOffset();
     const localDate = new Date(d.getTime() - (offset * 60 * 1000));
     const finalDateStr = localDate.toISOString().split('T')[0];
 
-    const manualBase = {
+    // Use params from Body (Admin Override) OR DB (User Request)
+    const correction_method = req.body.correction_method || correction.correction_method || 'fix';
+    console.log("DEBUG: Correction Method:", correction_method);
+
+    // Parse Correction Data
+    let correctionData = {};
+    try {
+      correctionData = typeof correction.correction_data === 'string'
+        ? JSON.parse(correction.correction_data)
+        : correction.correction_data || {};
+    } catch (e) {
+      console.error("DEBUG: JSON Parse Error for correction_data", e);
+    }
+
+    // Override logic (Frontend can send overrides in body)
+    // If overrides exist in body, use them. Else use DB data.
+    let sessions = req.body.sessions || correctionData.sessions || [];
+    const reset_time_in = req.body.reset_time_in || correctionData.time_in;
+    const reset_time_out = req.body.reset_time_out || correctionData.time_out;
+
+    const manualUpdateBase = {
       status: 'PRESENT',
       is_manual_adjustment: true,
       adjusted_by: reviewer_id,
       updated_at: attendanceDB.fn.now()
     };
 
-    // Delete all existing records for the day, then insert the approved sessions
-    await attendanceDB("attendance_records")
-      .where({ user_id: correction.user_id })
-      .whereRaw("DATE(time_in) = ?", [finalDateStr])
-      .del();
+    // 1. ADD REQUESTED SESSIONS (Replaces 'Fix' and 'Add Session')
+    if (correction_method === 'fix' || correction_method === 'add_session') {
+      if (sessions && Array.isArray(sessions) && sessions.length > 0) {
+        const newRecords = sessions.map(s => ({
+          user_id: correction.user_id,
+          org_id,
+          time_in: `${finalDateStr} ${(s.time_in.length === 5 ? s.time_in + ':00' : s.time_in)}`,
+          time_out: `${finalDateStr} ${(s.time_out.length === 5 ? s.time_out + ':00' : s.time_out)}`,
+          status: 'CLOSED',
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
+          time_in_address: 'Manual Correction',
+          time_out_address: 'Manual Correction',
+          is_manual: true,
+          altered_by: reviewer_id
+        }));
 
-    const newRecords = sessionsToApply.map(s => {
-      const tIn = typeof s.time_in === 'string' && s.time_in.length === 5 ? s.time_in + ':00' : s.time_in;
-      const tOut = typeof s.time_out === 'string' && s.time_out.length === 5 ? s.time_out + ':00' : s.time_out;
-      return {
-        user_id: correction.user_id,
-        org_id,
-        time_in: `${finalDateStr} ${tIn}`,
-        time_out: `${finalDateStr} ${tOut}`,
-        status: 'CLOSED',
-        created_at: attendanceDB.fn.now(),
-        updated_at: attendanceDB.fn.now(),
-        time_in_address: 'Manual Correction',
-        time_out_address: 'Manual Correction',
-        is_manual: true,
-        altered_by: reviewer_id
-      };
-    });
+        await attendanceDB("attendance_records").insert(newRecords);
 
-    await attendanceDB("attendance_records").insert(newRecords);
+        // Sync Daily Attendance
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
+          ...manualUpdateBase,
+          is_altered: true,
+          adjustment_reason: `Correction Request #${acr_id} (Manual Correction)`
+        });
+      }
+    }
 
-    // Sync Daily Summary
-    await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
-      ...manualBase,
-      is_altered: true,
-      adjustment_reason: `Correction Request #${acr_id}`
-    });
+    // 3. RESET DAY (Delete + Single Session + Sync)
+    else if (correction_method === 'reset') {
+      // Delete all records for the day
+      await attendanceDB("attendance_records")
+        .where({ user_id: correction.user_id })
+        .whereRaw("DATE(time_in) = ?", [finalDateStr])
+        .del();
+
+      // Insert Single Session
+      const tIn = reset_time_in || correction.requested_time_in;
+      const tOut = reset_time_out || correction.requested_time_out;
+
+      if (tIn && tOut) {
+        await attendanceDB("attendance_records").insert({
+          user_id: correction.user_id,
+          org_id,
+          time_in: `${finalDateStr}T${tIn}`,
+          time_out: `${finalDateStr}T${tOut}`,
+          status: 'CLOSED',
+          created_at: attendanceDB.fn.now(),
+          updated_at: attendanceDB.fn.now(),
+          time_in_address: 'Manual Reset',
+          time_out_address: 'Manual Reset'
+        });
+
+        await AttendanceService.syncDailyAttendance(correction.user_id, finalDateStr, {
+          ...manualUpdateBase,
+          adjustment_reason: `Correction Request #${acr_id} (Day Reset)`
+        });
+      }
+    }
   }
-  // -----------------------------------------------
+  // --------------------------------------
 
-  res.json({ message: `Request ${status} successfully` });
+  res.json({
+    message: `Request ${status} successfully`
+  });
 
 })
 );

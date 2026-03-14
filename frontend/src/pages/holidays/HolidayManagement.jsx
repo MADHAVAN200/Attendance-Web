@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -17,6 +18,14 @@ import LeaveApplication from './LeaveApplication';
 import HolidayCalendarView from '../../components/HolidayCalendarView';
 
 const HolidayManagement = () => {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            navigate('/mobile-view/holidays'); // Or default to /mobile-view if no specific holiday route
+        }
+    }, [navigate]);
+
     const { user } = useAuth();
     const [holidays, setHolidays] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -248,7 +257,9 @@ const HolidayManagement = () => {
                                         <div className="flex gap-3 w-full sm:w-auto">
                                             {user?.user_type === 'admin' && (
                                                 <>
-                                                    <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                                    <button 
+                                                        onClick={() => navigate('/holidays/bulk')}
+                                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                                                         <Upload size={16} />
                                                         <span className="hidden sm:inline">Import</span>
                                                     </button>

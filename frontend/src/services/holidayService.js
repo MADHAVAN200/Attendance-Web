@@ -41,5 +41,41 @@ export const holidayService = {
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete holiday(s)");
         }
+    },
+
+    // Bulk validate holidays from parsed data
+    async bulkValidateHolidays(holidaysData) {
+        try {
+            const res = await api.post(`${API_BASE_URL}/bulk-validate`, { holidays: holidaysData });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to validate holidays");
+        }
+    },
+
+    // Bulk create holidays from JSON (after preview)
+    async bulkCreateHolidaysJson(holidaysData) {
+        try {
+            const res = await api.post(`${API_BASE_URL}/bulk-json`, { holidays: holidaysData });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to create holidays");
+        }
+    },
+
+    // Upload holidays from CSV/Excel file
+    async bulkUploadHolidaysFile(file) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.post(`${API_BASE_URL}/bulk`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to upload holidays file");
+        }
     }
 };

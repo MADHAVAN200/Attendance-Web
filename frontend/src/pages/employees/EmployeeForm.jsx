@@ -186,7 +186,8 @@ const EmployeeForm = () => {
             reader.onloadend = () => {
                 setFormData(prev => ({
                     ...prev,
-                    profile_image: reader.result
+                    profile_image: reader.result,
+                    profile_image_file: file
                 }));
             };
             reader.readAsDataURL(file);
@@ -236,10 +237,10 @@ const EmployeeForm = () => {
 
 
             if (isEditMode) {
-                await adminService.updateUser(id, payload);
+                await adminService.updateUser(id, payload, formData.profile_image_file || null);
                 toast.success("User updated successfully");
             } else {
-                await adminService.createUser(payload);
+                await adminService.createUser(payload, formData.profile_image_file || null);
                 toast.success("User created successfully");
             }
             navigate('/employees');

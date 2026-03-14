@@ -1,9 +1,10 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
+
 
 const Login = () => {
   const { login } = useAuth();
@@ -37,7 +38,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const response = await login(formData.identifier, formData.password, captchaToken);
+      const response = await login(formData.identifier, formData.password);
       toast.success("Logged in successfully!");
 
       // Redirect to dashboard (DashboardHandler in App.jsx will decide which view to show)
@@ -45,8 +46,6 @@ const Login = () => {
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Invalid credentials";
       toast.error(errorMessage);
-      window.grecaptcha?.reset();
-      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
