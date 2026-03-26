@@ -1,7 +1,7 @@
 import cron from 'node-cron';
-import { attendanceDB } from '../database.js';
-import { buildReport } from '../DAR/DARReportAPI.js';
-import { sendEmail } from '../utils/emailService.js';
+import { attendanceDB } from '../config/database.js';
+import { buildReport } from '../services/darServices/DARReportAPI.js';
+import { sendEmail } from '../services/auth/emailService.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATE RANGE HELPERS

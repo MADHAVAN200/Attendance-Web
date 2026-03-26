@@ -1023,47 +1023,7 @@ export async function createActivity({ org_id, user_id, activity_date, start_tim
     return activity_id;
 }
 
-<<<<<<< HEAD:backend/DAR/ActivitiesAPI.js
-    res.json({ ok: true, message: "Activity logged successfully", activity_id, status });
-}));
-
-// POST /dar/activities/admin/simulate
-// Admin/HR bulk-generate or import DAR data from frontend JSON
-router.post('/admin/simulate', authenticateJWT, catchAsync(async (req, res) => {
-    if (!ensureDarAdminAccess(req, res)) {
-        return;
-    }
-
-    const mode = String(req.body.mode || 'generate').trim().toLowerCase();
-    let result;
-
-    if (mode === 'generate') {
-        result = await runGenerateSimulation(req.user.org_id, req.body);
-    } else if (mode === 'import') {
-        result = await runImportSimulation(req.user.org_id, req.body);
-    } else {
-        return res.status(400).json({ ok: false, message: 'mode must be either generate or import.' });
-    }
-
-    res.json({ ok: true, ...result });
-}));
-
-// PUT /dar/activities/update/:id
-router.put('/update/:activity_id', authenticateJWT, catchAsync(async (req, res) => {
-    const { activity_id } = req.params;
-    const { activity_date, start_time, end_time, title, description, activity_type } = req.body;
-    const { user_id, org_id } = req.user;
-
-    let status;
-    try {
-        status = await processActivityValidation(org_id, user_id, req.body);
-    } catch (err) {
-        return res.status(400).json({ ok: false, message: err.message });
-    }
-
-=======
 export async function updateActivity({ activity_id, org_id, user_id, activity_date, start_time, end_time, title, description, activity_type, status }) {
->>>>>>> cc5aca9ff00b7d89541850a9945f130e914b476b:backend/src/services/darServices/activitiesServices.js
     await attendanceDB("daily_activities")
         .where({ activity_id, org_id, user_id })
         .update({
@@ -1129,10 +1089,7 @@ export async function getAllActivitiesAdmin({ org_id, date, startDate, endDate }
         .where('da.org_id', org_id)
         .where('da.status', 'COMPLETED');
 
-<<<<<<< HEAD:backend/DAR/ActivitiesAPI.js
     // Filter by date or range — use DATE() to avoid timezone-offset issues with DATE columns
-=======
->>>>>>> cc5aca9ff00b7d89541850a9945f130e914b476b:backend/src/services/darServices/activitiesServices.js
     if (date) {
         query = query.whereRaw('DATE(da.activity_date) = ?', [date]);
     } else if (startDate && endDate) {

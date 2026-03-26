@@ -444,14 +444,59 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
         }));
 
         try {
-            const res = await api.get('/dar/reports/preview', {
-                params: {
-                    type: reportType,
-                    start: dateRange.start,
-                    end: dateRange.end,
-                    employeeIds: String(user.userId),
-                    generation: 'llm',
+            const toTimeString = (decimalHour) => {
+                const safe = Number.isFinite(decimalHour) ? decimalHour : 0;
+                const totalMinutes = Math.max(0, Math.round(safe * 60));
+                const hh = Math.floor(totalMinutes / 60) % 24;
+                const mm = totalMinutes % 60;
+                return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+            };
+
+            const userRows = timelineData.filter((row) => row.userId === user.userId);
+            const allRowActivities = userRows.flatMap((row) => (row.activities || []).map((act) => ({
+                ...act,
+                activityDate: act.activityDate || row.date,
+            })));
+
+            const activitiesPayload = allRowActivities
+                .filter((act) => {
+                    const cat = String(act.category || '').toUpperCase();
+                    return !act.isEvent && cat !== 'EVENT' && cat !== 'MEETING';
+                })
+                .map((act) => ({
+                    activity_date: act.activityDate,
+                    title: act.title || 'Task',
+                    activity_type: String(act.category || 'WORK').toUpperCase(),
+                    start_time: toTimeString(act.start),
+                    end_time: toTimeString(act.end),
+                }));
+
+            const eventsPayload = allRowActivities
+                .filter((act) => {
+                    const cat = String(act.category || '').toUpperCase();
+                    return act.isEvent || cat === 'EVENT' || cat === 'MEETING';
+                })
+                .map((act) => ({
+                    event_date: act.activityDate,
+                    title: act.title || 'Event',
+                    type: String(act.category || 'EVENT').toUpperCase(),
+                    start_time: toTimeString(act.start),
+                    end_time: toTimeString(act.end),
+                }));
+
+            const res = await api.post('/dar/reports/preview/client', {
+                type: reportType,
+                start: dateRange.start,
+                end: dateRange.end,
+                generation: 'llm',
+                employee: {
+                    user_id: user.userId,
+                    user_name: user.name,
+                    dept_name: user.dept,
+                    shift_name: user.shift,
                 },
+                activities: activitiesPayload,
+                events: eventsPayload,
             });
 
             const employeeSummary = res?.data?.data?.[0];

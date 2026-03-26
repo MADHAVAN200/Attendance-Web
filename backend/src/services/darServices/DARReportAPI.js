@@ -1,8 +1,8 @@
 import express from 'express';
-import { attendanceDB } from '../database.js';
-import { authenticateJWT } from '../middleware/auth.js';
-import catchAsync from '../utils/catchAsync.js';
-import { generateNarrativeWithGroq } from '../services/DARLLMService.js';
+import { attendanceDB } from '../../config/database.js';
+import { authenticateJWT } from '../../middleware/auth.js';
+import catchAsync from '../../utils/catchAsync.js';
+import { generateNarrativeWithGroq } from '../auth/DARLLMService.js';
 
 const router = express.Router();
 
@@ -47,7 +47,17 @@ async function ensureReportTables() {
     }
 }
 
-ensureReportTables().catch((err) => console.error('❌ DARReportAPI table init failed:', err));
+const shouldAutoInitDarReportTables = String(process.env.DAR_REPORT_SCHEMA_AUTO_CREATE || 'false').toLowerCase() === 'true';
+
+if (shouldAutoInitDarReportTables) {
+    ensureReportTables().catch((err) => {
+        if (err?.code === 'ER_TABLEACCESS_DENIED_ERROR' || err?.code === 'ER_DBACCESS_DENIED_ERROR') {
+            console.warn('⚠ DAR report table auto-init skipped: database user lacks CREATE permission.');
+            return;
+        }
+        console.error('❌ DARReportAPI table init failed:', err);
+    });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITIES
@@ -176,6 +186,35 @@ function buildEmployeeNarrative({ employeeName, dateList, productive, events, ac
         report_summary: reportParts.join(' '),
         work_summary: workSummary,
     };
+}
+
+function normalizeClientDate(value) {
+    if (!value) return null;
+    return String(value).split('T')[0];
+}
+
+function normalizeClientActivities(activities = []) {
+    return (activities || [])
+        .map((item) => ({
+            activity_date: normalizeClientDate(item.activity_date || item.date),
+            title: item.title || 'Task',
+            activity_type: item.activity_type || item.category || 'WORK',
+            start_time: item.start_time || null,
+            end_time: item.end_time || null,
+        }))
+        .filter((item) => Boolean(item.activity_date));
+}
+
+function normalizeClientEvents(events = []) {
+    return (events || [])
+        .map((item) => ({
+            event_date: normalizeClientDate(item.event_date || item.date),
+            title: item.title || 'Event',
+            type: item.type || item.category || 'EVENT',
+            start_time: item.start_time || null,
+            end_time: item.end_time || null,
+        }))
+        .filter((item) => Boolean(item.event_date));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -394,6 +433,89 @@ router.get('/preview', authenticateJWT, catchAsync(async (req, res) => {
         total_employees: data.length,
         generated_at: new Date().toISOString(),
         data,
+    });
+}));
+
+// POST /dar/reports/preview/client
+// Frontend sends already-fetched DAR data; backend does LLM summarization without DB reads.
+router.post('/preview/client', authenticateJWT, catchAsync(async (req, res) => {
+    const { user_type } = req.user;
+    if (user_type !== 'admin' && user_type !== 'HR') {
+        return res.status(403).json({ ok: false, message: 'Access denied.' });
+    }
+
+    const {
+        type = 'weekly',
+        start,
+        end,
+        generation = 'llm',
+        employee,
+        activities = [],
+        events = [],
+    } = req.body || {};
+
+    if (!start || !end) {
+        return res.status(400).json({ ok: false, message: '`start` and `end` are required.' });
+    }
+    if (!employee?.user_id || !employee?.user_name) {
+        return res.status(400).json({ ok: false, message: '`employee.user_id` and `employee.user_name` are required.' });
+    }
+    if (generation === 'llm' && !process.env.GROQ_API_KEY) {
+        return res.status(400).json({ ok: false, message: 'GROQ_API_KEY is missing. Configure Groq before generating AI reports.' });
+    }
+
+    const dateList = buildDateRange(start, end);
+    const normalizedActivities = normalizeClientActivities(activities);
+    const normalizedEvents = normalizeClientEvents(events);
+
+    const employeeRow = {
+        user_id: employee.user_id,
+        user_name: employee.user_name,
+        dept_name: employee.dept_name || '—',
+        shift_name: employee.shift_name || '—',
+    };
+
+    const base = analyzeEmployee(employeeRow, normalizedActivities, normalizedEvents, dateList, type);
+    let result = base;
+
+    if (generation === 'llm') {
+        const productive = normalizedActivities.filter((item) => item.activity_type !== 'BREAK');
+        const activitiesByDate = {};
+        for (const item of productive) {
+            if (!activitiesByDate[item.activity_date]) activitiesByDate[item.activity_date] = [];
+            activitiesByDate[item.activity_date].push(item);
+        }
+
+        const eventsByDate = {};
+        for (const event of normalizedEvents) {
+            if (!eventsByDate[event.event_date]) eventsByDate[event.event_date] = [];
+            eventsByDate[event.event_date].push(event);
+        }
+
+        const llmNarrative = await generateNarrativeWithGroq({
+            employeeName: employee.user_name,
+            reportType: type,
+            dateList,
+            activitiesByDate,
+            eventsByDate,
+        });
+
+        result = {
+            ...base,
+            report_summary: llmNarrative.report_summary,
+            work_summary: llmNarrative.work_summary,
+            generation_mode: llmNarrative.generation_mode,
+        };
+    }
+
+    return res.json({
+        ok: true,
+        type,
+        generation,
+        date_range: { start, end },
+        total_employees: 1,
+        generated_at: new Date().toISOString(),
+        data: [result],
     });
 }));
 

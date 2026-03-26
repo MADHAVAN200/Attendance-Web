@@ -23,12 +23,17 @@ const allowedOrigins = [
     process.env.FRONTEND_URL,
 ];
 
+function isLocalDevOrigin(origin) {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|localhost\.localdomain|lvh\.me|vite\.lvh\.me)(:\d+)?$/i.test(origin);
+}
+
 app.use(cookieParser());
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
 
         const isAllowed = allowedOrigins.includes(origin) ||
+            isLocalDevOrigin(origin) ||
             origin.startsWith('http://192.') || origin.startsWith('https://192.') ||
             origin.startsWith('http://10.') || origin.startsWith('https://10.') ||
             origin.startsWith('http://172.') || origin.startsWith('https://172.');
