@@ -131,8 +131,11 @@ const EmployeeList = () => {
 
     // Filter Logic
     const filteredEmployees = employees.filter(employee => {
-        const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            employee.email.toLowerCase().includes(searchTerm.toLowerCase());
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = 
+            (employee.name?.toLowerCase().includes(term)) ||
+            (employee.email?.toLowerCase().includes(term)) ||
+            (employee.phone?.toLowerCase().includes(term));
         const matchesStatus = statusFilter === 'All' || employee.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
