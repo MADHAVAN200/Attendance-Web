@@ -126,6 +126,9 @@ const AttendanceMonitoring = () => {
                             const outTime = new Date(r.time_out);
                             outStr = formatTime(outTime);
                             isActive = false;
+                            totalMin += Math.max(0, (outTime - inTime) / 60000);
+                        } else {
+                            totalMin += Math.max(0, (new Date() - inTime) / 60000);
                         }
 
                         // Locations
@@ -803,9 +806,13 @@ const AttendanceMonitoring = () => {
                                                                                         <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
                                                                                         <span className="line-clamp-2" title={item.sessions[0].outLocation}>{item.sessions[0].outLocation}</span>
                                                                                     </div>
-                                                                                ) : (
+                                                                                ) : item.sessions[0].isActive ? (
                                                                                     <div className="h-full flex items-center p-1.5">
                                                                                         <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Ongoing...</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="h-full flex items-center p-1.5">
+                                                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">System Checkout</span>
                                                                                     </div>
                                                                                 )}
                                                                             </div>

@@ -71,7 +71,10 @@ export async function processHourlyAttendance() {
             if (currentHour === targetHour) {
                 const yesterday = new Date(nowInUserTZ);
                 yesterday.setDate(yesterday.getDate() - 1);
-                const targetDate = yesterday.toISOString().split('T')[0];
+                const yyyy = yesterday.getFullYear();
+                const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+                const dd = String(yesterday.getDate()).padStart(2, '0');
+                const targetDate = `${yyyy}-${mm}-${dd}`;
 
                 await processUserAttendanceForDate(user, targetDate);
             }
