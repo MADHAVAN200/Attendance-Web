@@ -46,14 +46,14 @@ const MobileSidebar = ({ isOpen, onClose }) => {
 
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 bottom-0 w-72 bg-white dark:bg-[#111827] z-50 transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-slate-100 dark:border-slate-800/50 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed top-0 left-0 bottom-0 w-72 bg-white dark:bg-[#111827] z-50 transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-slate-100 dark:border-github-dark-border/50 ${isOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
                 {/* Header */}
                 <div className="h-20 flex items-center justify-between px-6 shrink-0">
                     <div className="flex items-center gap-3">
                         <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8" />
-                        <span className="text-xl font-bold text-indigo-600 dark:text-white tracking-tight">MANO</span>
+                        <span className="text-xl font-bold text-indigo-600 dark:text-github-dark-text tracking-tight">MANO</span>
                     </div>
                 </div>
 
@@ -68,10 +68,10 @@ const MobileSidebar = ({ isOpen, onClose }) => {
                                 onClick={onClose}
                                 className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-[15px] font-medium transition-all ${isActive
                                     ? 'text-indigo-400 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-900/20'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
+                                    : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
                                     }`}
                             >
-                                <div className={`${isActive ? 'text-indigo-500' : 'text-slate-500 dark:text-slate-500'}`}>
+                                <div className={`${isActive ? 'text-indigo-500' : 'text-slate-500 dark:text-github-dark-muted'}`}>
                                     {item.icon}
                                 </div>
                                 <span>{item.text}</span>
@@ -84,10 +84,10 @@ const MobileSidebar = ({ isOpen, onClose }) => {
                         onClick={onClose}
                         className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-[15px] font-medium transition-all mt-4 ${location.pathname === '/mobile-view/profile'
                             ? 'text-indigo-400 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-900/20'
-                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
+                            : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
                             }`}
                     >
-                        <div className={`${location.pathname === '/mobile-view/profile' ? 'text-indigo-500' : 'text-slate-500 dark:text-slate-500'}`}>
+                        <div className={`${location.pathname === '/mobile-view/profile' ? 'text-indigo-500' : 'text-slate-500 dark:text-github-dark-muted'}`}>
                             <User size={20} />
                         </div>
                         <span>My Profile</span>
@@ -101,7 +101,7 @@ const MobileSidebar = ({ isOpen, onClose }) => {
                         onClick={onClose}
                         className={`flex items-center gap-3 px-4 py-3 w-full rounded-xl text-[15px] font-medium transition-colors ${location.pathname === '/mobile-view/feedback'
                             ? 'bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-400 dark:text-indigo-300'
-                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-200'
+                            : 'text-slate-600 dark:text-github-dark-muted hover:text-slate-200'
                             }`}
                     >
                         <Bug size={20} className={location.pathname === '/mobile-view/feedback' ? "text-indigo-500" : "text-slate-500"} />

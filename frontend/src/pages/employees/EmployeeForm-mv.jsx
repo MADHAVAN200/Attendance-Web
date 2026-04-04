@@ -190,14 +190,14 @@ const EmployeeForm = () => {
 
     return (
         <MobileDashboardLayout title={isEditMode ? "Edit Employee" : "Add Employee"} hideSidebar={true}>
-            <form onSubmit={handleSubmit} className="space-y-6 pb-20 relative min-h-screen bg-slate-50 dark:bg-slate-900 p-4">
+            <form onSubmit={handleSubmit} className="space-y-6 pb-20 relative min-h-screen bg-slate-50 dark:bg-github-dark-subtle p-4">
 
                 {/* Header Actions */}
                 <div className="flex items-center justify-between mb-2">
                     <button
                         type="button"
                         onClick={() => navigate('/mobile-view/employees')}
-                        className="flex items-center gap-2 text-slate-800 dark:text-white transition-colors"
+                        className="flex items-center gap-2 text-slate-800 dark:text-github-dark-text transition-colors"
                     >
                         <X size={24} />
                         <span className="font-medium">Cancel</span>
@@ -219,7 +219,7 @@ const EmployeeForm = () => {
                 </div>
 
                 {/* Form Card */}
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+                <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border">
 
                     {/* PROFILE IMAGE (ONLY VISIBLE IN EDIT MODE) */}
                     {isEditMode && (
@@ -227,7 +227,7 @@ const EmployeeForm = () => {
                             <div className="relative group">
                                 <div
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-3xl font-bold border-4 border-white dark:border-slate-800 shadow-lg overflow-hidden cursor-pointer shrink-0"
+                                    className="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-3xl font-bold border-4 border-white dark:border-github-dark-border shadow-lg overflow-hidden cursor-pointer shrink-0"
                                 >
                                     {formData.profile_image_url ? (
                                         <img src={`${formData.profile_image_url}?t=${imageTimestamp}`} alt={formData.user_name} className="w-full h-full object-cover" />
@@ -238,7 +238,7 @@ const EmployeeForm = () => {
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center border-[3px] border-white dark:border-slate-800 shadow-md transition-transform active:scale-95"
+                                    className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center border-[3px] border-white dark:border-github-dark-border shadow-md transition-transform active:scale-95"
                                 >
                                     {uploading ? (
                                         <Loader2 className="animate-spin" size={14} />
@@ -274,7 +274,7 @@ const EmployeeForm = () => {
                                     placeholder="Enter full name"
                                     value={formData.user_name}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
                                     required
                                 />
                             </div>
@@ -288,7 +288,7 @@ const EmployeeForm = () => {
                                     placeholder="Enter password"
                                     value={formData.user_password}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
                                 />
                             </div>
 
@@ -301,7 +301,7 @@ const EmployeeForm = () => {
                                     placeholder="Enter email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
                                     required
                                 />
                             </div>
@@ -315,7 +315,7 @@ const EmployeeForm = () => {
                                     placeholder="Enter phone number"
                                     value={formData.phone_no}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
                                 />
                             </div>
                         </div>
@@ -336,7 +336,7 @@ const EmployeeForm = () => {
                                         name="dept_id"
                                         value={formData.dept_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
                                     >
                                         <option value="">Select</option>
                                         {departments.map(d => (
@@ -355,7 +355,7 @@ const EmployeeForm = () => {
                                         name="desg_id"
                                         value={formData.desg_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
                                     >
                                         <option value="">Select</option>
                                         {designations.map(d => (
@@ -374,7 +374,7 @@ const EmployeeForm = () => {
                                         name="shift_id"
                                         value={formData.shift_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
                                     >
                                         <option value="">Select</option>
                                         {shifts.map(s => (
@@ -393,7 +393,7 @@ const EmployeeForm = () => {
                                         name="user_type"
                                         value={formData.user_type}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
                                     >
                                         <option value="employee">Employee</option>
                                         <option value="admin">Admin</option>

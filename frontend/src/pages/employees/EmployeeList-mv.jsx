@@ -27,7 +27,7 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
     return createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-slate-700">
+            <div className="relative bg-white dark:bg-github-dark-subtle w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-github-dark-border">
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -36,30 +36,30 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
                 </button>
 
                 <div className="flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl font-bold mb-4 overflow-hidden border-4 border-white dark:border-slate-700 shadow-sm">
+                    <div className="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl font-bold mb-4 overflow-hidden border-4 border-white dark:border-github-dark-border shadow-sm">
                         {user.profile_image_url ? (
                             <img src={`${user.profile_image_url}?t=${avatarTimestamp}`} alt={user.name} className="w-full h-full object-cover" />
                         ) : (
                             user.name.charAt(0)
                         )}
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-white text-center">{user.name}</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6">{user.role}</p>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text text-center">{user.name}</h3>
+                    <p className="text-sm text-slate-500 dark:text-github-dark-muted font-medium mb-6">{user.role}</p>
 
                     <div className="w-full space-y-4">
-                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-github-dark-border">
                             <span className="text-sm text-slate-400 font-medium">Email</span>
                             <span className="text-sm text-slate-700 dark:text-slate-300 font-medium text-right max-w-[200px] truncate">{user.email}</span>
                         </div>
-                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-github-dark-border">
                             <span className="text-sm text-slate-400 font-medium">Phone</span>
                             <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{user.phone}</span>
                         </div>
-                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-github-dark-border">
                             <span className="text-sm text-slate-400 font-medium">Dept</span>
                             <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{user.department}</span>
                         </div>
-                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-github-dark-border">
                             <span className="text-sm text-slate-400 font-medium">Shift</span>
                             {/* Assuming shift is available in user object or defaulted */}
                             <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">General Shift</span>
@@ -122,14 +122,17 @@ const EmployeeList = () => {
         navigate(`/mobile-view/employees/edit/${id}`);
     };
 
-    const filteredEmployees = employees.filter(employee =>
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredEmployees = employees
+        .filter(employee => {
+            const searchLower = searchTerm.toLowerCase();
+            return (employee.name || "").toLowerCase().includes(searchLower) ||
+                (employee.email || "").toLowerCase().includes(searchLower);
+        })
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: 'base' }));
 
     return (
         <MobileDashboardLayout title="Employees">
-            <div className="space-y-4 pb-24 bg-slate-50 dark:bg-slate-900 min-h-screen transition-colors duration-300">
+            <div className="space-y-4 pb-24 bg-slate-50 dark:bg-github-dark-subtle min-h-screen transition-colors duration-300">
                 {/* Search & Actions */}
                 <div className="sticky top-[72px] z-10 px-4 pt-2 pb-2">
                     <div className="flex items-center gap-3">
@@ -140,14 +143,14 @@ const EmployeeList = () => {
                                 placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm text-sm text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                             />
                         </div>
                         <div className="flex gap-2">
-                            <button className="w-11 h-11 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
+                            <button className="w-11 h-11 flex items-center justify-center bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
                                 <Download size={20} />
                             </button>
-                            <button className="w-11 h-11 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
+                            <button className="w-11 h-11 flex items-center justify-center bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-transform">
                                 <Upload size={20} />
                             </button>
                         </div>
@@ -157,15 +160,15 @@ const EmployeeList = () => {
                 {/* List */}
                 <div className="space-y-3 px-4">
                     {loading ? (
-                        <div className="text-center py-10 text-slate-500 dark:text-slate-400 text-sm">Loading employees...</div>
+                        <div className="text-center py-10 text-slate-500 dark:text-github-dark-muted text-sm">Loading employees...</div>
                     ) : filteredEmployees.length === 0 ? (
-                        <div className="text-center py-10 text-slate-500 dark:text-slate-400 text-sm">No employees found.</div>
+                        <div className="text-center py-10 text-slate-500 dark:text-github-dark-muted text-sm">No employees found.</div>
                     ) : (
                         filteredEmployees.map(employee => (
                             <div
                                 key={employee.id}
                                 onClick={() => setSelectedUser(employee)}
-                                className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-all flex items-center justify-between"
+                                className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm active:scale-[0.98] transition-all flex items-center justify-between"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 border border-indigo-100 dark:border-indigo-500/10">
@@ -176,9 +179,9 @@ const EmployeeList = () => {
                                         )}
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-800 dark:text-white text-sm">{employee.name}</h4>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{employee.role}</p>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wide">ID: {employee.count}</p>
+                                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-sm">{employee.name}</h4>
+                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">{employee.role}</p>
+                                        <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mt-1 uppercase tracking-wide">ID: {employee.count}</p>
                                     </div>
                                 </div>
 

@@ -48,10 +48,10 @@ const NotificationDropdown = ({ isOpen, onClose }) => {
     return (
         <div 
             ref={dropdownRef}
-            className="absolute right-0 mt-2 w-80 md:w-96 bg-white dark:bg-dark-card rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden z-50 transform origin-top-right transition-all animate-in fade-in slide-in-from-top-2"
+            className="absolute right-0 mt-2 w-80 md:w-96 bg-white dark:bg-dark-card rounded-xl shadow-lg border border-slate-100 dark:border-github-dark-border overflow-hidden z-50 transform origin-top-right transition-all animate-in fade-in slide-in-from-top-2"
         >
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                <h3 className="font-semibold text-slate-800 dark:text-white">Notifications</h3>
+            <div className="p-4 border-b border-slate-100 dark:border-github-dark-border flex justify-between items-center">
+                <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Notifications</h3>
                 {unreadCount > 0 && (
                     <button 
                         onClick={markAllAsRead}
@@ -65,7 +65,7 @@ const NotificationDropdown = ({ isOpen, onClose }) => {
 
             <div className="max-h-[400px] overflow-y-auto">
                 {notifications.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                    <div className="p-8 text-center text-slate-500 dark:text-github-dark-muted">
                         <Bell className="mx-auto h-8 w-8 mb-2 opacity-50" />
                         <p className="text-sm">No notifications yet</p>
                     </div>
@@ -73,7 +73,7 @@ const NotificationDropdown = ({ isOpen, onClose }) => {
                     notifications.map((notification) => (
                         <div 
                             key={notification.notification_id}
-                            className={`p-4 border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer relative group ${notification.is_read ? 'opacity-70' : 'bg-indigo-50/10'}`}
+                            className={`p-4 border-b border-slate-50 dark:border-github-dark-border hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer relative group ${notification.is_read ? 'opacity-70' : 'bg-indigo-50/10'}`}
                             onClick={() => !notification.is_read && markAsRead(notification.notification_id)}
                         >
                             <div className="flex gap-3">
@@ -89,10 +89,10 @@ const NotificationDropdown = ({ isOpen, onClose }) => {
                                 )}
                                 </div>
                                 <div className="flex-1">
-                                    <p className={`text-sm ${notification.is_read ? 'font-medium text-slate-700 dark:text-slate-300' : 'font-semibold text-slate-900 dark:text-white'}`}>
+                                    <p className={`text-sm ${notification.is_read ? 'font-medium text-slate-700 dark:text-slate-300' : 'font-semibold text-slate-900 dark:text-github-dark-text'}`}>
                                         {notification.title}
                                     </p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-1 line-clamp-2">
                                         {notification.message}
                                     </p>
                                     <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-400">
@@ -107,7 +107,7 @@ const NotificationDropdown = ({ isOpen, onClose }) => {
             </div>
             
             {notifications.length > 0 && (
-                 <div className="p-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 text-center">
+                 <div className="p-2 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/30 text-center">
                     <button className="text-xs text-slate-500 hover:text-indigo-600 font-medium">
                         View earlier notifications
                     </button>

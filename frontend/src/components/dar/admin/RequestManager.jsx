@@ -77,10 +77,10 @@ const RequestManager = () => {
     return (
         <div className="flex h-full gap-6 pb-6">
             {/* Left: List */}
-            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-700 space-y-3 bg-white dark:bg-dark-card z-10">
+            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-github-dark-border space-y-3 bg-white dark:bg-dark-card z-10">
                     <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-slate-800 dark:text-white">Requests</h3>
+                        <h3 className="font-bold text-slate-800 dark:text-github-dark-text">Requests</h3>
                         <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-bold">{requests.length} Total</span>
                     </div>
                     <div className="relative">
@@ -90,7 +90,7 @@ const RequestManager = () => {
                             value={requestSearch}
                             onChange={(e) => setRequestSearch(e.target.value)}
                             placeholder="Search by employee name..."
-                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                         />
                     </div>
                 </div>
@@ -104,15 +104,15 @@ const RequestManager = () => {
                             <div
                                 key={req.id}
                                 onClick={() => setSelectedRequest(req)}
-                                className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${selectedRequest?.id === req.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200'}`}
+                                className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${selectedRequest?.id === req.id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500' : 'bg-slate-50 dark:bg-github-dark-subtle border-slate-100 dark:border-github-dark-border hover:border-indigo-200'}`}
                             >
                                 <div className="flex justify-between items-start mb-1">
-                                    <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>{req.user}</span>
+                                    <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{req.user}</span>
                                     <span className="text-[10px] text-slate-400 font-mono">{req.date}</span>
                                 </div>
                                 <div className="text-xs text-slate-500 mb-2">{req.changes} changes proposed</div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>{req.status}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${req.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-slate-100 dark:bg-github-dark-subtle text-slate-500'}`}>{req.status}</span>
                                 </div>
                             </div>
                         ))
@@ -121,7 +121,7 @@ const RequestManager = () => {
             </div>
 
             {/* Right: Details */}
-            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col relative">
+            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative">
                 {selectedRequest ? (
                     <RequestReviewModal
                         isOpen={true}
