@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { attendanceDB } from '../config/database.js';
+import { syncDailyAttendance } from '../services/attendance/attendanceService.js';
 
 /**
  * Hourly Attendance Processor
@@ -70,7 +71,10 @@ export async function processHourlyAttendance() {
             if (currentHour === targetHour) {
                 const yesterday = new Date(nowInUserTZ);
                 yesterday.setDate(yesterday.getDate() - 1);
-                const targetDate = yesterday.toISOString().split('T')[0];
+                const yyyy = yesterday.getFullYear();
+                const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+                const dd = String(yesterday.getDate()).padStart(2, '0');
+                const targetDate = `${yyyy}-${mm}-${dd}`;
 
                 await processUserAttendanceForDate(user, targetDate);
             }
@@ -104,18 +108,29 @@ async function processUserAttendanceForDate(user, dateStr) {
     }
 
     if (record) {
-        // Existing record: auto-close if missing time_out
-        if (record.time_in && !record.time_out) {
+        // Existing record: auto-close if missing last_out
+        if (record.first_in && !record.last_out) {
             console.log(`⚠️ User ${user.user_id} forgot to check out on ${dateStr}. Auto-closing.`);
 
             const autoOutTime = `${dateStr} ${shiftEndTime}`;
-            await attendanceDB('daily_attendance')
-                .where({ attendance_id: record.attendance_id })
+            
+            // Close the raw attendance record's open session
+            await attendanceDB('attendance_records')
+                .where({ user_id: user.user_id })
+                .whereNull('time_out')
+                .whereRaw('DATE(time_in) = ?', [dateStr])
                 .update({
                     time_out: autoOutTime,
-                    status: 'Present',
+                    status: 'PRESENT',
                     updated_at: attendanceDB.fn.now()
                 });
+
+            // Re-sync daily attendance which will compute total_hours and proper last_out
+            try {
+                await syncDailyAttendance(user.user_id, dateStr, { status: 'Present' });
+            } catch (err) {
+                console.error(`Failed to sync daily attendance for user ${user.user_id}:`, err);
+            }
         }
     } else {
         // Missing record: determine status
