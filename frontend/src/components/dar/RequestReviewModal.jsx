@@ -117,17 +117,17 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
     if (!isOpen && !inline) return null;
 
     const Content = (
-        <div className={`w-full bg-white dark:bg-[#0f111a] flex flex-col ${inline ? 'h-full rounded-2xl border border-slate-200 dark:border-slate-800' : 'max-w-5xl rounded-2xl shadow-2xl max-h-[90vh]'}`}>
+        <div className={`w-full bg-white dark:bg-[#0f111a] flex flex-col ${inline ? 'h-full rounded-2xl border border-slate-200 dark:border-github-dark-border' : 'max-w-5xl rounded-2xl shadow-2xl max-h-[90vh]'}`}>
             {/* Header */}
             {!inline && (
-                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="px-6 py-4 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-github-dark-subtle/50">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             <Activity className="text-violet-500" size={24} />
                             Review Schedule Changes
                         </h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
-                            Reviewing request from <span className="font-semibold text-slate-700 dark:text-slate-300">{data.employeeName}</span> for <span className="flex items-center gap-1 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded text-xs"><Calendar size={12} /> {data.date}</span>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-0.5 flex items-center gap-2">
+                            Reviewing request from <span className="font-semibold text-slate-700 dark:text-slate-300">{data.employeeName}</span> for <span className="flex items-center gap-1 bg-slate-200 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs"><Calendar size={12} /> {data.date}</span>
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -137,13 +137,13 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
             )}
 
             {inline && (
-                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-dark-card">
+                <div className="px-6 py-4 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center bg-white dark:bg-dark-card">
                     <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             Review Changes
                         </h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-                            {data.employeeName} • <span className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs font-mono"><Calendar size={12} /> {data.date}</span>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1 flex items-center gap-2">
+                            {data.employeeName} • <span className="flex items-center gap-1 bg-slate-100 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs font-mono"><Calendar size={12} /> {data.date}</span>
                         </p>
                     </div>
                 </div>
@@ -154,7 +154,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
 
                 {/* VISUAL TIMELINE SECTION */}
-                <div className="relative p-8 pt-12 pb-8 bg-slate-50 dark:bg-[#13151f] rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="relative p-8 pt-12 pb-8 bg-slate-50 dark:bg-[#13151f] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
 
                     <div className="absolute top-4 left-6 z-10">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-[#13151f] pr-4">Visual Sync Timeline</h3>
@@ -165,7 +165,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                         {/* Timeline Scale */}
                         <div className="absolute top-0 bottom-0 left-0 right-0 pointer-events-none">
                             {Array.from({ length: timeRange.span + 1 }, (_, i) => timeRange.start + i).map((h, i) => (
-                                <div key={h} className="absolute top-0 bottom-0 border-r border-slate-300 dark:border-slate-700/50 dashed" style={{ left: `${(i / timeRange.span) * 100}%` }}>
+                                <div key={h} className="absolute top-0 bottom-0 border-r border-slate-300 dark:border-github-dark-border/50 dashed" style={{ left: `${(i / timeRange.span) * 100}%` }}>
                                     <span className="absolute -top-6 -right-3 text-[10px] text-slate-400 font-mono">{h}:00</span>
                                 </div>
                             ))}
@@ -173,7 +173,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
 
                         <div className="relative space-y-12 pt-8 z-10">
                             {/* Original Timeline */}
-                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
                                 {(data.originalTasks || []).map(task => (
                                     <div
                                         key={`orig-${task.id}`}
@@ -223,7 +223,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                             </div>
 
                             {/* Proposed Timeline */}
-                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
                                 {(data.proposedTasks || []).map(task => {
                                     const isNew = !(data.originalTasks || []).find(o => o.id === task.id);
                                     const isChanged = (data.originalTasks || []).find(o => o.id === task.id && (o.startTime !== task.startTime || o.endTime !== task.endTime));
@@ -257,23 +257,23 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                 {/* CHANGES LIST SECTION */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            Diff Changelog <span className="bg-slate-200 dark:bg-slate-800 text-xs px-2 py-0.5 rounded-full">{changes.length} Changes</span>
+                        <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
+                            Diff Changelog <span className="bg-slate-200 dark:bg-github-dark-subtle text-xs px-2 py-0.5 rounded-full">{changes.length} Changes</span>
                         </h3>
                         <div className="space-y-3">
                             {changes.map((change, idx) => (
-                                <div key={idx} className="bg-white dark:bg-[#13151f] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-start gap-3">
+                                <div key={idx} className="bg-white dark:bg-[#13151f] p-4 rounded-xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-start gap-3">
                                     {change.type === 'ADD' && <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600"><Check size={16} /></div>}
                                     {change.type === 'DELETE' && <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-600"><X size={16} /></div>}
                                     {change.type === 'MODIFY' && <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600"><Clock size={16} /></div>}
 
                                     <div>
-                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{change.task.title}</h4>
+                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text">{change.task.title}</h4>
                                         <p className="text-xs text-slate-500 mt-1">{change.reason}</p>
                                         {change.type === 'MODIFY' &&
                                             (fmtTime(change.original.startTime) !== fmtTime(change.task.startTime) ||
                                                 fmtTime(change.original.endTime) !== fmtTime(change.task.endTime)) && (
-                                                <div className="flex items-center gap-2 text-xs mt-2 font-mono bg-slate-100 dark:bg-slate-900 p-1.5 rounded">
+                                                <div className="flex items-center gap-2 text-xs mt-2 font-mono bg-slate-100 dark:bg-github-dark-subtle p-1.5 rounded">
                                                     <span className="text-slate-400 line-through">{fmtTime(change.original.startTime)}-{fmtTime(change.original.endTime)}</span>
                                                     <ArrowRight size={12} className="text-slate-400" />
                                                     <span className="text-amber-500 font-bold">{fmtTime(change.task.startTime)}-{fmtTime(change.task.endTime)}</span>
@@ -289,12 +289,12 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                     </div>
 
                     {/* META/NOTES SECTION */}
-                    <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-slate-800 h-fit">
+                    <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-github-dark-border h-fit">
                         <h3 className="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-300">Request Reason</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 italic">
+                        <p className="text-sm text-slate-600 dark:text-github-dark-muted italic">
                             {data.reason || "No reason provided."}
                         </p>
-                        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-github-dark-border">
                         </div>
                     </div>
                 </div>
@@ -302,10 +302,10 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
             </div>
 
             {/* Footer Actions */}
-            <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f111a] flex justify-end gap-3">
+            <div className="p-6 border-t border-slate-200 dark:border-github-dark-border bg-white dark:bg-[#0f111a] flex justify-end gap-3">
                 <button
                     onClick={onReject}
-                    className="px-5 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="px-5 py-2.5 rounded-xl font-medium text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                     Reject Request
                 </button>

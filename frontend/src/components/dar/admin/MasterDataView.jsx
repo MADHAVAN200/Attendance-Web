@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    Calendar, Download, Users, Building, Clock, FileText
+    Calendar, Download, Users, Building, Clock, FileText, Plus
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import MinimalSelect from "../../MinimalSelect"; // Ensure path is correct relative to new location
 import MiniCalendar from '../MiniCalendar'; // Ensure path is correct relative to new location
 import api from '../../../services/api'; // Ensure path is correct relative to new location
@@ -54,7 +55,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
     const [loadingData, setLoadingData] = useState(false);
     const [timelineData, setTimelineData] = useState([]);
     const [summaryByQuery, setSummaryByQuery] = useState({});
-    const [openSummaryRows, setOpenSummaryRows] = useState({});
+    const [sidebarConfig, setSidebarConfig] = useState({ isOpen: false, user: null });
     const [selectedShift, setSelectedShift] = useState(''); // Name of shift
     const [currentShift, setCurrentShift] = useState({ start: 8, end: 18 }); // Default View Range
 
@@ -429,10 +430,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
     };
 
     const handleSummaryClick = async (user) => {
-        const rowId = user.id;
-        const nextOpen = !openSummaryRows[rowId];
-        setOpenSummaryRows((prev) => ({ ...prev, [rowId]: nextOpen }));
-        if (!nextOpen) return;
+        setSidebarConfig({ isOpen: true, user });
 
         const summaryKey = buildSummaryKey(user.userId);
         const cached = summaryByQuery[summaryKey];
@@ -526,14 +524,14 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
     };
 
     useEffect(() => {
-        setOpenSummaryRows({});
+        setSidebarConfig({ isOpen: false, user: null });
     }, [timeMode, dateRange.start, dateRange.end]);
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden relative">
 
             {/* Toolbar */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-4 items-center justify-between bg-white dark:bg-dark-card z-20">
+            <div className="p-4 border-b border-slate-100 dark:border-github-dark-border flex flex-wrap gap-4 items-center justify-between bg-white dark:bg-dark-card z-20">
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                         <MinimalSelect
@@ -553,10 +551,10 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                     <button
                         ref={buttonRef}
                         onClick={toggleCalendar}
-                        className="flex items-center gap-2 pl-3 pr-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                        className="flex items-center gap-2 pl-3 pr-4 py-2 bg-slate-50 dark:bg-github-dark-subtle rounded-lg border border-slate-200 dark:border-github-dark-border hover:bg-white dark:hover:bg-slate-700 transition-colors"
                     >
                         <Calendar size={16} className="text-indigo-500" />
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                        <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
                             {dateRange.start === dateRange.end
                                 ? new Date(dateRange.start).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
                                 : `${new Date(dateRange.start).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} - ${new Date(dateRange.end).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
@@ -595,7 +593,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                     )}
                 </div>
 
-                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-github-dark-border overflow-hidden">
                     {[
                         { key: 'day', label: 'Day' },
                         { key: 'week', label: 'Week' },
@@ -607,9 +605,9 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                 setTimeMode(option.key);
                                 setDateRange(buildRangeByMode(dateRange.end, option.key));
                             }}
-                            className={`px-3 py-2 text-xs font-bold transition-colors border-r last:border-r-0 border-slate-200 dark:border-slate-700 ${timeMode === option.key
+                            className={`px-3 py-2 text-xs font-bold transition-colors border-r last:border-r-0 border-slate-200 dark:border-github-dark-border ${timeMode === option.key
                                 ? 'bg-indigo-600 text-white'
-                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                : 'bg-white dark:bg-github-dark-subtle text-slate-600 dark:text-slate-300'
                                 }`}
                         >
                             {option.label}
@@ -645,7 +643,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                             <span className="text-xs text-slate-500">Task Logged</span>
                         </div>
                         <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-dashed"></div>
+                            <div className="w-3 h-3 rounded bg-slate-100 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border border-dashed"></div>
                             <span className="text-xs text-slate-500">Empty</span>
                         </div>
                     </div>
@@ -659,13 +657,13 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
             <div className="flex-1 overflow-auto relative custom-scrollbar">
                 <div className="min-w-[1600px]">
                     {/* Table Header (Time Slots) */}
-                    <div className="flex border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 sticky top-0 z-10 backdrop-blur-sm">
-                        <div className="w-48 p-3 text-xs font-bold text-slate-500 uppercase flex-shrink-0 sticky left-0 bg-slate-50 dark:bg-slate-800 border-r border-slate-100 dark:border-slate-700 z-20">
+                    <div className="flex border-b border-slate-100 dark:border-github-dark-border bg-slate-50/80 dark:bg-github-dark-subtle/80 sticky top-0 z-10 backdrop-blur-sm">
+                        <div className="w-48 p-3 text-xs font-bold text-slate-500 uppercase flex-shrink-0 sticky left-0 bg-slate-50 dark:bg-github-dark-subtle border-r border-slate-100 dark:border-github-dark-border z-20">
                             Employee
                         </div>
                         <div className="flex-1 flex">
                             {timeSlots.map(hour => (
-                                <div key={hour} className="flex-1 min-w-[120px] p-3 text-center border-r border-dashed border-slate-200 dark:border-slate-700/50 last:border-none">
+                                <div key={hour} className="flex-1 min-w-[120px] p-3 text-center border-r border-dashed border-slate-200 dark:border-github-dark-border/50 last:border-none">
                                     <span className="text-[10px] font-bold text-slate-500">{formatTime(hour)}</span>
                                 </div>
                             ))}
@@ -677,7 +675,6 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                         {filteredTimelineData.map(user => {
                             const summaryKey = buildSummaryKey(user.userId);
                             const summaryState = summaryByQuery[summaryKey];
-                            const isSummaryOpen = Boolean(openSummaryRows[user.id]);
                             const dayDates = timeMode === 'day'
                                 ? [user.date || dateRange.start]
                                 : enumerateDates(dateRange.start, dateRange.end);
@@ -800,10 +797,10 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                 <div key={user.id}>
                                     <div className="flex hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
                                         {/* User Info Column */}
-                                        <div className="w-48 p-4 flex flex-col justify-center border-r border-slate-100 dark:border-slate-700 flex-shrink-0 sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-30">
-                                            <span className="text-sm font-bold text-slate-800 dark:text-white truncate">{user.name}</span>
+                                        <div className="w-48 p-4 flex flex-col justify-center border-r border-slate-100 dark:border-github-dark-border flex-shrink-0 sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-slate-800 z-30">
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate">{user.name}</span>
                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400">
+                                                <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-github-dark-muted">
                                                     {formatDateDisplay(user)}
                                                 </span>
                                             </div>
@@ -823,10 +820,10 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
 
                                             <button
                                                 onClick={() => handleSummaryClick(user)}
-                                                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors w-fit"
+                                                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors w-fit border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-400"
                                             >
                                                 <FileText size={12} />
-                                                {isSummaryOpen ? 'Hide Summary' : 'Summary'}
+                                                View Summary
                                             </button>
                                         </div>
 
@@ -834,7 +831,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                         <div className="flex-1 flex relative py-2 overflow-hidden">
                                             {/* Background Grid Lines */}
                                             {timeSlots.map(hour => (
-                                                <div key={hour} className="flex-1 min-w-[120px] border-r border-dashed border-slate-100 dark:border-slate-700/30 h-full absolute" style={{
+                                                <div key={hour} className="flex-1 min-w-[120px] border-r border-dashed border-slate-100 dark:border-github-dark-border/30 h-full absolute" style={{
                                                     left: `${((hour - currentShift.start) / (currentShift.end - currentShift.start + 1)) * 100}%`,
                                                     width: `${(1 / (currentShift.end - currentShift.start + 1)) * 100}%`
                                                 }}></div>
@@ -847,12 +844,12 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                                     <React.Fragment key={day.date}>
                                                         {idx < dayLayout.days.length - 1 && (
                                                             <div
-                                                                className="absolute w-full border-b border-slate-300 dark:border-slate-600"
+                                                                className="absolute w-full border-b border-slate-300 dark:border-github-dark-border"
                                                                 style={{ top: `${day.top + day.height}px` }}
                                                             ></div>
                                                         )}
                                                         <div
-                                                            className="absolute text-[9px] font-bold text-slate-400 dark:text-slate-500 px-1"
+                                                            className="absolute text-[9px] font-bold text-slate-400 dark:text-github-dark-muted px-1"
                                                             style={{ top: `${day.top + 2}px`, left: '4px' }}
                                                         >
                                                             {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -927,27 +924,166 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                         </div>
                                     </div>
 
-                                    {isSummaryOpen && (
-                                        <div className="px-4 py-3 bg-indigo-50/60 dark:bg-indigo-900/10 border-t border-indigo-100 dark:border-indigo-900/30">
-                                            {summaryState?.loading ? (
-                                                <p className="text-xs text-slate-500 dark:text-slate-400">Generating summary...</p>
-                                            ) : summaryState?.error ? (
-                                                <p className="text-xs text-red-500">{summaryState.error}</p>
-                                            ) : summaryState?.data ? (
-                                                <div className="space-y-2">
-                                                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{summaryState.data.report_summary}</p>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line">{summaryState.data.work_summary}</p>
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })}
                     </div>
                 </div>
+
+                {createPortal(
+                    <EmployeeInsightSidebar
+                        isOpen={sidebarConfig.isOpen}
+                        onClose={() => setSidebarConfig({ ...sidebarConfig, isOpen: false })}
+                        user={sidebarConfig.user}
+                        summaryState={sidebarConfig.user ? summaryByQuery[buildSummaryKey(sidebarConfig.user.userId)] : null}
+                        formatDateDisplay={formatDateDisplay}
+                    />,
+                    document.body
+                )}
             </div>
         </div>
+    );
+};
+
+const EmployeeInsightSidebar = ({ isOpen, onClose, user, summaryState, formatDateDisplay }) => {
+    if (!user) return null;
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={onClose}
+                        className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[9998]"
+                    />
+                    {/* Sidebar */}
+                    <motion.div
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                        className="fixed right-0 top-0 bottom-0 w-[420px] bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl z-[9999] flex flex-col dar-context"
+                    >
+                        {/* Header */}
+                        <div className="p-5 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-subtle/20 sticky top-0 z-10">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">{user.name}</h3>
+                                <p className="text-[10px] text-slate-500 dark:text-github-dark-muted mt-0.5">{user.role} • {user.dept}</p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-400 dark:text-github-dark-muted"
+                            >
+                                <Plus size={18} className="rotate-45" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-6">
+                            {/* Stats/Badges */}
+                                <div className="flex flex-wrap gap-2">
+                                    <div className="px-2.5 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-md flex items-center gap-1.5 border border-slate-200 dark:border-github-dark-border">
+                                        <Calendar size={12} className="text-indigo-500" />
+                                        <span className="text-[10px] text-slate-600 dark:text-slate-300 font-medium">{formatDateDisplay(user)}</span>
+                                    </div>
+                                    <div className="px-2.5 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-md flex items-center gap-1.5 border border-slate-200 dark:border-github-dark-border">
+                                        <Clock size={12} className="text-emerald-500" />
+                                        <span className="text-[10px] text-slate-600 dark:text-slate-300 font-medium">{user.shift}</span>
+                                    </div>
+                                </div>
+
+                                {/* AI SUMMARY SECTION */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-6 w-1 bg-indigo-500 rounded-full"></div>
+                                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">AI Report Insight</h4>
+                                    </div>
+
+                                    {summaryState?.loading ? (
+                                        <div className="space-y-3 p-4 bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl animate-pulse">
+                                            <div className="h-3 bg-slate-200 dark:bg-github-dark-subtle rounded w-full"></div>
+                                            <div className="h-3 bg-slate-200 dark:bg-github-dark-subtle rounded w-[90%]"></div>
+                                            <div className="h-3 bg-slate-200 dark:bg-github-dark-subtle rounded w-[40%]"></div>
+                                        </div>
+                                    ) : summaryState?.error ? (
+                                        <div className="p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 rounded-xl">
+                                            <p className="text-[11px] text-rose-500">{summaryState.error}</p>
+                                        </div>
+                                    ) : summaryState?.data ? (
+                                        <div className="space-y-6">
+                                            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                <p className="text-xs text-slate-700 dark:text-github-dark-text leading-relaxed italic">
+                                                    "{summaryState.data.report_summary}"
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-5 w-1 bg-emerald-500 rounded-full"></div>
+                                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Work Breakdown</h4>
+                                                </div>
+                                                <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border rounded-xl">
+                                                    <div className="text-[11px] leading-relaxed text-slate-600 dark:text-github-dark-muted whitespace-pre-line">
+                                                        {summaryState.data.work_summary.split(/(\bWeek\s+\d+-\s*)/i).map((part, index) => {
+                                                            if (part.match(/Week\s+\d+-/i)) {
+                                                                return <strong key={index} className="text-indigo-600 dark:text-indigo-400 block mt-3 first:mt-0 uppercase tracking-widest text-[10px]">{part}</strong>;
+                                                            }
+                                                            return <span key={index}>{part}</span>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="p-10 flex flex-col items-center justify-center text-center opacity-50">
+                                            <FileText size={32} className="text-slate-300 dark:text-slate-700 mb-2" />
+                                            <p className="text-xs text-slate-500">Wait, checking for observations...</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ACTIVITY LIST PREVIEW (Mini) */}
+                                {user.activities?.length > 0 && (
+                                    <div className="space-y-3 mt-6">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-5 w-1 bg-amber-500 rounded-full"></div>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Logged Activities</h4>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {user.activities
+                                                .filter(act => String(act.category || '').toUpperCase() !== 'BREAK')
+                                                .map(act => (
+                                                    <div key={act.id} className="p-3 bg-white dark:bg-github-dark-subtle/40 border border-slate-100 dark:border-github-dark-border rounded-xl flex items-center gap-3">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-[11px] font-medium text-slate-700 dark:text-github-dark-text leading-tight">
+                                                                {act.title}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                            <button
+                                onClick={onClose}
+                                className="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:opacity-90 transition-all uppercase tracking-widest"
+                            >
+                                Close Insights
+                            </button>
+                        </div>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
     );
 };
 

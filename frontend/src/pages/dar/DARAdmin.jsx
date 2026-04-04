@@ -1,17 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-    Activity, Settings, Database, FileText, PlayCircle
+    Activity, Settings, Database, FileText
 } from 'lucide-react';
 import api from '../../services/api';
 import DashboardInsights from '../../components/dar/admin/DashboardInsights';
 import RequestManager from '../../components/dar/admin/RequestManager';
 import MasterDataView from '../../components/dar/admin/MasterDataView';
 import AdminConfigurations from '../../components/dar/admin/AdminConfigurations';
-import SimulationPanel from '../../components/dar/admin/SimulationPanel';
 
 const DARAdmin = ({ embedded = false }) => {
-    const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'requests' | 'data' | 'settings' | 'simulate'
+    const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'requests' | 'data'
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     // --- SHARED DATA STATE ---
     const [departments, setDepartments] = useState([]);
@@ -67,23 +69,23 @@ const DARAdmin = ({ embedded = false }) => {
     }, []);
 
     return (
-        <div className={`flex flex-col h-full bg-slate-50 dark:bg-dark-bg transition-colors ${embedded ? '' : 'p-6'}`}>
+        <div className={`dar-context flex flex-col h-full bg-slate-50 dark:bg-dark-bg transition-colors ${embedded ? '' : 'p-5'}`}>
 
             {/* Header (Only if not embedded, or simplified) */}
             {!embedded && (
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">DAR Admin</h1>
+                        <h1 className="text-2xl font-bold text-slate-800 dark:text-github-dark-text">DAR Admin</h1>
                         <p className="text-slate-500 text-sm">Monitor daily activity reports and analytics</p>
                     </div>
                 </div>
             )}
 
             {/* Navigation Tabs (Pill Style) */}
-            <div className="flex gap-2 mb-6 bg-white dark:bg-dark-card p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-fit shadow-sm">
+            <div className="flex gap-2 mb-6 bg-white dark:bg-dark-card p-1.5 rounded-xl border border-slate-200 dark:border-github-dark-border w-fit shadow-sm">
                 <button
                     onClick={() => setActiveTab('insights')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'insights'
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'insights'
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
                         : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
@@ -93,7 +95,7 @@ const DARAdmin = ({ embedded = false }) => {
                 </button>
                 <button
                     onClick={() => setActiveTab('requests')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'requests'
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'requests'
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
                         : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
@@ -103,7 +105,7 @@ const DARAdmin = ({ embedded = false }) => {
                 </button>
                 <button
                     onClick={() => setActiveTab('data')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'data'
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'data'
                         ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
                         : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
@@ -111,35 +113,11 @@ const DARAdmin = ({ embedded = false }) => {
                     <Database size={16} />
                     Master Data
                 </button>
-                <button
-                    onClick={() => setActiveTab('settings')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'settings'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                >
-                    <Settings size={16} />
-                    Configurations
-                </button>
-                <button
-                    onClick={() => setActiveTab('simulate')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'simulate'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                >
-                    <PlayCircle size={16} />
-                    Simulator
-                </button>
             </div>
 
             {/* Content Area */}
             <div className="flex-1 overflow-hidden">
 
-                {/* --- CONFIGURATIONS TAB --- */}
-                {activeTab === 'settings' && (
-                    <AdminConfigurations />
-                )}
 
                 {/* --- MASTER DATA TAB (TIMELINE VIEW) --- */}
                 {activeTab === 'data' && (
@@ -160,16 +138,47 @@ const DARAdmin = ({ embedded = false }) => {
                     <DashboardInsights
                         departments={departments}
                         allUsers={allUsers}
+                        onOpenConfig={() => setIsConfigOpen(true)}
                     />
                 )}
 
-                {activeTab === 'simulate' && (
-                    <SimulationPanel allUsers={allUsers} />
-                )}
-
             </div>
+
+            {/* --- CONFIGURATION SIDEBAR (RIGHT SLIDE) --- */}
+            <AnimatePresence>
+                {isConfigOpen && (
+                    <Portal>
+                        <div className="fixed inset-0 z-[100] flex justify-end overflow-hidden">
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsConfigOpen(false)}
+                                className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+                            />
+
+                            {/* Sidebar Container */}
+                            <motion.div
+                                initial={{ x: '100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="relative w-full max-w-[500px] h-full bg-white dark:bg-github-dark-subtle shadow-2xl flex flex-col dar-context"
+                            >
+                                <AdminConfigurations onClose={() => setIsConfigOpen(false)} />
+                            </motion.div>
+                        </div>
+                    </Portal>
+                )}
+            </AnimatePresence>
         </div>
     );
+};
+
+// --- PORTAL HELPER ---
+const Portal = ({ children }) => {
+    return ReactDOM.createPortal(children, document.body);
 };
 
 export default DARAdmin;

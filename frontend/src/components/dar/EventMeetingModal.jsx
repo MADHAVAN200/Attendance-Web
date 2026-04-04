@@ -143,10 +143,10 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="bg-white dark:bg-dark-card w-[500px] rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden pointer-events-auto cursor-default flex flex-col font-sans"
+                className="bg-white dark:bg-dark-card w-[500px] rounded-xl shadow-2xl border border-gray-200 dark:border-github-dark-border overflow-hidden pointer-events-auto cursor-default flex flex-col font-sans"
             >
                 {/* Header / Drag Handle */}
-                <div className="bg-gray-50 dark:bg-dark-card/50 p-3 px-4 flex justify-between items-center border-b border-gray-100 dark:border-slate-700 cursor-grab active:cursor-grabbing">
+                <div className="bg-gray-50 dark:bg-dark-card/50 p-3 px-4 flex justify-between items-center border-b border-gray-100 dark:border-github-dark-border cursor-grab active:cursor-grabbing">
                     <div className="flex gap-2">
                         {/* Type Switcher */}
                         <button
@@ -204,7 +204,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                             disabled={isEdit}
                                             value={date}
                                             onChange={(e) => setDate(e.target.value)}
-                                            className={`px-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`px-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-github-dark-border rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         />
 
                                         {/* Start Time */}
@@ -212,7 +212,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                             type="time"
                                             value={startTime}
                                             onChange={(e) => setStartTime(e.target.value)}
-                                            className="px-2 py-2 w-28 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors text-center"
+                                            className="px-2 py-2 w-28 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-github-dark-border rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors text-center"
                                         />
 
                                         <span className="text-gray-400 text-sm">–</span>
@@ -222,7 +222,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                             type="time"
                                             value={endTime}
                                             onChange={(e) => setEndTime(e.target.value)}
-                                            className="px-2 py-2 w-28 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors text-center"
+                                            className="px-2 py-2 w-28 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-github-dark-border rounded-md text-sm text-gray-800 dark:text-gray-100 focus:border-blue-500 outline-none hover:bg-white dark:hover:bg-slate-600 transition-colors text-center"
                                         />
                                     </div>
 
@@ -241,13 +241,13 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => setLocationType('online')}
-                                            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${locationType === 'online' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${locationType === 'online' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-github-dark-border text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
                                         >
                                             Online Meeting
                                         </button>
                                         <button
                                             onClick={() => setLocationType('offline')}
-                                            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${locationType === 'offline' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-medium border ${locationType === 'offline' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-github-dark-border text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
                                         >
                                             In-Person
                                         </button>
@@ -261,7 +261,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                                     placeholder="Add Google Meet or Zoom link"
                                                     value={meetLink}
                                                     onChange={(e) => setMeetLink(e.target.value)}
-                                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-github-dark-border rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                                                 />
                                                 <LinkIcon size={14} className="absolute left-3 top-2.5 text-gray-400" />
                                             </div>
@@ -288,7 +288,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                                 placeholder="Add meeting location/address"
                                                 value={address}
                                                 onChange={(e) => setAddress(e.target.value)}
-                                                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                                                className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-github-dark-border rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                                             />
                                             <MapPin size={14} className="absolute left-3 top-2.5 text-gray-400" />
                                         </div>
@@ -311,7 +311,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                         placeholder="Add location"
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        className="w-full py-2 bg-transparent border-b border-gray-100 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500 focus:border-indigo-500 outline-none text-sm transition-colors text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                                        className="w-full py-2 bg-transparent border-b border-gray-100 dark:border-github-dark-border hover:border-gray-300 dark:hover:border-slate-500 focus:border-indigo-500 outline-none text-sm transition-colors text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
                                     />
                                 </div>
                             </div>
@@ -323,7 +323,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                     <select
                                         value={reminder}
                                         onChange={(e) => setReminder(e.target.value)}
-                                        className="w-full py-2 bg-transparent border-b border-gray-100 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500 focus:border-indigo-500 outline-none text-sm cursor-pointer text-gray-600 dark:text-gray-300 [&>option]:text-gray-800 dark:[&>option]:bg-slate-800 dark:[&>option]:text-gray-200"
+                                        className="w-full py-2 bg-transparent border-b border-gray-100 dark:border-github-dark-border hover:border-gray-300 dark:hover:border-slate-500 focus:border-indigo-500 outline-none text-sm cursor-pointer text-gray-600 dark:text-gray-300 [&>option]:text-gray-800 dark:[&>option]:bg-slate-800 dark:[&>option]:text-gray-200"
                                     >
                                         <option value={10}>Notify 10 minutes before</option>
                                         <option value={30}>Notify 30 minutes before</option>
@@ -344,7 +344,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={3}
-                                className="w-full py-2 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-lg px-3 text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:border-indigo-500 outline-none resize-none transition-colors"
+                                className="w-full py-2 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-github-dark-border rounded-lg px-3 text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:border-indigo-500 outline-none resize-none transition-colors"
                             />
                         </div>
                     </div>
@@ -352,7 +352,7 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-dark-card/50">
+                <div className="p-4 border-t border-gray-100 dark:border-github-dark-border flex justify-between items-center bg-gray-50/50 dark:bg-dark-card/50">
                     <div>
                         {isEdit && (
                             <button
