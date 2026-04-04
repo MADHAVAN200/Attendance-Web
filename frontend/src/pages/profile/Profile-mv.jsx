@@ -146,7 +146,7 @@ const Profile = () => {
                     <div className="relative group mt-2">
                         <div
                             onClick={handleAvatarClick}
-                            className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-2xl font-bold border-[3px] border-white dark:border-slate-800 shadow-lg shrink-0 overflow-hidden cursor-pointer"
+                            className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-2xl font-bold border-[3px] border-white dark:border-github-dark-border shadow-lg shrink-0 overflow-hidden cursor-pointer"
                         >
                             {user.avatar ? (
                                 <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
@@ -179,7 +179,7 @@ const Profile = () => {
                     </div>
 
                     <div className="space-y-2 mt-2">
-                        <h2 className="text-[17px] font-bold text-slate-800 dark:text-white capitalize tracking-tight">{user.name}</h2>
+                        <h2 className="text-[17px] font-bold text-slate-800 dark:text-github-dark-text capitalize tracking-tight">{user.name}</h2>
                         <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-500/20">
                             <Shield size={12} />
                             <span>{user.role}</span>
@@ -189,35 +189,35 @@ const Profile = () => {
 
                 {/* Contact Info Card */}
                 <div className="bg-white dark:bg-[#1f2937] border border-slate-100 dark:border-transparent rounded-3xl p-6 shadow-sm space-y-6">
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">Contact Information</h3>
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-github-dark-text">Contact Information</h3>
 
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0 border border-slate-100 dark:border-transparent">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-github-dark-muted shrink-0 border border-slate-100 dark:border-transparent">
                             <Mail size={18} />
                         </div>
                         <div className="min-w-0 pt-0.5">
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Email Address</p>
-                            <p className="text-[13px] font-semibold text-slate-800 dark:text-white truncate">{user.email}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mb-0.5">Email Address</p>
+                            <p className="text-[13px] font-semibold text-slate-800 dark:text-github-dark-text truncate">{user.email}</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0 border border-slate-100 dark:border-transparent">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-github-dark-muted shrink-0 border border-slate-100 dark:border-transparent">
                             <Phone size={18} />
                         </div>
                         <div className="min-w-0 pt-0.5">
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Phone Number</p>
-                            <p className="text-[13px] font-semibold text-slate-800 dark:text-white">{user.phone}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mb-0.5">Phone Number</p>
+                            <p className="text-[13px] font-semibold text-slate-800 dark:text-github-dark-text">{user.phone}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Employment Details Card */}
                 <div className="bg-white dark:bg-[#1f2937] border border-slate-100 dark:border-transparent rounded-3xl p-6 shadow-sm space-y-6">
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">Employment Details</h3>
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-github-dark-text">Employment Details</h3>
 
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0 border border-slate-100 dark:border-transparent">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-github-dark-muted shrink-0 border border-slate-100 dark:border-transparent">
                             {/* Using a building/company icon to match UI roughly */}
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
                                 <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
@@ -234,18 +234,18 @@ const Profile = () => {
                             </svg>
                         </div>
                         <div className="min-w-0 pt-0.5">
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Department</p>
-                            <p className="text-[13px] font-semibold text-slate-800 dark:text-white truncate">{user.department}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mb-0.5">Department</p>
+                            <p className="text-[13px] font-semibold text-slate-800 dark:text-github-dark-text truncate">{user.department}</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0 border border-slate-100 dark:border-transparent">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 dark:text-github-dark-muted shrink-0 border border-slate-100 dark:border-transparent">
                             <Briefcase size={18} />
                         </div>
                         <div className="min-w-0 pt-0.5">
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5">Designation</p>
-                            <p className="text-[13px] font-semibold text-slate-800 dark:text-white">Manager</p>
+                            <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mb-0.5">Designation</p>
+                            <p className="text-[13px] font-semibold text-slate-800 dark:text-github-dark-text">Manager</p>
                         </div>
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Upload, Bug, MessageSquare, Loader2, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Upload, Bug, MessageSquare, Loader2, Image as ImageIcon, Trash2, CheckCircle } from 'lucide-react';
 import api from '../services/api'; // Adjust path as needed
 import { toast } from 'react-toastify';
 
@@ -9,8 +10,6 @@ const FeedbackModal = ({ isOpen, onClose }) => {
     const [type, setType] = useState('BUG'); // BUG or FEEDBACK
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(false);
-
-    if (!isOpen) return null;
 
     const handleFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
@@ -70,161 +69,188 @@ const FeedbackModal = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div
-                className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20">
-                    <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                        {type === 'BUG' ? <Bug className="text-red-500" size={20} /> : <MessageSquare className="text-indigo-500" size={20} />}
-                        Submit {type === 'BUG' ? 'Bug Report' : 'Feedback'}
-                    </h2>
-                    <button
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[1000] flex justify-end overflow-hidden">
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                    />
+
+                    {/* Sidebar */}
+                    <motion.div
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="relative w-full max-w-md h-full bg-white dark:bg-[#0d1117] shadow-2xl flex flex-col border-l border-slate-200 dark:border-[#30363d]"
                     >
-                        <X size={20} />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-
-                    {/* Type Selection */}
-                    <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                        <button
-                            type="button"
-                            onClick={() => setType('BUG')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${type === 'BUG'
-                                    ? 'bg-white dark:bg-dark-bg text-red-600 dark:text-red-400 shadow-sm'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                                }`}
-                        >
-                            <Bug size={16} />
-                            Bug Report
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setType('FEEDBACK')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${type === 'FEEDBACK'
-                                    ? 'bg-white dark:bg-dark-bg text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                                }`}
-                        >
-                            <MessageSquare size={16} />
-                            Feedback
-                        </button>
-                    </div>
-
-                    {/* Title */}
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Title
-                        </label>
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-slate-800 dark:text-slate-100 font-medium transition-all"
-                            placeholder={type === 'BUG' ? "e.g., Error on Leave Page" : "e.g., Suggestion for Dashboard"}
-                            autoFocus
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Description
-                        </label>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            rows={4}
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-slate-800 dark:text-slate-100 text-sm resize-none transition-all"
-                            placeholder="Describe the issue or feedback in detail..."
-                        />
-                    </div>
-
-                    {/* Image Upload */}
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Screenshots (Optional)
-                        </label>
-                        <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors hover:border-indigo-400 dark:hover:border-indigo-600 bg-slate-50/50 dark:bg-slate-800/30">
-                            <input
-                                type="file"
-                                id="feedback-files"
-                                multiple
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleFileChange}
-                            />
-                            <label htmlFor="feedback-files" className="cursor-pointer flex flex-col items-center gap-2">
-                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-full text-indigo-500 dark:text-indigo-400">
-                                    <Upload size={20} />
-                                </div>
-                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                    Click to upload images
-                                </span>
-                                <span className="text-xs text-slate-400">
-                                    PNG, JPG up to 50MB
-                                </span>
-                            </label>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-[#30363d] bg-slate-50/30 dark:bg-[#010409]/40">
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800 dark:text-[#f0f6fc] flex items-center gap-2 tracking-tight uppercase">
+                                    {type === 'BUG' ? <Bug className="text-red-500" size={22} /> : <MessageSquare className="text-indigo-500" size={22} />}
+                                    Support Lab
+                                </h2>
+                                <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted mt-0.5 tracking-[0.2em] uppercase">SYSTEM FEEDBACK & STABILITY</p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-[#f0f6fc] hover:bg-slate-100 dark:hover:bg-[#30363d] transition-all active:scale-90"
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
-                    </div>
 
-                    {/* Preview Images */}
-                    {files.length > 0 && (
-                        <div className="grid grid-cols-4 gap-2">
-                            {files.map((file, idx) => (
-                                <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                                    <img
-                                        src={URL.createObjectURL(file)}
-                                        alt="preview"
-                                        className="w-full h-full object-cover"
-                                    />
+                        {/* Body - Scrollable */}
+                        <div className="flex-1 overflow-y-auto px-6 py-8 custom-scrollbar space-y-10">
+                            
+                            {/* Tab Switcher - Premium Segmented Control */}
+                            <div className="relative">
+                                <label className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.15em] mb-4">Select Category</label>
+                                <div className="grid grid-cols-2 p-1.5 bg-slate-100 dark:bg-[#010409] border border-slate-200 dark:border-[#30363d] rounded-xl relative overflow-hidden">
                                     <button
-                                        type="button"
-                                        onClick={() => removeFile(idx)}
-                                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity transform scale-75 hover:scale-100"
+                                        onClick={() => setType('BUG')}
+                                        className={`relative z-10 py-3 text-xs font-black uppercase tracking-widest transition-colors ${type === 'BUG' ? 'text-white' : 'text-slate-500 dark:text-[#8b949e]'}`}
                                     >
-                                        <X size={12} />
+                                        Bug Report
                                     </button>
+                                    <button
+                                        onClick={() => setType('FEEDBACK')}
+                                        className={`relative z-10 py-3 text-xs font-black uppercase tracking-widest transition-colors ${type === 'FEEDBACK' ? 'text-white' : 'text-slate-500 dark:text-[#8b949e]'}`}
+                                    >
+                                        Feedback
+                                    </button>
+                                    
+                                    {/* Animated Active Background */}
+                                    <motion.div
+                                        className={`absolute inset-y-1.5 left-1.5 w-[calc(50%-6px)] rounded-lg shadow-lg shadow-black/10 ${type === 'BUG' ? 'bg-red-600' : 'bg-indigo-600'}`}
+                                        animate={{ x: type === 'BUG' ? '0%' : '100%' }}
+                                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                    />
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* Form */}
+                            <form onSubmit={handleSubmit} className="space-y-8">
+                                {/* Title Input */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 dark:text-[#8b949e] uppercase tracking-[0.15em] mb-2.5">
+                                        Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="w-full px-5 py-4 bg-slate-50 dark:bg-[#010409] border border-slate-200 dark:border-[#30363d] rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-slate-800 dark:text-[#f0f6fc] text-sm font-bold transition-all placeholder:text-slate-400 dark:placeholder:text-[#484f58]"
+                                        placeholder={type === 'BUG' ? "Describe the anomaly..." : "What's on your mind?"}
+                                    />
+                                </div>
+
+                                {/* Description Textarea */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 dark:text-[#8b949e] uppercase tracking-[0.15em] mb-2.5">
+                                        Intelligence Report
+                                    </label>
+                                    <textarea
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        rows={6}
+                                        className="w-full px-5 py-4 bg-slate-50 dark:bg-[#010409] border border-slate-200 dark:border-[#30363d] rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-slate-800 dark:text-[#c9d1d9] text-sm font-medium resize-none transition-all placeholder:text-slate-400 dark:placeholder:text-[#484f58]"
+                                        placeholder="Provide as much detail as possible to help us analyze the situation..."
+                                    />
+                                </div>
+
+                                {/* File Upload */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 dark:text-[#8b949e] uppercase tracking-[0.15em] mb-3">
+                                        Visual Evidence
+                                    </label>
+                                    <div className="group relative border-2 border-dashed border-slate-200 dark:border-[#30363d] rounded-[2rem] p-8 text-center transition-all hover:border-indigo-500/50 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10">
+                                        <input
+                                            type="file"
+                                            id="sidebar-feedback-files"
+                                            multiple
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleFileChange}
+                                        />
+                                        <label htmlFor="sidebar-feedback-files" className="cursor-pointer flex flex-col items-center gap-4">
+                                            <div className="w-14 h-14 bg-white dark:bg-[#0d1117] border border-slate-100 dark:border-[#30363d] rounded-2xl shadow-sm flex items-center justify-center text-slate-400 group-hover:text-indigo-500 group-hover:scale-110 transition-all duration-300">
+                                                <Upload size={24} />
+                                            </div>
+                                            <div>
+                                                <span className="block text-sm font-black text-slate-700 dark:text-[#f0f6fc] uppercase tracking-wide">
+                                                    Drop or Click to Upload
+                                                </span>
+                                                <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                                                    Images up to 50MB
+                                                </span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Preview Grid */}
+                                {files.length > 0 && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {files.map((file, idx) => (
+                                            <div key={idx} className="relative group rounded-2xl overflow-hidden border border-slate-200 dark:border-[#30363d] aspect-video">
+                                                <img
+                                                    src={URL.createObjectURL(file)}
+                                                    alt="preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeFile(idx)}
+                                                        className="p-2 bg-red-500 text-white rounded-full hover:scale-110 transition-transform active:scale-90"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </form>
                         </div>
-                    )}
 
-                    {/* Footer Actions */}
-                    <div className="pt-2 flex gap-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-[2] px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={18} />
-                                    Submitting...
-                                </>
-                            ) : (
-                                "Submit Report"
-                            )}
-                        </button>
-                    </div>
-
-                </form>
-            </div>
-        </div>
+                        {/* Footer Actions */}
+                        <div className="px-8 py-8 border-t border-slate-100 dark:border-[#30363d] bg-slate-50/50 dark:bg-[#010409]/60 backdrop-blur-md">
+                            <div className="flex gap-4">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="flex-1 px-4 py-4 rounded-xl border border-slate-200 dark:border-[#30363d] text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-[#8b949e] hover:bg-white dark:hover:bg-[#161b22] transition-all active:scale-[0.98]"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={loading}
+                                    className={`flex-[2] py-4 rounded-xl text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all active:scale-[0.97] flex items-center justify-center gap-3 ${loading ? 'opacity-70 bg-slate-400' : type === 'BUG' ? 'bg-red-600 shadow-red-600/20 hover:bg-red-700' : 'bg-indigo-600 shadow-indigo-600/20 hover:bg-indigo-700'}`}
+                                >
+                                    {loading ? (
+                                        <Loader2 className="animate-spin" size={16} />
+                                    ) : (
+                                        <>
+                                            <Bug className={type === 'BUG' ? 'animate-bounce' : 'hidden'} size={16} />
+                                            Submit Report
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     );
 };
 

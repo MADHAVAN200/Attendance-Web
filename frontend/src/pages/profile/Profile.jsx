@@ -164,11 +164,11 @@ const Profile = () => {
             <div className="w-full space-y-6">
 
                 {/* Profile Header Card */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center md:items-center gap-8 transition-colors">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col md:flex-row items-center md:items-center gap-8 transition-colors">
                     <div className="relative group">
                         <div
                             onClick={handleAvatarClick}
-                            className="w-32 h-32 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-4xl font-bold border-4 border-white dark:border-slate-800 shadow-lg shrink-0 overflow-hidden cursor-pointer"
+                            className="w-32 h-32 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-4xl font-bold border-4 border-white dark:border-github-dark-border shadow-lg shrink-0 overflow-hidden cursor-pointer"
                         >
                             {user.avatar ? (
                                 <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
@@ -182,7 +182,7 @@ const Profile = () => {
                         {/* Camera Icon Badge */}
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="absolute bottom-0 right-0 w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-lg transition-all active:scale-95"
+                            className="absolute bottom-0 right-0 w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center border-4 border-white dark:border-github-dark-border shadow-lg transition-all active:scale-95"
                             title="Change Profile Picture"
                         >
                             {uploading ? (
@@ -203,7 +203,7 @@ const Profile = () => {
                     </div>
 
                     <div className="flex-1 text-center md:text-left space-y-2">
-                        <h2 className="text-3xl font-bold text-slate-800 dark:text-white capitalize">{user.name}</h2>
+                        <h2 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text capitalize">{user.name}</h2>
                         <div className="flex items-center justify-center md:justify-start gap-2 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50 dark:bg-indigo-900/10 px-3 py-1 rounded-full w-fit mx-auto md:mx-0 capitalize">
                             <Shield size={16} />
                             <span>{user.role}</span>
@@ -214,54 +214,54 @@ const Profile = () => {
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Personal Info */}
-                    <div className="bg-white dark:bg-dark-card rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-4">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-github-dark-border space-y-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-4">
                             Contact Information
                         </h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 shrink-0">
+                                <div className="p-3 bg-slate-100 dark:bg-github-dark-subtle rounded-xl text-slate-500 dark:text-github-dark-muted shrink-0">
                                     <Mail size={22} />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-0.5">Email Address</p>
-                                    <p className="text-slate-800 dark:text-white font-medium truncate">{user.email}</p>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-0.5">Email Address</p>
+                                    <p className="text-slate-800 dark:text-github-dark-text font-medium truncate">{user.email}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 shrink-0">
+                                <div className="p-3 bg-slate-100 dark:bg-github-dark-subtle rounded-xl text-slate-500 dark:text-github-dark-muted shrink-0">
                                     <Phone size={22} />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-0.5">Phone Number</p>
-                                    <p className="text-slate-800 dark:text-white font-medium truncate">{user.phone}</p>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-0.5">Phone Number</p>
+                                    <p className="text-slate-800 dark:text-github-dark-text font-medium truncate">{user.phone}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Employment Info */}
-                    <div className="bg-white dark:bg-dark-card rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-4">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-github-dark-border space-y-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-4">
                             Employment Details
                         </h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 shrink-0">
+                                <div className="p-3 bg-slate-100 dark:bg-github-dark-subtle rounded-xl text-slate-500 dark:text-github-dark-muted shrink-0">
                                     <Briefcase size={22} />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-0.5">Department</p>
-                                    <p className="text-slate-800 dark:text-white font-medium truncate">{user.department}</p>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-0.5">Department</p>
+                                    <p className="text-slate-800 dark:text-github-dark-text font-medium truncate">{user.department}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 shrink-0">
+                                <div className="p-3 bg-slate-100 dark:bg-github-dark-subtle rounded-xl text-slate-500 dark:text-github-dark-muted shrink-0">
                                     <User size={22} />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-0.5">Employee Code</p>
-                                    <p className="text-slate-800 dark:text-white font-medium truncate">{user.employeeCode}</p>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-0.5">Employee Code</p>
+                                    <p className="text-slate-800 dark:text-github-dark-text font-medium truncate">{user.employeeCode}</p>
                                 </div>
                             </div>
                         </div>

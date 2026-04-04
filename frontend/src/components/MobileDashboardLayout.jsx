@@ -33,10 +33,10 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-white pb-6 md:pb-0 transition-colors duration-300 overflow-x-hidden">
+        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300 overflow-x-hidden">
             {/* Header */}
             {!hideHeader && (
-                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between px-4 z-30">
+                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-github-dark-border/50 flex items-center justify-between px-4 z-30">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(true)}
@@ -44,7 +44,7 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                         >
                             <Menu size={24} strokeWidth={2.5} />
                         </button>
-                        <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-wide">{title}</h1>
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-github-dark-text tracking-wide">{title}</h1>
                     </div>
 
                     <div className="flex items-center gap-4">

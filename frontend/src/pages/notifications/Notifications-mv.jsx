@@ -76,16 +76,16 @@ const Notifications = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-white pb-6 md:pb-0 transition-colors duration-300">
+        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300">
             {/* Custom Header for Notifications */}
-            <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-slate-800/50 flex items-center px-4 z-30">
+            <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-github-dark-border/50 flex items-center px-4 z-30">
                 <button
                     onClick={() => navigate(-1)}
                     className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                 >
                     <ArrowLeft size={22} />
                 </button>
-                <h1 className="flex-1 text-center pr-8 text-[17px] font-medium text-slate-800 dark:text-white">
+                <h1 className="flex-1 text-center pr-8 text-[17px] font-medium text-slate-800 dark:text-github-dark-text">
                     Notifications
                 </h1>
             </header>
@@ -99,20 +99,20 @@ const Notifications = () => {
                         >
                             {/* Icon Column */}
                             <div className="shrink-0 pt-0.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/50 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
                                     <Info size={16} />
                                 </div>
                             </div>
                             
                             {/* Content Column */}
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-[13px] font-medium text-slate-800 dark:text-slate-200 mb-1">
+                                <h3 className="text-[13px] font-medium text-slate-800 dark:text-github-dark-text mb-1">
                                     {notification.title}
                                 </h3>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed tracking-wide mb-2 break-words">
+                                <p className="text-[11px] text-slate-500 dark:text-github-dark-muted leading-relaxed tracking-wide mb-2 break-words">
                                     {notification.message}
                                 </p>
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                <p className="text-[10px] text-slate-400 dark:text-github-dark-muted font-medium">
                                     {formatScreenshotDate(notification.created_at)}
                                 </p>
                             </div>
@@ -120,7 +120,7 @@ const Notifications = () => {
                     ))}
                     
                     {localNotifications.length === 0 && (
-                        <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-sm">
+                        <div className="py-12 text-center text-slate-500 dark:text-github-dark-muted text-sm">
                             No notifications yet.
                         </div>
                     )}

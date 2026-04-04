@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     BarChart3, Filter, UserCheck, Clock, CheckCircle, TrendingUp, TrendingDown,
-    Activity, PieChart as PieChartIcon, RefreshCw, Users, Building, FileText
+    Activity, PieChart as PieChartIcon, RefreshCw, Users, Building, FileText, Settings
 } from 'lucide-react';
 import {
     PieChart, Pie, Cell,
@@ -12,7 +12,7 @@ import {
 import api from '../../../services/api';
 import { toast } from 'react-toastify';
 
-const DashboardInsights = ({ departments, allUsers }) => {
+const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
     // --- ENHANCED FILTER STATE ---
     const [filters, setFilters] = useState({
         startDate: new Date(new Date().setDate(new Date().getDate() - 6)).toISOString().split('T')[0], // Last 7 days
@@ -405,10 +405,10 @@ const DashboardInsights = ({ departments, allUsers }) => {
         <div className="flex flex-col gap-6 h-full overflow-y-auto pb-10 custom-scrollbar pr-2">
 
             {/* --- Enhanced Filter Bar (Real-time Monitoring Card) --- */}
-            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-0 z-30">
-                <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border sticky top-0 z-30">
+                <div className="p-3.5 border-b border-slate-200 dark:border-github-dark-border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Real-time Monitoring</h2>
+                        <h2 className="text-lg font-semibold text-slate-800 dark:text-github-dark-text">Real-time Monitoring</h2>
                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -423,7 +423,7 @@ const DashboardInsights = ({ departments, allUsers }) => {
                             <select
                                 value={filters.dept}
                                 onChange={(e) => setFilters(prev => ({ ...prev, dept: e.target.value }))}
-                                className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                                className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
                             >
                                 <option value="All">All Depts</option>
                                 {departments.map(d => (
@@ -434,7 +434,7 @@ const DashboardInsights = ({ departments, allUsers }) => {
                         </div>
 
                         {/* Preserved Controls */}
-                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 hidden md:flex">
+                        <div className="flex items-center gap-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg px-2 py-1.5 hidden md:flex">
                             <input
                                 type="date"
                                 value={filters.startDate}
@@ -450,8 +450,15 @@ const DashboardInsights = ({ departments, allUsers }) => {
                             />
                         </div>
                         <button
+                            onClick={onOpenConfig}
+                            className="px-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                        >
+                            <Settings size={15} className="opacity-70" />
+                            <span className="text-[12px] font-medium tracking-wide">Configurations</span>
+                        </button>
+                        <button
                             onClick={fetchInsights}
-                            className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all shadow-sm active:scale-95"
+                            className="p-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all shadow-sm active:scale-95"
                             title="Refresh Data"
                         >
                             <RefreshCw size={16} />
@@ -460,67 +467,67 @@ const DashboardInsights = ({ departments, allUsers }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
+                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
-                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Submission Rate</div>
-                        <div className="text-2xl font-black text-slate-800 dark:text-white">{stats.submissionRate}%</div>
-                        <div className="text-[10px] text-emerald-500 font-bold mt-1">
+                        <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Submission Rate</div>
+                        <div className="text-lg font-black text-slate-800 dark:text-github-dark-text">{stats.submissionRate}%</div>
+                        <div className="text-[8.5px] text-emerald-500 font-bold mt-1">
                             {Math.round(stats.submittedCount)}/{stats.totalEmployees} Employees
                         </div>
                     </div>
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-full">
-                        <FileText size={20} className="text-emerald-500" />
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-1.5 rounded-full">
+                        <FileText size={16} className="text-emerald-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <div className="min-w-0 flex-1 mr-3">
-                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Top Activity</div>
-                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate" title={stats.topActivity}>{stats.topActivity}</div>
-                        <div className="text-[10px] text-slate-400 font-bold mt-1 truncate">{stats.topActivityPercent}% of total time</div>
+                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                    <div className="min-w-0 flex-1 mr-1.5">
+                        <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Top Activity</div>
+                        <div className="text-lg font-black text-indigo-600 dark:text-indigo-400 truncate" title={stats.topActivity}>{stats.topActivity}</div>
+                        <div className="text-[8.5px] text-slate-400 font-bold mt-1 truncate">{stats.topActivityPercent}% of total time</div>
                     </div>
-                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-2.5 rounded-full flex-shrink-0">
-                        <BarChart3 size={20} className="text-indigo-500" />
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-1.5 rounded-full flex-shrink-0">
+                        <BarChart3 size={16} className="text-indigo-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
-                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Average Work Hours</div>
-                        <div className="flex items-baseline gap-2 mt-1">
-                            <div className="text-2xl font-black text-purple-600 dark:text-purple-400">{stats.avgHours || "0h 0m"}</div>
-                            <div className={`flex items-center text-xs font-bold px-1.5 py-0.5 rounded ${stats.avgTrend === 'up' ? 'bg-emerald-50 text-emerald-600' : stats.avgTrend === 'down' ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'
+                        <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Average Work Hours</div>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <div className="text-lg font-black text-purple-600 dark:text-purple-400">{stats.avgHours || "0h 0m"}</div>
+                            <div className={`flex items-center text-[9px] font-bold px-1 py-0.5 rounded ${stats.avgTrend === 'up' ? 'bg-emerald-50 text-emerald-600' : stats.avgTrend === 'down' ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'
                                 }`}>
-                                {stats.avgTrend === 'up' ? <TrendingUp size={12} className="mr-1" /> : stats.avgTrend === 'down' ? <TrendingDown size={12} className="mr-1" /> : null}
+                                {stats.avgTrend === 'up' ? <TrendingUp size={9} className="mr-1" /> : stats.avgTrend === 'down' ? <TrendingDown size={9} className="mr-1" /> : null}
                                 {stats.avgDiff}%
                             </div>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-bold mt-1">Per active employee</p>
+                        <p className="text-[8.5px] text-slate-400 font-bold mt-1">Per active employee</p>
                     </div>
-                    <div className="bg-purple-50 dark:bg-purple-900/20 p-2.5 rounded-full">
-                        <Clock size={20} className="text-purple-500" />
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-1.5 rounded-full">
+                        <Clock size={16} className="text-purple-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
-                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Average Idle Time</div>
-                        <div className="text-2xl font-black text-orange-500 dark:text-orange-400">{stats.avgIdle}</div>
-                        <div className="text-[10px] text-slate-400 font-bold mt-1">Unaccounted gaps between shift</div>
+                        <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Average Idle Time</div>
+                        <div className="text-lg font-black text-orange-500 dark:text-orange-400">{stats.avgIdle}</div>
+                        <div className="text-[8.5px] text-slate-400 font-bold mt-1">Unaccounted gaps between shift</div>
                     </div>
-                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2.5 rounded-full">
-                        <Clock size={20} className="text-orange-500" />
+                    <div className="bg-orange-50 dark:bg-orange-900/20 p-1.5 rounded-full">
+                        <Clock size={16} className="text-orange-500" />
                     </div>
                 </div>
             </div>
 
             {/* Row 2: Workload Trend (Area Chart) */}
-            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                        <BarChart3 size={20} className="text-indigo-500" />
+            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                <div className="flex items-center justify-between mb-5">
+                    <h3 className="font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2 text-sm">
+                        <BarChart3 size={18} className="text-indigo-500" />
                         Workload Distribution
                     </h3>
                 </div>
-                <div className="h-80 w-full">
+                <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
@@ -558,8 +565,8 @@ const DashboardInsights = ({ departments, allUsers }) => {
             {/* Row 3: Department Breakdown & Capacity Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Department Activity Stacked Bar */}
-                <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6 flex items-center gap-2">
                         <Building size={20} className="text-orange-500" /> Department Focus
                     </h3>
                     <div className="flex-1 w-full min-h-[300px] max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -598,12 +605,12 @@ const DashboardInsights = ({ departments, allUsers }) => {
 
 
                 {/* Employee Consistency */}
-                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             <FileText size={20} className="text-indigo-500" /> Employee Consistency
                         </h3>
-                        <div className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-600">
+                        <div className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-github-dark-subtle px-2 py-1 rounded-lg border border-slate-200 dark:border-github-dark-border">
                             Target: {consistencyData[0]?.target || 0} Reports
                         </div>
                     </div>
@@ -615,10 +622,10 @@ const DashboardInsights = ({ departments, allUsers }) => {
                             else if (pct < 80) barColor = 'bg-amber-400';
 
                             return (
-                                <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                     <div className="flex-1 min-w-0 mr-4">
                                         <div className="flex justify-between items-center mb-1">
-                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{user.name}</div>
+                                            <div className="text-sm font-bold text-slate-700 dark:text-github-dark-text truncate">{user.name}</div>
                                             <div className="text-[10px] font-bold text-slate-400">{user.dars}/{user.target} Reports</div>
                                         </div>
                                         {/* Progress Bar */}
@@ -639,8 +646,8 @@ const DashboardInsights = ({ departments, allUsers }) => {
             {/* Row 4: Category Pie & Compliance Bar (Existing, just moved down) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Chart 3: Time Investment (Donut) */}
-                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2 mb-4">
                         <PieChartIcon size={20} className="text-purple-500" /> Time Investment
                     </h3>
                     <div className="flex flex-col md:flex-row items-center gap-6">
@@ -672,12 +679,12 @@ const DashboardInsights = ({ departments, allUsers }) => {
                         {/* Right: Legend with Time */}
                         <div className="w-full md:w-1/2 flex flex-col gap-3 overflow-y-auto max-h-[200px] custom-scrollbar pr-2">
                             {categoryData.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-github-dark-subtle/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}></div>
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title={item.name}>{item.name}</span>
+                                        <span className="text-xs font-bold text-slate-700 dark:text-github-dark-text truncate" title={item.name}>{item.name}</span>
                                     </div>
-                                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap ml-2">
+                                    <span className="text-xs font-bold text-slate-500 dark:text-github-dark-muted whitespace-nowrap ml-2">
                                         {formatDuration(item.value)}
                                     </span>
                                 </div>
@@ -687,8 +694,8 @@ const DashboardInsights = ({ departments, allUsers }) => {
                 </div>
 
                 {/* Chart 4: Daily Submission Compliance (Bar) */}
-                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6 flex items-center gap-2">
                         <Users size={20} className="text-emerald-500" /> Submission Compliance
                     </h3>
                     <div className="flex-1 w-full min-h-[250px] overflow-x-auto custom-scrollbar pb-2">
