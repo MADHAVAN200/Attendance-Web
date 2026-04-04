@@ -45,19 +45,19 @@ const Login = () => {
             <div className="w-full max-w-md">
                 {/* Brand Header */}
                 <div className="flex flex-col items-center mb-8">
-                    <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-slate-700">
+                    <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-github-dark-border">
                         <img src="/mano-logo.svg" alt="MANO" className="w-10 h-10" />
                     </div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-github-dark-text mb-2">
                         Welcome Back
                     </h2>
-                    <p className="text-slate-500 dark:text-slate-400">
+                    <p className="text-slate-500 dark:text-github-dark-muted">
                         Sign in to continue to MANO Attendance
                     </p>
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-slate-700 p-8">
+                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-github-dark-border p-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -73,7 +73,7 @@ const Login = () => {
                                     value={formData.identifier}
                                     onChange={handleChange}
                                     required
-                                    className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                                    className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                                     placeholder="admin@demo.com"
                                 />
                             </div>
@@ -98,7 +98,7 @@ const Login = () => {
                                     value={formData.password}
                                     onChange={handleChange}
                                     required
-                                    className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                                    className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                                     placeholder="••••••••"
                                 />
                                 <button
@@ -134,7 +134,7 @@ const Login = () => {
                 </div>
 
                 {/* Footer */}
-                <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-8 text-center text-sm text-slate-500 dark:text-github-dark-muted">
                     Don't have an account?{" "}
                     <a href="#" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                         Contact Administrator

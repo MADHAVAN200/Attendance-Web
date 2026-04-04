@@ -132,13 +132,13 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
             </div>
 
             {/* Body */}
-            <div className="p-3 bg-white dark:bg-slate-800 rounded-b-md space-y-3 relative">
+            <div className="p-3 bg-white dark:bg-github-dark-subtle rounded-b-md space-y-3 relative">
                 
                 {/* Specific UI for Node Types */}
                 
                 {isLogic && (
                     <select 
-                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border"
                         value={node.data.op || 'and'}
                         onChange={(e) => updateNodeData(node.id, { op: e.target.value })}
                         onMouseDown={e => e.stopPropagation()}
@@ -149,7 +149,7 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
 
                 {isCompare && (
                     <select 
-                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border"
                         value={node.data.op || '>'}
                         onChange={(e) => updateNodeData(node.id, { op: e.target.value })}
                         onMouseDown={e => e.stopPropagation()}
@@ -160,7 +160,7 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
 
                 {isVar && (
                     <select 
-                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                        className="w-full text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border"
                         value={node.data.value || 'minutes_late'}
                         onChange={(e) => updateNodeData(node.id, { value: e.target.value })}
                         onMouseDown={e => e.stopPropagation()}
@@ -172,7 +172,7 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
                 {isConst && (
                     <div className="flex gap-1" onMouseDown={e => e.stopPropagation()}>
                         <select 
-                            className="text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700 w-16"
+                            className="text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border w-16"
                             value={node.data.type || 'number'}
                             onChange={(e) => updateNodeData(node.id, { type: e.target.value, value: node.data.value })}
                         >
@@ -182,7 +182,7 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
                         </select>
                         {node.data.type === 'bool' ? (
                             <select
-                                className="flex-1 text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                                className="flex-1 text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border"
                                 value={node.data.value}
                                 onChange={(e) => updateNodeData(node.id, { value: e.target.value === 'true' })}
                             >
@@ -192,7 +192,7 @@ const Node = ({ node, isSelected, onMouseDown, onDelete, updateNodeData, scale }
                         ) : (
                             <input 
                                 type={node.data.type === 'number' ? 'number' : 'text'}
-                                className="flex-1 text-xs p-1 border rounded bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-700 min-w-0"
+                                className="flex-1 text-xs p-1 border rounded bg-slate-50 dark:bg-github-dark-subtle dark:text-github-dark-text dark:border-github-dark-border min-w-0"
                                 value={node.data.value || ''}
                                 onChange={(e) => updateNodeData(node.id, { value: node.data.type === 'number' ? parseFloat(e.target.value) : e.target.value })}
                                 placeholder="Value..."
@@ -602,8 +602,8 @@ const VisualScripting = () => {
     return (
         <DashboardLayout title="Visual Policy Architect">
             <div className="flex h-[calc(100vh-140px)] gap-4 overflow-hidden">
-                <div className="w-48 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col shrink-0 z-20 shadow-xl">
-                    <div className="p-3 border-b border-slate-200 dark:border-slate-700 font-semibold text-sm">Nodes</div>
+                <div className="w-48 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl flex flex-col shrink-0 z-20 shadow-xl">
+                    <div className="p-3 border-b border-slate-200 dark:border-github-dark-border font-semibold text-sm">Nodes</div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
                         {Object.keys(NODE_TYPES).map(key => {
                             if (key === 'RESULT') return null;
@@ -614,7 +614,7 @@ const VisualScripting = () => {
                     </div>
                 </div>
 
-                <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700"
+                <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border"
                      ref={canvasRef}
                      onWheel={handleWheel}
                      onMouseDown={handleCanvasMouseDown}
@@ -622,7 +622,7 @@ const VisualScripting = () => {
                      onMouseUp={handleMouseUp}
                 >
                     {/* Viewport Control Info */}
-                    <div className="absolute top-4 right-4 z-20 flex gap-2 bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg backdrop-blur-sm border border-slate-200 dark:border-slate-600">
+                    <div className="absolute top-4 right-4 z-20 flex gap-2 bg-white/80 dark:bg-github-dark-subtle/80 p-2 rounded-lg backdrop-blur-sm border border-slate-200 dark:border-github-dark-border">
                         <ZoomIn size={16} className="cursor-pointer hover:text-indigo-500" onClick={() => setViewport(v => ({...v, zoom: Math.min(v.zoom + 0.1, 3)}))} />
                         <span className="text-xs font-mono w-12 text-center">{(viewport.zoom * 100).toFixed(0)}%</span>
                         <ZoomOut size={16} className="cursor-pointer hover:text-indigo-500" onClick={() => setViewport(v => ({...v, zoom: Math.max(v.zoom - 0.1, 0.1)}))} />
@@ -680,12 +680,12 @@ const VisualScripting = () => {
                     </div>
                 </div>
 
-                <div className="w-80 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col shrink-0 z-20 shadow-xl">
-                    <div className="p-3 border-b border-slate-200 dark:border-slate-700 font-semibold text-sm flex justify-between items-center">
+                <div className="w-80 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl flex flex-col shrink-0 z-20 shadow-xl">
+                    <div className="p-3 border-b border-slate-200 dark:border-github-dark-border font-semibold text-sm flex justify-between items-center">
                         <span>Result JSON</span>
                         <Code size={16} className="text-slate-400" />
                     </div>
-                    <div className="flex-1 bg-slate-50 dark:bg-slate-900 p-0 relative group">
+                    <div className="flex-1 bg-slate-50 dark:bg-github-dark-subtle p-0 relative group">
                         <textarea 
                             className="w-full h-full bg-transparent p-4 font-mono text-[10px] resize-none focus:outline-none dark:text-emerald-400 text-slate-700"
                             value={JSON.stringify(generatedJson, null, 2)}

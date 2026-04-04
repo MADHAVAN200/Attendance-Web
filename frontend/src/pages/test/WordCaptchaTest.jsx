@@ -86,19 +86,19 @@ const WordCaptchaTest = () => {
            <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold mb-4 border border-amber-200">
             TEST MODE: WORD CAPTCHA
           </div>
-          <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-slate-700">
+          <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-github-dark-border">
             <img src="/mano-logo.svg" alt="MANO" className="w-10 h-10" />
           </div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-github-dark-text mb-2">
             App Login Test
           </h2>
-          <p className="text-slate-500 dark:text-slate-400">
+          <p className="text-slate-500 dark:text-github-dark-muted">
             Verifying Word-Based Captcha Flow
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-slate-700 p-8">
+        <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-github-dark-border p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -114,7 +114,7 @@ const WordCaptchaTest = () => {
                   value={formData.identifier}
                   onChange={handleChange}
                   required
-                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                   placeholder="admin@demo.com"
                 />
               </div>
@@ -136,7 +136,7 @@ const WordCaptchaTest = () => {
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                   placeholder="••••••••"
                 />
                 <button
@@ -156,7 +156,7 @@ const WordCaptchaTest = () => {
                 </label>
                 
                 <div className="flex items-center gap-3">
-                    <div className="flex-1 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden flex items-center justify-center relative">
+                    <div className="flex-1 h-16 bg-slate-100 dark:bg-github-dark-subtle rounded-lg border border-slate-200 dark:border-github-dark-border overflow-hidden flex items-center justify-center relative">
                         {captchaLoading ? (
                             <Loader2 className="animate-spin text-slate-400" />
                         ) : captchaData.svg ? (
@@ -168,7 +168,7 @@ const WordCaptchaTest = () => {
                     <button 
                         type="button" 
                         onClick={fetchCaptcha}
-                        className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors border border-slate-200 dark:border-slate-600"
+                        className="p-3 rounded-lg bg-slate-100 dark:bg-github-dark-subtle hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-github-dark-muted transition-colors border border-slate-200 dark:border-github-dark-border"
                         title="Reload Captcha"
                     >
                         <RefreshCw className={`h-5 w-5 ${captchaLoading ? 'animate-spin' : ''}`} />
@@ -182,7 +182,7 @@ const WordCaptchaTest = () => {
                         value={formData.captchaText}
                         onChange={handleChange}
                         required
-                        className="block w-full py-3 px-4 uppercase tracking-widest text-center border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 font-bold"
+                        className="block w-full py-3 px-4 uppercase tracking-widest text-center border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 font-bold"
                         placeholder="ENTER TEXT"
                         autoComplete="off"
                     />

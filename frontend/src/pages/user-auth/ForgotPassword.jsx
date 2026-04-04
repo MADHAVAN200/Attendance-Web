@@ -115,15 +115,15 @@ const ForgotPassword = () => {
 
                 {/* Brand Header */}
                 <div className="flex flex-col items-center mb-8">
-                    <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-slate-700">
+                    <div className="w-16 h-16 bg-white dark:bg-dark-card rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-slate-100 dark:border-github-dark-border">
                         <img src="/mano-logo.svg" alt="MANO" className="w-10 h-10" />
                     </div>
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-github-dark-text mb-2">
                         {step === 'email' && "Forgot Password?"}
                         {step === 'otp' && "Verify OTP"}
                         {step === 'reset' && "Reset Password"}
                     </h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-center max-w-sm">
+                    <p className="text-slate-500 dark:text-github-dark-muted text-center max-w-sm">
                         {step === 'email' && "Enter your email address and we'll send you an OTP to reset your password."}
                         {step === 'otp' && `We've sent an OTP to ${email}. Please enter it below.`}
                         {step === 'reset' && "Create a new strong password for your account."}
@@ -131,7 +131,7 @@ const ForgotPassword = () => {
                 </div>
 
                 {/* Card */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-slate-700 p-8 relative overflow-hidden">
+                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl dark:shadow-2xl border border-slate-100 dark:border-github-dark-border p-8 relative overflow-hidden">
 
                     {/* Step 1: Email Input */}
                     {step === 'email' && (
@@ -149,7 +149,7 @@ const ForgotPassword = () => {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         required
-                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                                         placeholder="admin@demo.com"
                                     />
                                 </div>
@@ -181,7 +181,7 @@ const ForgotPassword = () => {
                                         value={otp}
                                         onChange={(e) => setOtp(e.target.value)}
                                         required
-                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 tracking-[0.5em] font-mono text-center text-lg"
+                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 tracking-[0.5em] font-mono text-center text-lg"
                                         placeholder="123456"
                                         maxLength={6}
                                     />
@@ -223,7 +223,7 @@ const ForgotPassword = () => {
                                         onChange={(e) => setNewPassword(e.target.value)}
                                         required
                                         minLength={8}
-                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                                         placeholder="••••••••"
                                     />
                                 </div>
@@ -243,7 +243,7 @@ const ForgotPassword = () => {
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         required
                                         minLength={8}
-                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                                         placeholder="••••••••"
                                     />
                                 </div>
@@ -263,7 +263,7 @@ const ForgotPassword = () => {
 
                 {/* Footer Back to Login */}
                 <div className="mt-8 text-center">
-                    <Link to="/login" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors">
+                    <Link to="/login" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-white transition-colors">
                         <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
                         Back to Login
                     </Link>
