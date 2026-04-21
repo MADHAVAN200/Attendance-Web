@@ -25,9 +25,10 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
     if (!user) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative bg-white dark:bg-github-dark-subtle w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-github-dark-border">
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity" onClick={onClose}></div>
+                <div className="relative bg-white dark:bg-github-dark-subtle w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-github-dark-border text-left mx-auto">
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -72,6 +73,7 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
                     >
                         Close
                     </button>
+                </div>
                 </div>
             </div>
         </div>,

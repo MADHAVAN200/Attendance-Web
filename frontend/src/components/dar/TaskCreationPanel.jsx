@@ -766,12 +766,13 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
 
             {/* REASON MODAL */}
             {showReasonModal && createPortal(
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="bg-white dark:bg-[#13151f] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-                    >
+                <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/60 backdrop-blur-sm">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="relative mx-auto z-10 bg-white dark:bg-[#13151f] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+                        >
                         <div className="p-6">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-2">Request Reason</h3>
                             <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-4">
@@ -799,7 +800,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                                 </button>
                             </div>
                         </div>
-                    </motion.div>
+                        </motion.div>
+                    </div>
                 </div>,
                 document.body
             )}

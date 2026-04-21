@@ -539,8 +539,9 @@ const PolicyBuilder = () => {
 
                 {/* --- DELETE CONFIRMATION MODAL --- */}
                 {isDeleteModalOpen && (
-                    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-all duration-200 animate-in fade-in">
-                        <div className="w-full max-w-lg bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all duration-200 animate-in fade-in">
+                        <div className="flex min-h-full items-center justify-center p-4">
+                            <div className="relative w-full max-w-lg bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 mx-auto">
                             <div className="p-10 text-center">
                                 <div className="w-20 h-20 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
                                     <AlertTriangle size={40} />
@@ -563,6 +564,7 @@ const PolicyBuilder = () => {
                                         Delete
                                     </button>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </div>

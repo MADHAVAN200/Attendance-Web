@@ -185,8 +185,9 @@ const ShiftManagement = () => {
 
             {/* View Shift Modal Overlay */}
             {isViewModalOpen && selectedShift && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 px-4">
-                    <div className="bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto shadow-xl">
+                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate pr-2">{selectedShift.name}</h2>
                             <button onClick={() => setIsViewModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
@@ -285,6 +286,7 @@ const ShiftManagement = () => {
                         >
                             Close
                         </button>
+                        </div>
                     </div>
                 </div>,
                 document.body
@@ -292,8 +294,9 @@ const ShiftManagement = () => {
 
             {/* Create New Shift Modal Overlay */}
             {isAddModalOpen && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 px-4">
-                    <div className="bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto shadow-xl">
+                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
                         <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-github-dark-border/50 mb-3">
                             <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">Create Shift</h2>
                             <button onClick={() => setIsAddModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
@@ -431,6 +434,7 @@ const ShiftManagement = () => {
                             >
                                 Save Shift
                             </button>
+                        </div>
                         </div>
                     </div>
                 </div>,

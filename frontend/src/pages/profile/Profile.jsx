@@ -273,13 +273,14 @@ const Profile = () => {
             {/* --- IMAGE PREVIEW MODAL --- */}
             {showPreview && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200"
+                    className="fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/95 backdrop-blur-xl transition-all duration-200"
                     onClick={() => setShowPreview(false)}
                 >
-                    <div
-                        className="w-full max-w-4xl space-y-6 animate-in fade-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div
+                            className="relative w-full max-w-4xl space-y-6 animate-in fade-in zoom-in-95 duration-200 mx-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                         <div className="flex justify-between items-center px-4">
                             <h3 className="text-2xl font-bold text-white tracking-tight">
                                 Profile Picture
@@ -314,6 +315,7 @@ const Profile = () => {
                                 alt="Profile Preview"
                                 className="w-full h-full object-contain max-h-[80vh]"
                             />
+                        </div>
                         </div>
                     </div>
                 </div>,

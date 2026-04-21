@@ -34,8 +34,10 @@ const AttachmentModal = ({ file, onClose }) => {
     const isPdf = file.file_type === 'application/pdf' || /\.pdf$/i.test(file.file_key || file.name);
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
-            <div className="relative bg-white dark:bg-github-dark-subtle rounded-2xl overflow-hidden w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+                <div className="relative z-10 bg-white dark:bg-github-dark-subtle rounded-2xl overflow-hidden w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 mx-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
@@ -70,6 +72,7 @@ const AttachmentModal = ({ file, onClose }) => {
                             <a href={file.file_url} download className="text-indigo-600 hover:underline">Download to view</a>
                         </div>
                     )}
+                </div>
                 </div>
             </div>
         </div>
