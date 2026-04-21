@@ -30,11 +30,6 @@ import EmployeeFormContent from '../../components/employees/EmployeeFormContent'
 const EmployeeList = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view/employees');
-        }
-    }, [navigate]);
 
     const { avatarTimestamp } = useAuth();
     const [employees, setEmployees] = useState([]);

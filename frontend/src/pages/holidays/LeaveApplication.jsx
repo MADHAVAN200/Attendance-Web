@@ -82,11 +82,6 @@ const AttachmentModal = ({ file, onClose }) => {
 const LeaveApplication = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view/apply-leave');
-        }
-    }, [navigate]);
 
     const { user } = useAuth();
     const [leaves, setLeaves] = useState([]);

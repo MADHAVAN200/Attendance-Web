@@ -57,11 +57,6 @@ const AdminDashboard = () => {
     // Cache for dashboard data
     const dataCache = React.useRef({});
 
-    React.useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view');
-        }
-    }, [navigate]);
 
     React.useEffect(() => {
         if (!user || !['admin', 'hr'].includes(user.user_type)) {

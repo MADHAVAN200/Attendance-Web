@@ -10,11 +10,6 @@ import { toast } from 'react-toastify';
 const Profile = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view/profile');
-        }
-    }, [navigate]);
 
     const { user: authUser, fetchUser } = useAuth();
     const [profileData, setProfileData] = useState(null);
