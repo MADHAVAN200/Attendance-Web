@@ -669,7 +669,7 @@ const Attendance = () => {
                             {subTab === 'analytics' && (
                                 <div className="space-y-6">
                                     {/* Report Download Card */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex flex-col gap-4">
+                                    <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border shadow-sm flex flex-col gap-4">
                                         <div className="flex items-center gap-4">
                                             <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400">
                                                 <FileText size={24} />
@@ -685,7 +685,7 @@ const Attendance = () => {
                                                 <select
                                                     value={reportMonth}
                                                     onChange={(e) => setReportMonth(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
                                                 >
                                                     {Array.from({ length: 12 }, (_, i) => {
                                                         const d = new Date(new Date().getFullYear(), i, 1);
@@ -699,7 +699,7 @@ const Attendance = () => {
                                                 <select
                                                     value={reportYear}
                                                     onChange={(e) => setReportYear(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
                                                 >
                                                     <option value="2026">2026</option>
                                                     <option value="2025">2025</option>
@@ -720,7 +720,7 @@ const Attendance = () => {
 
                                     {/* Summary Stats Vertical List */}
                                     <div className="space-y-4">
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Total Records</p>
                                                 <Calendar className="text-slate-400 dark:text-github-dark-muted" size={20} />
@@ -728,7 +728,7 @@ const Attendance = () => {
                                             <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{totalRecords}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Present</p>
                                                 <div className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 text-xs font-bold">
@@ -738,7 +738,7 @@ const Attendance = () => {
                                             <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{presentCount}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Late</p>
                                                 <div className="px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 text-xs font-bold">
@@ -748,7 +748,7 @@ const Attendance = () => {
                                             <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{lateCount}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Avg Hours</p>
                                                 <Clock className="text-sky-500 dark:text-sky-400" size={20} />
@@ -760,7 +760,7 @@ const Attendance = () => {
                                     {/* Charts */}
 
                                     {/* 1. Area Chart (Total Attendance Report) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                                    <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text">Total Attendance Report</h3>
                                             <button className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
@@ -790,7 +790,7 @@ const Attendance = () => {
                                     </div>
 
                                     {/* 2. Attendance Status (Donut Chart) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                                    <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
                                         <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text mb-2">Attendance Status</h3>
 
                                         <div className="flex items-center justify-between">
@@ -839,7 +839,7 @@ const Attendance = () => {
                                     </div>
 
                                     {/* 3. Weekly Activity (Radar Chart) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                                    <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
                                         <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text mb-6">Weekly Activity</h3>
                                         <div className="h-64 flex items-center justify-center">
                                             <ResponsiveContainer width="100%" height="100%">
@@ -882,7 +882,7 @@ const Attendance = () => {
                                             <div
                                                 key={idx}
                                                 onClick={() => handleRequestClick(item)}
-                                                className={`bg-white dark:bg-[#1a2332] p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
+                                                className={`bg-white dark:bg-dark-card p-4 rounded-xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
@@ -1014,7 +1014,7 @@ const Attendance = () => {
                                             <div className="col-span-2 mt-1">
                                                 <button
                                                     onClick={addSession}
-                                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-github-dark-border/60 rounded-xl text-slate-500 dark:text-github-dark-muted text-[13px] font-bold flex items-center justify-center gap-2 hover:border-indigo-400 dark:hover:border-indigo-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all active:scale-[0.98]"
+                                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-github-dark-border rounded-xl text-slate-500 dark:text-github-dark-muted text-[13px] font-bold flex items-center justify-center gap-2 hover:border-indigo-400 dark:hover:border-indigo-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all active:scale-[0.98]"
                                                 >
                                                     <Plus size={16} strokeWidth={2.5} /> Add Another Session
                                                 </button>
@@ -1160,13 +1160,13 @@ const Attendance = () => {
 
                                     {/* Info Grid */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</span>
                                             <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text leading-tight">
                                                 {new Date(selectedRequest.request_date || selectedRequest.date).toLocaleDateString()}
                                             </span>
                                         </div>
-                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Type</span>
                                             <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate">
                                                 {selectedRequest.correction_type || selectedRequest.type}
@@ -1175,7 +1175,7 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Reason */}
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border">
                                         <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Reason</span>
                                         <p className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
                                             "{selectedRequest.reason || selectedRequest.comments || 'No reason provided'}"
@@ -1183,7 +1183,7 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Sessions */}
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border">
                                         <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Proposed Sessions</span>
                                         <div className="space-y-3">
                                             {(selectedRequest.details?.sessions || (selectedRequest.time_in ? [{ in: selectedRequest.time_in, out: selectedRequest.time_out }] : [])).map((s, idx) => (

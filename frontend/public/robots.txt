@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /forgot-password
+Disallow: /unauthorized
+Disallow: /mobile-view/unauthorized
+
+Sitemap: https://attendance.mano.co.in/sitemap.xml

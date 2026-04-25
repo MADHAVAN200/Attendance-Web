@@ -1487,31 +1487,33 @@ const Attendance = () => {
 
                 {/* --- CONFIRM SUBMISSION MODAL --- */}
                 {showConfirmSubmit && createPortal(
-                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowConfirmSubmit(false)} />
-                        <div className="relative bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-6 text-center">
-                                <div className="w-16 h-16 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <AlertCircle size={32} />
-                                </div>
-                                <h3 className="text-xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Confirm Submission</h3>
-                                <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-6">
-                                    Are you sure you want to submit this correction request for <span className="font-bold text-slate-800 dark:text-github-dark-text">{formatDateDisplay(corrDate)}</span>?
-                                </p>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => setShowConfirmSubmit(false)}
-                                        className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleConfirmSubmit}
-                                        disabled={submitLoading}
-                                        className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        {submitLoading ? <RefreshCw className="animate-spin" size={16} /> : "Confirm & Send"}
-                                    </button>
+                    <div className="fixed inset-0 z-[9000] overflow-y-auto">
+                        <div className="flex min-h-full items-center justify-center p-4 text-center animate-in fade-in duration-200">
+                            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => !submitLoading && setShowConfirmSubmit(false)} />
+                            <div className="relative bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden animate-in zoom-in-95 duration-200">
+                                <div className="p-6 text-center">
+                                    <div className="w-16 h-16 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <AlertCircle size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Confirm Submission</h3>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-6">
+                                        Are you sure you want to submit this correction request for <span className="font-bold text-slate-800 dark:text-github-dark-text">{formatDateDisplay(corrDate)}</span>?
+                                    </p>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowConfirmSubmit(false)}
+                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleConfirmSubmit}
+                                            disabled={submitLoading}
+                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            {submitLoading ? <RefreshCw className="animate-spin" size={16} /> : "Confirm & Send"}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1521,17 +1523,18 @@ const Attendance = () => {
 
                 {/* --- SUCCESS POPUP --- */}
                 {showSuccessPopup && createPortal(
-                    <div className="fixed inset-0 z-[9001] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setShowSuccessPopup(false)} />
-                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-3xl shadow-3xl border border-emerald-100 dark:border-emerald-500/20 overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-8 text-center">
-                                <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm ring-8 ring-emerald-50 dark:ring-emerald-500/5">
-                                    <CheckCircle size={40} />
-                                </div>
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Request Sent!</h3>
-                                <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 leading-relaxed">
-                                    Your attendance correction request has been successfully submitted and is now pending review by the administrator.
-                                </p>
+                    <div className="fixed inset-0 z-[9001] overflow-y-auto">
+                        <div className="flex min-h-full items-center justify-center p-4 text-center animate-in fade-in duration-200">
+                            <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setShowSuccessPopup(false)} />
+                            <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-3xl shadow-3xl border border-emerald-100 dark:border-emerald-500/20 overflow-hidden animate-in zoom-in-95 duration-200 text-left mx-auto">
+                                <div className="p-8 text-center">
+                                    <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm ring-8 ring-emerald-50 dark:ring-emerald-500/5">
+                                        <CheckCircle size={40} />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Request Sent!</h3>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 leading-relaxed">
+                                        Your attendance correction request has been successfully submitted and is now pending review by the administrator.
+                                    </p>
                                 <button
                                     onClick={() => setShowSuccessPopup(false)}
                                     className="w-full px-6 py-4 text-sm font-black uppercase tracking-[0.2em] text-white bg-emerald-500 hover:bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
@@ -1540,15 +1543,17 @@ const Attendance = () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
                     </div>,
                     document.body
                 )}
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
-                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 transition-all duration-200">
-                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={closeCamera} />
-                        <div className="relative w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[9000] overflow-y-auto">
+                        <div className="flex min-h-full items-center justify-center p-4 text-center transition-all duration-200">
+                            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={closeCamera} />
+                            <div className="relative w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200 text-left mx-auto">
                             <div className="flex justify-between items-center px-4">
                                 <h3 className="text-2xl font-bold text-white tracking-tight">
                                     {cameraMode === 'IN' ? 'Check In' : 'Check Out'}
@@ -1618,6 +1623,7 @@ const Attendance = () => {
                                 )}
                             </div>
                         </div>
+                    </div>
                     </div>,
                     document.body
                 )}

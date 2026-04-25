@@ -260,8 +260,9 @@ const GeoFencing = () => {
 
             {/* Assign Staff Modal */}
             {isModalOpen && createPortal(
-                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-github-dark-subtle w-full max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/50 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="flex min-h-full items-end sm:items-center justify-center p-4">
+                        <div className="bg-white dark:bg-github-dark-subtle w-full max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200 mx-auto relative z-10">
                         {/* Header */}
                         <div className="p-4 border-b border-slate-100 dark:border-github-dark-border flex justify-between items-center">
                             <div>
@@ -334,6 +335,7 @@ const GeoFencing = () => {
                                 Confirm Assignment ({tempSelectedStaff.length})
                             </button>
                         </div>
+                        </div>
                     </div>
                 </div>,
                 document.body
@@ -341,8 +343,9 @@ const GeoFencing = () => {
 
             {/* Create Location Modal */}
             {isCreateModalOpen && createPortal(
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setIsCreateModalOpen(false)}>
-                    <div className="bg-white dark:bg-github-dark-subtle w-full max-w-md rounded-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/50 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsCreateModalOpen(false)}>
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="bg-white dark:bg-github-dark-subtle w-full max-w-md rounded-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 mx-auto relative z-10" onClick={e => e.stopPropagation()}>
                         <div className="p-5 border-b border-slate-100 dark:border-github-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-github-dark-subtle/20 rounded-t-2xl">
                             <div>
                                 <h3 className="font-bold text-slate-800 dark:text-github-dark-text">Create Location</h3>
@@ -440,6 +443,7 @@ const GeoFencing = () => {
                                 )}
                             </button>
                         </form>
+                        </div>
                     </div>
                 </div>,
                 document.body

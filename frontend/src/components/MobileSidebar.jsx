@@ -10,103 +10,128 @@ import {
     MapPin,
     User,
     Bug,
-    X,
-    LogOut
+    LogOut,
+    TrendingUp,
+    ClipboardList,
+    X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const MobileSidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
+    const userType = user?.user_type || 'employee';
 
-    const menuItems = [
-        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/mobile-view" },
-        { icon: <Users size={20} />, text: "Employees", to: "/mobile-view/employees" },
-        { icon: <Calendar size={20} />, text: "Attendance", to: "/mobile-view/attendance" },
-        { icon: <Clock size={20} />, text: "Live Attendance", to: "/mobile-view/attendance-monitoring" }, // Assuming route
-        { icon: <Calendar size={20} />, text: "Holidays & Leave", to: "/mobile-view/holidays" },
-        { icon: <FileText size={20} />, text: "Reports & Exports", to: "/mobile-view/reports" },
-        { icon: <Settings size={20} />, text: "Shift Management", to: "/mobile-view/shifts" },
-        { icon: <MapPin size={20} />, text: "Geo-Fencing", to: "/mobile-view/geofencing" },
+    const allMenuItems = [
+        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/", roles: ['admin', 'hr', 'employee', 'super_admin'] },
+        { icon: <Users size={20} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={20} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
+        { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
+        { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
+        { icon: <ClipboardList size={20} />, text: "Daily Activity", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
+        { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
+        { icon: <Settings size={20} />, text: "Shift Management", to: "/shift-management", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
     ];
 
-    // "My Profile" is special in the screenshot (at bottom or separate)
-    // Screenshot shows "My Profile" after Geo-Fencing, before Bugs.
-    // Actually it shows "My Profile" with a purple background active state.
+    const menuItems = allMenuItems.filter(item => item.roles.includes(userType));
+
+    const isActive = (to) =>
+        location.pathname === to || (to !== '/' && location.pathname.startsWith(to + '/'));
+
+    const linkClass = (to) =>
+        `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group ${
+            isActive(to)
+                ? 'bg-indigo-50 dark:bg-github-dark-border text-indigo-600 dark:text-github-dark-accent shadow-sm border border-transparent dark:border-github-dark-border/50'
+                : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-border/50 hover:text-slate-900 dark:hover:text-github-dark-text'
+        }`;
+
+    const iconClass = (to) =>
+        `mr-3 transition-colors ${
+            isActive(to)
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-slate-400 dark:text-github-dark-muted group-hover:text-slate-600 dark:group-hover:text-slate-300'
+        }`;
 
     return (
         <>
             {/* Overlay */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/60 z-40 transition-opacity backdrop-blur-md"
+                    className="fixed inset-0 bg-black/50 z-40 transition-opacity"
                     onClick={onClose}
                 />
             )}
 
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 bottom-0 w-72 bg-white dark:bg-[#111827] z-50 transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-slate-100 dark:border-github-dark-border/50 ${isOpen ? 'translate-x-0' : '-translate-x-full'
-                    }`}
+                className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-github-dark-subtle border-r border-slate-200 dark:border-github-dark-border transform transition-transform duration-300 ease-in-out flex flex-col shadow-xl ${
+                    isOpen ? 'translate-x-0' : '-translate-x-full'
+                }`}
             >
-                {/* Header */}
-                <div className="h-20 flex items-center justify-between px-6 shrink-0">
-                    <div className="flex items-center gap-3">
+                {/* Header — matches desktop exactly */}
+                <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-github-dark-border shrink-0">
+                    <div className="flex items-center gap-3 font-bold text-xl text-indigo-600 dark:text-github-dark-accent">
                         <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8" />
-                        <span className="text-xl font-bold text-indigo-600 dark:text-github-dark-text tracking-tight">MANO</span>
+                        <span>MANO</span>
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto py-2 px-4 space-y-1 custom-scrollbar">
-                    {menuItems.map((item) => {
-                        const isActive = location.pathname === item.to || (item.to !== '/mobile-view' && location.pathname.startsWith(item.to));
-                        return (
-                            <Link
-                                key={item.to}
-                                to={item.to}
-                                onClick={onClose}
-                                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-[15px] font-medium transition-all ${isActive
-                                    ? 'text-indigo-400 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-900/20'
-                                    : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
-                                    }`}
-                            >
-                                <div className={`${isActive ? 'text-indigo-500' : 'text-slate-500 dark:text-github-dark-muted'}`}>
-                                    {item.icon}
-                                </div>
-                                <span>{item.text}</span>
-                            </Link>
-                        );
-                    })}
+                {/* Nav — matches desktop exactly */}
+                <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+                    {menuItems.map((item) => (
+                        <Link
+                            key={item.to}
+                            to={item.to}
+                            onClick={onClose}
+                            className={linkClass(item.to)}
+                        >
+                            <span className={iconClass(item.to)}>{item.icon}</span>
+                            {item.text}
+                        </Link>
+                    ))}
 
-                    <Link
-                        to="/mobile-view/profile"
-                        onClick={onClose}
-                        className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-[15px] font-medium transition-all mt-4 ${location.pathname === '/mobile-view/profile'
-                            ? 'text-indigo-400 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-900/20'
-                            : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-200'
-                            }`}
-                    >
-                        <div className={`${location.pathname === '/mobile-view/profile' ? 'text-indigo-500' : 'text-slate-500 dark:text-github-dark-muted'}`}>
-                            <User size={20} />
-                        </div>
-                        <span>My Profile</span>
-                    </Link>
+                    {/* Profile link */}
+                    <div className="pt-4 border-t border-slate-100 dark:border-github-dark-border mt-4">
+                        <Link
+                            to="/profile"
+                            onClick={onClose}
+                            className={linkClass('/profile')}
+                        >
+                            <span className={iconClass('/profile')}><User size={20} /></span>
+                            My Profile
+                        </Link>
+                    </div>
                 </nav>
 
-                {/* Footer */}
-                <div className="p-4 shrink-0 mb-4">
+                {/* Footer — matches desktop exactly */}
+                <div className="p-4 border-t border-slate-100 dark:border-github-dark-border space-y-2 shrink-0">
                     <Link
-                        to="/mobile-view/feedback"
+                        to="/feedback"
                         onClick={onClose}
-                        className={`flex items-center gap-3 px-4 py-3 w-full rounded-xl text-[15px] font-medium transition-colors ${location.pathname === '/mobile-view/feedback'
-                            ? 'bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-400 dark:text-indigo-300'
-                            : 'text-slate-600 dark:text-github-dark-muted hover:text-slate-200'
-                            }`}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-border/30 hover:bg-slate-100 dark:hover:bg-github-dark-border hover:text-indigo-600 dark:hover:text-github-dark-accent rounded-lg transition-all"
                     >
-                        <Bug size={20} className={location.pathname === '/mobile-view/feedback' ? "text-indigo-500" : "text-slate-500"} />
-                        <span>Bugs & Feedback</span>
+                        <Bug size={18} />
+                        Bugs & Feedback
                     </Link>
+
+                    <button
+                        onClick={() => { logout(); onClose(); }}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
+
+                    <div className="text-[10px] text-center text-slate-400 dark:text-slate-600 font-mono pt-2">
+                        v1.0.0
+                    </div>
                 </div>
             </aside>
         </>

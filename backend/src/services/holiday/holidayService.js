@@ -135,7 +135,10 @@ export const validateBulkHolidays = async (org_id, holidays) => {
         const existingHolidays = await attendanceDB('holidays')
             .where({ org_id })
             .whereIn('holiday_date', Array.from(inputDates))
-            .select('holiday_date', 'holiday_name');
+            .select(
+                attendanceDB.raw("DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date"),
+                'holiday_name'
+            );
 
         const existingDateMap = new Map(existingHolidays.map(h => [h.holiday_date, h.holiday_name]));
 
@@ -273,7 +276,7 @@ export const bulkUploadFromFile = async (org_id, file) => {
 
     const existingHolidays = await attendanceDB('holidays')
         .where({ org_id })
-        .select('holiday_date');
+        .select(attendanceDB.raw("DATE_FORMAT(holiday_date, '%Y-%m-%d') as holiday_date"));
     const existingDates = new Set(existingHolidays.map(h => h.holiday_date));
 
     for (const { row, rowNumber } of rowsData) {

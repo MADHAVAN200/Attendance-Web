@@ -11,8 +11,8 @@ const PublicRoute = ({ children }) => {
   }
 
   // If user is logged in, redirect to dashboard. Otherwise render the public page (Login)
-  const isMobileView = location.pathname.startsWith('/mobile-view');
-  return user ? <Navigate to={isMobileView ? "/mobile-view" : "/"} replace /> : (children || <Outlet />);
+  
+  return user ? <Navigate to="/" replace /> : (children || <Outlet />);
 };
 
 export default PublicRoute;

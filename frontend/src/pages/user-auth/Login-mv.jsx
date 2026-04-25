@@ -31,7 +31,7 @@ const Login = () => {
             toast.success("Logged in successfully!");
 
             // Redirect to dashboard (DashboardHandler in App.jsx will decide which view to show)
-            navigate("/mobile-view");
+            navigate('/');
         } catch (err) {
             const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Invalid credentials";
             toast.error(errorMessage);
@@ -84,7 +84,7 @@ const Login = () => {
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                     Password
                                 </label>
-                                <Link to="/mobile-view/forgot-password" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+                                <Link to="/forgot-password" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                                     Forgot password?
                                 </Link>
                             </div>

@@ -25,9 +25,10 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
     if (!user) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative bg-white dark:bg-github-dark-subtle w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-github-dark-border">
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity" onClick={onClose}></div>
+                <div className="relative bg-white dark:bg-github-dark-subtle w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-github-dark-border text-left mx-auto">
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -72,6 +73,7 @@ const EmployeeDetailModal = ({ user, onClose, avatarTimestamp }) => {
                     >
                         Close
                     </button>
+                </div>
                 </div>
             </div>
         </div>,
@@ -119,7 +121,7 @@ const EmployeeList = () => {
 
     const handleEdit = (e, id) => {
         e.stopPropagation();
-        navigate(`/mobile-view/employees/edit/${id}`);
+        navigate('/employees/edit/${id}');
     };
 
     const filteredEmployees = employees
@@ -199,7 +201,7 @@ const EmployeeList = () => {
 
                 {/* FAB */}
                 <Link
-                    to="/mobile-view/employees/add"
+                    to="/employees/add"
                     className="fixed bottom-24 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center active:scale-90 transition-all z-20"
                 >
                     <Plus size={28} />

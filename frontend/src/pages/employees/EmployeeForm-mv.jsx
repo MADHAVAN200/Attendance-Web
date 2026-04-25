@@ -171,7 +171,7 @@ const EmployeeForm = () => {
                 await adminService.createUser(payload);
                 toast.success("User created successfully");
             }
-            navigate('/mobile-view/employees');
+            navigate('/employees');
         } catch (err) {
             console.error(err);
             toast.error(err.message || "Operation failed");
@@ -196,7 +196,7 @@ const EmployeeForm = () => {
                 <div className="flex items-center justify-between mb-2">
                     <button
                         type="button"
-                        onClick={() => navigate('/mobile-view/employees')}
+                        onClick={() => navigate('/employees')}
                         className="flex items-center gap-2 text-slate-800 dark:text-github-dark-text transition-colors"
                     >
                         <X size={24} />

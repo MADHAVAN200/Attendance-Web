@@ -36,12 +36,12 @@ const Feedback = () => {
             <div className="px-4 pb-6 pt-2 space-y-6 max-w-md mx-auto">
                 
                 {/* Tabs */}
-                <div className="flex p-1 bg-slate-50 dark:bg-[#1a2332] rounded-[16px] border border-slate-200 dark:border-github-dark-border/50">
+                <div className="flex p-1 bg-slate-50 dark:bg-dark-card rounded-[16px] border border-slate-200 dark:border-github-dark-border">
                     <button
                         onClick={() => setActiveTab('bug')}
                         className={`flex-1 py-3 flex items-center justify-center gap-2 rounded-[12px] text-[13px] font-bold transition-all ${
                             activeTab === 'bug' 
-                                ? 'bg-white dark:bg-[#2a364b] text-indigo-500 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border/50' 
+                                ? 'bg-white dark:bg-[#2a364b] text-indigo-500 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border' 
                                 : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-300 border border-transparent'
                         }`}
                     >
@@ -51,7 +51,7 @@ const Feedback = () => {
                         onClick={() => setActiveTab('feedback')}
                         className={`flex-1 py-3 flex items-center justify-center gap-2 rounded-[12px] text-[13px] font-bold transition-all ${
                             activeTab === 'feedback' 
-                                ? 'bg-white dark:bg-[#2a364b] text-indigo-500 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border/50' 
+                                ? 'bg-white dark:bg-[#2a364b] text-indigo-500 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border' 
                                 : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-300 border border-transparent'
                         }`}
                     >
@@ -70,7 +70,7 @@ const Feedback = () => {
                             placeholder={activeTab === 'bug' ? "e.g., Error on Leave Page" : "e.g., Suggestion for new feature"}
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-[#1a2332] border border-slate-200 dark:border-github-dark-border/50 rounded-2xl px-4 py-4 text-[13px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                            className="w-full bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-2xl px-4 py-4 text-[13px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors"
                         />
                     </div>
 
@@ -83,7 +83,7 @@ const Feedback = () => {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={4}
-                            className="w-full bg-slate-50 dark:bg-[#1a2332] border border-slate-200 dark:border-github-dark-border/50 rounded-2xl px-4 py-4 text-[13px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
+                            className="w-full bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-2xl px-4 py-4 text-[13px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
                         />
                     </div>
 
@@ -91,7 +91,7 @@ const Feedback = () => {
                         <label className="block text-[10px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">
                             Screenshots (Optional)
                         </label>
-                        <button className="w-full flex items-center justify-between bg-slate-50 dark:bg-[#1a2332] border border-slate-200 dark:border-github-dark-border/50 rounded-2xl px-4 py-4 text-[13px] text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors group">
+                        <button className="w-full flex items-center justify-between bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-2xl px-4 py-4 text-[13px] text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors group">
                             <div className="flex items-center gap-3">
                                 <Paperclip size={18} className="text-indigo-500 dark:text-indigo-400" />
                                 <span>Attach Screenshots (Optional)</span>

@@ -13,9 +13,9 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
     // Initialize theme from localStorage or default to 'dark' logic
     const [theme, setTheme] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('theme') || 'dark'; // defaulting to dark for this aesthetic update
+            return localStorage.getItem('theme') || 'light'; // matches desktop default
         }
-        return 'dark';
+        return 'light';
     });
 
     useEffect(() => {
@@ -33,10 +33,10 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300 overflow-x-hidden">
+        <div className="min-h-screen bg-slate-50 dark:bg-github-dark-bg font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300 overflow-x-hidden">
             {/* Header */}
             {!hideHeader && (
-                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-github-dark-border/50 flex items-center justify-between px-4 z-30">
+                <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-github-dark-subtle border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between px-4 z-30">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(true)}
@@ -56,12 +56,12 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                         </button>
                         <div className="relative">
                             <button
-                                onClick={() => navigate('/mobile-view/notifications')}
+                                onClick={() => navigate('/notifications')}
                                 className="relative text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                             >
                                 <Bell size={22} />
                                 {unreadCount > 0 && (
-                                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-[#111827]"></span>
+                                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-github-dark-subtle"></span>
                                 )}
                             </button>
                         </div>
@@ -73,7 +73,7 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
             <MobileSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
             {/* Main Content */}
-            <main className={`${hideHeader ? '' : 'pt-20 px-4 space-y-6'}`}>
+            <main className={`${hideHeader ? '' : 'pt-16 px-4 space-y-6'}`}>
                 {children}
             </main>
         </div>

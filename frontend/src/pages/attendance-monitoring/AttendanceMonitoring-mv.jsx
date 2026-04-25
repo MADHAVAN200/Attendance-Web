@@ -264,7 +264,7 @@ const AttendanceMonitoring = () => {
                                                 <StatusBadge status={emp.status} />
                                             </div>
 
-                                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-github-dark-border/50">
+                                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-github-dark-border">
                                                 <div>
                                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time In</p>
                                                     <span className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
@@ -533,14 +533,14 @@ const RequestsView = () => {
             {selectedRequest && createPortal(
                 <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center sm:p-4">
                     <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setSelectedRequest(null)}></div>
-                    <div className="relative z-10 bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+                    <div className="relative z-10 bg-white dark:bg-github-dark-bg w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
                         {/* Header Pull Bar (Mobile) */}
                         <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
                             <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
                         </div>
 
                         {/* Modal Header */}
-                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-github-dark-border/60 shrink-0">
+                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-github-dark-border shrink-0">
                             <div>
                                 <h3 className="font-bold text-2xl text-slate-900 dark:text-github-dark-text">Request #{selectedRequest.acr_id || selectedRequest.request_id || selectedRequest.id}</h3>
                                 <div className="flex items-center gap-2 mt-2">
@@ -562,7 +562,7 @@ const RequestsView = () => {
                             <section>
                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Correction Details</h4>
                                 <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                                    <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
                                         <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-1">Request Type</span>
                                         <span className="font-bold text-slate-800 dark:text-github-dark-text text-sm uppercase">{selectedRequest.correction_type || 'CORRECTION'}</span>
                                     </div>
@@ -571,7 +571,7 @@ const RequestsView = () => {
                                         <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.correction_method || selectedRequest.correction_data_parsed?.method || 'FIX TIMINGS'}</span>
                                     </div>
                                 </div>
-                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm">
+                                <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm">
                                     <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-3 block">Requested Sessions</span>
                                     <div className="space-y-2">
                                         {(() => {
@@ -593,7 +593,7 @@ const RequestsView = () => {
                             {/* Justification */}
                             <section>
                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Justification & Comments</h4>
-                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                                <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm flex items-start gap-3">
                                     <FileText size={16} className="text-slate-400 shrink-0 mt-0.5" />
                                     <p className="text-sm font-medium italic text-slate-600 dark:text-slate-300">
                                         "{selectedRequest.reason || selectedRequest.comments || 'No comment provided'}"
@@ -603,7 +603,7 @@ const RequestsView = () => {
 
                             {/* Audit Trail */}
                             <section>
-                                <div className="border-t border-slate-100 dark:border-github-dark-border/60 mb-6"></div>
+                                <div className="border-t border-slate-100 dark:border-github-dark-border mb-6"></div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <History size={14} className="text-slate-400" />
                                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Trail</h4>
@@ -612,7 +612,7 @@ const RequestsView = () => {
                                 <div className="relative pl-3 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
                                     {/* Submited */}
                                     <div className="relative">
-                                        <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 border-indigo-500"></div>
+                                        <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-github-dark-bg border-2 border-indigo-500"></div>
                                         <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text">Submitted</h5>
                                         <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
                                             {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'User'}
@@ -622,7 +622,7 @@ const RequestsView = () => {
                                     {/* Final Status (if processed) */}
                                     {(selectedRequest.status || 'PENDING').toUpperCase() !== 'PENDING' && (
                                         <div className="relative">
-                                            <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 
+                                            <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-github-dark-bg border-2 
                                                     ${(selectedRequest.status).toUpperCase() === 'APPROVED' ? 'border-emerald-500' : 'border-rose-500'}`}>
                                             </div>
                                             <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text drop-shadow-sm capitalize">
@@ -639,11 +639,11 @@ const RequestsView = () => {
 
                         {/* Admin/HR Action Buttons (Bottom Fixed) */}
                         {['admin', 'hr', 'manager'].includes((user?.user_type || user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
-                            <div className="px-6 py-4 border-t border-slate-100 dark:border-github-dark-border/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
+                            <div className="px-6 py-4 border-t border-slate-100 dark:border-github-dark-border bg-white dark:bg-github-dark-bg shrink-0 sm:rounded-b-[2rem] flex gap-3">
                                 <button
                                     onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'REJECTED')}
                                     disabled={isUpdatingStatus}
-                                    className="flex-1 py-3.5 bg-white dark:bg-[#1a2332] border border-rose-200 dark:border-rose-900 shadow-sm text-rose-600 dark:text-rose-500 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
+                                    className="flex-1 py-3.5 bg-white dark:bg-dark-card border border-rose-200 dark:border-rose-900 shadow-sm text-rose-600 dark:text-rose-500 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
                                 >
                                     Reject
                                 </button>

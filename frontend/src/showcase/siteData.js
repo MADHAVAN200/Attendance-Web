@@ -25,7 +25,7 @@ export const navigation = {
         { label: "Holidays & Leave", path: "/features/holidays-leave" },
     ],
     ai: [
-        { label: "\"Ask HR\" AI Assistant", path: "/ai/ask-hr-assistant" },
+        { label: "Ask AI Assistant", path: "/ai/ask-hr-assistant" },
         { label: "Smart DAR Insights", path: "/ai/smart-dar-insights" },
         { label: "Generative Policy Builder", path: "/ai/generative-policy-builder" },
     ],
@@ -42,13 +42,13 @@ export const navigation = {
 
 export const homeData = {
     heroImage: "/showcase/dashboard.png",
-    headline: "Smart Attendance & Workforce Management for Modern Teams",
+    headline: "MANO Attendance: Smart Attendance & Workforce Management",
     subtext:
         "MANO-Attendance helps organizations track employee attendance, manage leave requests, enforce location-based compliance, and generate powerful workforce insights -- all in one intelligent platform.",
     ctaPrimary: "Start Free Trial",
     ctaSecondary: "Book a Demo",
     values: [
-        "Ask natural language questions to the AI-powered HR Assistant",
+        "Ask natural language questions to the AI-powered Assistant",
         "Generate dynamic shift policies instantly with Prompts",
         "Prevent proxy attendance with webcam verification",
         "Ensure employees are present at the right location with geofencing",
@@ -104,7 +104,7 @@ export const homeData = {
             link: "/product/leave-management"
         },
         {
-            title: "\"Ask HR\" AI Assistant",
+            title: "Ask AI Assistant",
             body: "A conversational AI chatbot trained on your company's policy documents. Employees get instant, cited answers rather than generating HR tickets. It acts as a 24/7 first-response layer for all internal queries.",
             bullets: [
                 "Natural Language Processing (NLP) for complex policy queries",
@@ -643,7 +643,7 @@ export const pageContent = {
         points: ["Leave approvals", "Correction alerts", "Socket.io integration", "Email delivery", "Policy broadcasts"],
     },
     "/ai/ask-hr-assistant": {
-        title: "\"Ask HR\" AI Assistant (Powered by RAG)",
+        title: "Ask AI Assistant (Powered by RAG)",
         image: "/showcase/rag-assistant.png",
         intro: "A conversational AI chatbot trained on your company's policy documents, providing instant answers with accurate citations.",
         body: "Instead of emailing HR, employees can ask natural language questions about policies, attendance, and leave balances directly from the dashboard.",

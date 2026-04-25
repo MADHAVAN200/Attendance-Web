@@ -76,9 +76,9 @@ const Notifications = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#111827] font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300">
+        <div className="min-h-screen bg-slate-50 dark:bg-github-dark-bg font-poppins text-slate-900 dark:text-github-dark-text pb-6 md:pb-0 transition-colors duration-300">
             {/* Custom Header for Notifications */}
-            <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-[#111827] border-b border-slate-100 dark:border-github-dark-border/50 flex items-center px-4 z-30">
+            <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-github-dark-bg border-b border-slate-100 dark:border-github-dark-border flex items-center px-4 z-30">
                 <button
                     onClick={() => navigate(-1)}
                     className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
@@ -95,11 +95,11 @@ const Notifications = () => {
                     {localNotifications.map((notification) => (
                         <div 
                             key={notification.id} 
-                            className="p-4 flex gap-4 bg-white dark:bg-[#111827] hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                            className="p-4 flex gap-4 bg-white dark:bg-github-dark-bg hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
                         >
                             {/* Icon Column */}
                             <div className="shrink-0 pt-0.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border flex items-center justify-center text-indigo-500 dark:text-indigo-400">
                                     <Info size={16} />
                                 </div>
                             </div>

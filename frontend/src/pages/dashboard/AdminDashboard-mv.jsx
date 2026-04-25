@@ -165,19 +165,19 @@ const AdminDashboard = () => {
                     <h3 className="text-base font-semibold text-slate-800 dark:text-github-dark-text mb-3 px-1">Quick Actions</h3>
                     <div className="space-y-3">
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/employees')}
+                            onClick={() => navigate('/employees')}
                             icon={<UserPlus size={20} className="text-indigo-400" />}
                             iconBg="bg-indigo-500/10"
                             title="Add Employee"
                         />
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/attendance-monitoring')}
+                            onClick={() => navigate('/attendance-monitoring')}
                             icon={<AlertTriangle size={20} className="text-rose-400" />}
                             iconBg="bg-rose-500/10"
                             title="Live Monitor"
                         />
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/shifts')}
+                            onClick={() => navigate('/shifts')}
                             icon={<Briefcase size={20} className="text-purple-400" />}
                             iconBg="bg-purple-500/10"
                             title="Manage Shifts"
@@ -189,7 +189,7 @@ const AdminDashboard = () => {
                 <div>
                     <h3 className="text-base font-semibold text-slate-800 dark:text-github-dark-text mb-3 px-1">Analytics</h3>
 
-                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
                         <h4 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Attendance Trends</h4>
                         <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-6 mt-1">Weekly Insight</p>
 
@@ -211,9 +211,9 @@ const AdminDashboard = () => {
                                             iconType="circle"
                                             wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', left: 0 }}
                                         />
-                                        <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Present" />
-                                        <Line type="monotone" dataKey="absent" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Absent" />
-                                        <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#1a2332' }} name="Late" />
+                                        <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#0d1117' }} name="Present" />
+                                        <Line type="monotone" dataKey="absent" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#0d1117' }} name="Absent" />
+                                        <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#0d1117' }} name="Late" />
                                     </LineChart>
                                 </ResponsiveContainer>
                             )}
@@ -222,8 +222,8 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Live Activity Segment */}
-                <div className="bg-white dark:bg-[#1a2332] rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border/60">
-                    <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-github-dark-border/60">
+                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border">
+                    <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-github-dark-border">
                         <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text">Live Activity</h3>
                         <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
                     </div>
@@ -277,7 +277,7 @@ const AdminDashboard = () => {
 };
 
 const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, iconBg }) => (
-    <div className="bg-white dark:bg-[#1a2332] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border/60 relative overflow-hidden">
+    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border relative overflow-hidden">
         {loading ? (
             <div className="animate-pulse space-y-4">
                 <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3"></div>
@@ -315,7 +315,7 @@ const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, 
 const QuickLinkCard = ({ icon, title, onClick, iconBg }) => (
     <div
         onClick={onClick}
-        className="bg-white dark:bg-[#1a2332] p-4 rounded-xl shadow-sm border border-slate-100 dark:border-github-dark-border/60 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
+        className="bg-white dark:bg-dark-card p-4 rounded-xl shadow-sm border border-slate-100 dark:border-github-dark-border flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
     >
         <div className="flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>

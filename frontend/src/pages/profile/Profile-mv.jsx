@@ -263,13 +263,14 @@ const Profile = () => {
             {/* --- IMAGE PREVIEW MODAL --- */}
             {showPreview && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 transition-all duration-200"
+                    className="fixed inset-0 z-[9999] overflow-y-auto bg-black/90 backdrop-blur-md transition-opacity duration-200"
                     onClick={() => setShowPreview(false)}
                 >
-                    <div
-                        className="w-full max-w-sm space-y-6 animate-in fade-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div
+                            className="relative w-full max-w-sm space-y-6 animate-in fade-in zoom-in-95 duration-200 mx-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                         <div className="relative bg-transparent rounded-lg overflow-hidden flex items-center justify-center">
                             <img
                                 src={user.avatar}
@@ -293,6 +294,7 @@ const Profile = () => {
                             </button>
                         </div>
                         <button onClick={() => setShowPreview(false)} className="w-full py-3 text-white/50 font-bold">Close</button>
+                        </div>
                     </div>
                 </div>,
                 document.body

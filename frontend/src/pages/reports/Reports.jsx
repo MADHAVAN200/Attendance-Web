@@ -20,11 +20,6 @@ import { toast } from 'react-toastify';
 const Reports = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view/reports');
-        }
-    }, [navigate]);
 
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));

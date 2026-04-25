@@ -112,14 +112,14 @@ const Reports = () => {
         <MobileDashboardLayout title="Reports & Exports">
             <div className="space-y-3 px-2 pb-6 pt-2">
                 {/* Control Form area */}
-                <div className="bg-white dark:bg-dark-card text-slate-800 dark:text-github-dark-text rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border/50 flex flex-col gap-4">
+                <div className="bg-white dark:bg-dark-card text-slate-800 dark:text-github-dark-text rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col gap-4">
                     
                     {reportType !== 'employee_master' && (
                         <div>
                             <label className="block text-[10px] font-bold tracking-widest uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">
                                 {['matrix_monthly', 'lateness_report', 'attendance_detailed', 'attendance_summary'].includes(reportType) ? 'Select Month' : 'Select Date'}
                             </label>
-                            <div className="relative bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg border border-slate-200 dark:border-github-dark-border/50 flex items-center overflow-hidden">
+                            <div className="relative bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg border border-slate-200 dark:border-github-dark-border flex items-center overflow-hidden">
                                 <div className="absolute left-3 z-10 text-indigo-500 dark:text-indigo-400">
                                     <Calendar size={14} />
                                 </div>
@@ -146,7 +146,7 @@ const Reports = () => {
                         <label className="block text-[10px] font-bold tracking-widest uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">
                             Report Type
                         </label>
-                        <div className="relative bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg border border-slate-200 dark:border-github-dark-border/50 flex items-center overflow-hidden">
+                        <div className="relative bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg border border-slate-200 dark:border-github-dark-border flex items-center overflow-hidden">
                             <select
                                 value={reportType}
                                 onChange={(e) => setReportType(e.target.value)}
@@ -166,7 +166,7 @@ const Reports = () => {
                         <label className="block text-[10px] font-bold tracking-widest uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">
                             File Format
                         </label>
-                        <div className="flex bg-slate-50 dark:bg-github-dark-subtle/80 p-1 rounded-lg border border-slate-200 dark:border-github-dark-border/50 gap-1">
+                        <div className="flex bg-slate-50 dark:bg-github-dark-subtle/80 p-1 rounded-lg border border-slate-200 dark:border-github-dark-border gap-1">
                             {fileFormats.map((format) => (
                                 <button
                                     key={format.id}
@@ -203,7 +203,7 @@ const Reports = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex bg-white dark:bg-dark-card p-1 rounded-lg border border-slate-200 dark:border-github-dark-border/50 mt-4 shadow-sm">
+                <div className="flex bg-white dark:bg-dark-card p-1 rounded-lg border border-slate-200 dark:border-github-dark-border mt-4 shadow-sm">
                     {[
                         { id: 'preview', label: 'Preview', icon: Eye },
                         { id: 'history', label: 'History', icon: History }
@@ -225,7 +225,7 @@ const Reports = () => {
                 {/* Tab Content */}
                 <div className="mt-4">
                     {activeTab === 'preview' && (
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border/50 overflow-hidden min-h-[250px] flex flex-col">
+                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden min-h-[250px] flex flex-col">
                             {loadingPreview ? (
                                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                                     <div className="w-6 h-6 border-[3px] border-indigo-100 dark:border-indigo-900/30 border-t-indigo-500 dark:border-t-indigo-400 rounded-full animate-spin"></div>
@@ -234,7 +234,7 @@ const Reports = () => {
                             ) : previewData.rows && previewData.rows.length > 0 ? (
                                 <div className="overflow-x-auto w-full">
                                     <table className="w-full text-left border-collapse min-w-max">
-                                        <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border/50">
+                                        <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border">
                                             <tr className="text-[9px] tracking-wider uppercase text-slate-500 dark:text-github-dark-muted font-bold">
                                                 {previewData.columns.map((col, idx) => (
                                                     <th key={idx} className="px-3 py-2.5 whitespace-nowrap">{col}</th>
@@ -280,7 +280,7 @@ const Reports = () => {
                         <div className="space-y-2">
                             {exportHistory.length > 0 ? (
                                 exportHistory.map((report) => (
-                                    <div key={report.id} className="bg-white dark:bg-dark-card rounded-xl p-3 shadow-sm border border-slate-200 dark:border-github-dark-border/50 flex flex-col gap-2">
+                                    <div key={report.id} className="bg-white dark:bg-dark-card rounded-xl p-3 shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col gap-2">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                                                 report.name.endsWith('.pdf') ? 'bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400' 
@@ -302,7 +302,7 @@ const Reports = () => {
                                     </div>
                                 ))
                             ) : (
-                                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border/50 p-6 flex flex-col items-center justify-center gap-2 text-center">
+                                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 flex flex-col items-center justify-center gap-2 text-center">
                                     <DownloadCloud size={28} className="text-slate-300 dark:text-slate-700" />
                                     <div>
                                         <p className="text-slate-800 dark:text-github-dark-text font-bold text-xs">No Export History</p>

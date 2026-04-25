@@ -41,11 +41,6 @@ import {
 const AttendanceMonitoring = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (window.innerWidth < 1024) {
-            navigate('/mobile-view/attendance-monitoring');
-        }
-    }, [navigate]);
 
     const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'

@@ -114,9 +114,9 @@ const BulkHolidayImport = () => {
                 success_count: 0,
                 failure_count: 0,
                 errors: [],
-                skipped_rows: duplicates.map((d, idx) => ({
-                    name: previewData[d.row - 1]?.name,
-                    date: previewData[d.row - 1]?.date,
+                skipped_rows: duplicates.map((d) => ({
+                    name: validRows[d.row - 1]?.name,
+                    date: validRows[d.row - 1]?.date,
                     skipReason: d.reason
                 }))
             };

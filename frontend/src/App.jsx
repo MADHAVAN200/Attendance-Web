@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
 import ErrorBoundary from "./ErrorBoundary";
-
+import ResponsiveRoute from "./components/ResponsiveRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import ProtectedRoute from "./context/protection";
@@ -77,16 +77,83 @@ import WebsiteChatbotWidget from "./showcase/components/WebsiteChatbotWidget";
 import useDeviceType from "./showcase/hooks/useDeviceType";
 import "./showcase/showcase.css";
 
+const SEO_BASE_URL = "https://attendance.mano.co.in";
+
+function upsertMetaTag(selector, attributes) {
+  let el = document.head.querySelector(selector);
+  if (!el) {
+    el = document.createElement("meta");
+    document.head.appendChild(el);
+  }
+
+  Object.entries(attributes).forEach(([key, value]) => {
+    el.setAttribute(key, value);
+  });
+}
+
+function upsertCanonical(url) {
+  let link = document.head.querySelector('link[rel="canonical"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.setAttribute("rel", "canonical");
+    document.head.appendChild(link);
+  }
+  link.setAttribute("href", url);
+}
+
+function SeoManager() {
+  const location = useLocation();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const path = location.pathname;
+    const isPublicLanding = path === "/" && !user;
+    const isLoginPage = path === "/login";
+    const isForgotPassword = path === "/forgot-password";
+
+    const title = isPublicLanding
+      ? "MANO Attendance | Smart Attendance & Workforce Management"
+      : isLoginPage
+        ? "MANO Attendance Login | Secure Portal Access"
+        : isForgotPassword
+          ? "Forgot Password | MANO Attendance"
+          : "MANO Attendance";
+
+    const description = isPublicLanding
+      ? "MANO Attendance: The ultimate smart attendance and workforce management platform with geofencing, AI insights, and payroll reports."
+      : isLoginPage
+        ? "Access the MANO Attendance secure login portal. Manage your workforce, track live attendance, and generate reports."
+        : "MANO Attendance workforce platform.";
+
+    const canonicalPath = isPublicLanding || isLoginPage || isForgotPassword ? path : "/";
+    const canonicalUrl = `${SEO_BASE_URL}${canonicalPath}`;
+    const robots = isPublicLanding || isLoginPage || isForgotPassword ? "index, follow" : "noindex, nofollow";
+
+    document.title = title;
+    upsertCanonical(canonicalUrl);
+
+    upsertMetaTag('meta[name="description"]', { name: "description", content: description });
+    upsertMetaTag('meta[name="robots"]', { name: "robots", content: robots });
+    upsertMetaTag('meta[property="og:title"]', { property: "og:title", content: title });
+    upsertMetaTag('meta[property="og:description"]', { property: "og:description", content: description });
+    upsertMetaTag('meta[property="og:url"]', { property: "og:url", content: canonicalUrl });
+    upsertMetaTag('meta[name="twitter:title"]', { name: "twitter:title", content: title });
+    upsertMetaTag('meta[name="twitter:description"]', { name: "twitter:description", content: description });
+  }, [location.pathname, user]);
+
+  return null;
+}
+
 // Component to handle role-based dashboard view
 const DashboardHandler = () => {
   const { user } = useAuth();
   if (user?.user_type === 'employee') {
-    return <EmployeeDashboard />;
+    return <ResponsiveRoute DesktopComponent={EmployeeDashboard} MobileComponent={MobileEmployeeDashboard} />;
   }
   if (user?.user_type === 'super_admin') {
     return <SuperAdminDashboard />;
   }
-  return <AdminDashboard />;
+  return <ResponsiveRoute DesktopComponent={AdminDashboard} MobileComponent={MobileAdminDashboard} />;
 };
 
 function ShowcaseScrollToTop() {
@@ -171,6 +238,7 @@ function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
+        <SeoManager />
         <ScaleManager />
         <ToastContainer position="top-right" autoClose={3000} />
         <Routes>
@@ -181,9 +249,9 @@ function App() {
 
           {/* Public Route: Login */}
           <Route element={<PublicRoute />}>
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<ResponsiveRoute DesktopComponent={Login} MobileComponent={MobileLogin} />} />
             <Route path="/org-login" element={<SuperAdminLogin />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/forgot-password" element={<ResponsiveRoute DesktopComponent={ForgotPassword} MobileComponent={MobileForgotPassword} />} />
           </Route>
 
           {/* Test Routes - Only available in Development */}
@@ -198,22 +266,26 @@ function App() {
             {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee', 'super_admin']} />}>
               <Route path="/" element={<DashboardHandler />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/holidays" element={<HolidayManagement />} />
-              <Route path="/profile" element={<Profile />} />
+              <Route path="/attendance" element={<ResponsiveRoute DesktopComponent={Attendance} MobileComponent={MobileAttendance} />} />
+              <Route path="/holidays" element={<ResponsiveRoute DesktopComponent={HolidayManagement} MobileComponent={MobileHolidayManagement} />} />
+              <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
               <Route path="/daily-activity" element={<DailyActivity />} />
-              <Route path="/apply-leave" element={<LeaveApplication />} />
+              <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
+              
+              {/* Mobile-Only Pages fallback */}
+              <Route path="/notifications" element={<MobileNotifications />} />
+              <Route path="/feedback" element={<MobileFeedback />} />
             </Route>
 
             {/* Admin & HR Only Routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
-              <Route path="/attendance-monitoring" element={<AttendanceMonitoring />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/shift-management" element={<PolicyBuilder />} />
-              <Route path="/geofencing" element={<GeoFencing />} />
-              <Route path="/employees" element={<EmployeeList />} />
-              <Route path="/employees/add" element={<EmployeeForm />} />
-              <Route path="/employees/edit/:id" element={<EmployeeForm />} />
+              <Route path="/attendance-monitoring" element={<ResponsiveRoute DesktopComponent={AttendanceMonitoring} MobileComponent={MobileAttendanceMonitoring} />} />
+              <Route path="/reports" element={<ResponsiveRoute DesktopComponent={Reports} MobileComponent={MobileReports} />} />
+              <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={PolicyBuilder} MobileComponent={MobileShiftManagement} />} />
+              <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={GeoFencing} MobileComponent={MobileGeoFencing} />} />
+              <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeList} MobileComponent={MobileEmployeeList} />} />
+              <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
+              <Route path="/employees/edit/:id" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/bulk" element={<BulkUpload />} />
               <Route path="/holidays/bulk" element={<BulkHolidayImport />} />
               <Route path="/dar-admin" element={<DARAdmin />} />
@@ -230,37 +302,6 @@ function App() {
               <Route path="/super-admin/alerts" element={<SecurityAlerts />} />
               <Route path="/super-admin/feedback" element={<UserFeedback />} />
               <Route path="/super-admin/logs" element={<SystemLogs />} />
-            </Route>
-          </Route>
-
-          {/* Mobile View Routes */}
-          {/* Public Mobile Routes */}
-          <Route element={<PublicRoute />}>
-            <Route path="/mobile-view/login" element={<MobileLogin />} />
-            <Route path="/mobile-view/forgot-password" element={<MobileForgotPassword />} />
-          </Route>
-
-          <Route element={<ProtectedRoute />}>
-            <Route path="/mobile-view/unauthorized" element={<Unauthorized />} />
-
-            <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee', 'super_admin']} />}>
-              <Route path="/mobile-view" element={<MobileDashboardHandler />} />
-              <Route path="/mobile-view/attendance" element={<MobileAttendance />} />
-              <Route path="/mobile-view/holidays" element={<MobileHolidayManagement />} />
-              <Route path="/mobile-view/profile" element={<MobileProfile />} />
-              <Route path="/mobile-view/apply-leave" element={<MobileLeaveApplication />} />
-
-              {/* Admin/HR Specific Mobile Pages */}
-              <Route path="/mobile-view/employees" element={<MobileEmployeeList />} />
-              <Route path="/mobile-view/employees/add" element={<MobileEmployeeForm />} />
-              <Route path="/mobile-view/employees/edit/:id" element={<MobileEmployeeForm />} />
-
-              <Route path="/mobile-view/attendance-monitoring" element={<MobileAttendanceMonitoring />} />
-              <Route path="/mobile-view/shifts" element={<MobileShiftManagement />} />
-              <Route path="/mobile-view/geofencing" element={<MobileGeoFencing />} />
-              <Route path="/mobile-view/reports" element={<MobileReports />} />
-              <Route path="/mobile-view/notifications" element={<MobileNotifications />} />
-              <Route path="/mobile-view/feedback" element={<MobileFeedback />} />
             </Route>
           </Route>
 

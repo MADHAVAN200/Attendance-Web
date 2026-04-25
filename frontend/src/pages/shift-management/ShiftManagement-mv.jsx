@@ -125,7 +125,7 @@ const ShiftManagement = () => {
         <MobileDashboardLayout title="Shift Management">
             <div className="px-2 pb-6 pt-2 space-y-3">
                 {/* Top Card */}
-                <div className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border/50 flex justify-between items-center">
+                <div className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border flex justify-between items-center">
                     <div>
                         <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">Active Shifts</h2>
                         <p className="text-[10px] text-slate-500 dark:text-github-dark-muted max-w-[150px] mt-0.5">Manage work timings & grace</p>
@@ -145,7 +145,7 @@ const ShiftManagement = () => {
                         <div 
                             key={shift.id} 
                             onClick={() => handleOpenViewModal(shift)}
-                            className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border/50 relative cursor-pointer active:scale-[0.98] transition-all"
+                            className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border relative cursor-pointer active:scale-[0.98] transition-all"
                         >
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-3">
@@ -162,7 +162,7 @@ const ShiftManagement = () => {
                                 </button>
                             </div>
 
-                            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-github-dark-border/50">
+                            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-github-dark-border">
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-slate-500 dark:text-github-dark-muted">Timing</span>
                                     <span className="font-bold text-slate-700 dark:text-github-dark-text font-mono tracking-wide">{shift.startTime.substring(0,5)} - {shift.endTime.substring(0,5)}</span>
@@ -185,8 +185,9 @@ const ShiftManagement = () => {
 
             {/* View Shift Modal Overlay */}
             {isViewModalOpen && selectedShift && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 px-4">
-                    <div className="bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto shadow-xl">
+                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
                         <div className="flex justify-between items-center mb-3">
                             <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate pr-2">{selectedShift.name}</h2>
                             <button onClick={() => setIsViewModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
@@ -201,7 +202,7 @@ const ShiftManagement = () => {
                             <div>
                                 <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Timing & Schedule</p>
                                 <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
                                         <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
                                             <Sun size={12} />
                                         </div>
@@ -210,7 +211,7 @@ const ShiftManagement = () => {
                                             <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text mt-0.5">{selectedShift.startTime.substring(0,5)}</p>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
                                         <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
                                             <Moon size={12} />
                                         </div>
@@ -220,7 +221,7 @@ const ShiftManagement = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border/50">
+                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
                                     <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
                                         <Hourglass size={12} />
                                     </div>
@@ -234,7 +235,7 @@ const ShiftManagement = () => {
                             {/* Overtime Configuration */}
                             <div>
                                 <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Overtime Config</p>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border/50">
+                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
                                     <div className="p-1 bg-slate-200 dark:bg-slate-700/50 text-slate-600 dark:text-github-dark-muted rounded-md">
                                         {selectedShift.overtime ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400"/> : <XCircle size={12} />}
                                     </div>
@@ -248,7 +249,7 @@ const ShiftManagement = () => {
                             {/* Attendance Validation */}
                             <div>
                                 <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Validation</p>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-100 dark:border-github-dark-border/50 grid grid-cols-2 gap-3">
+                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-100 dark:border-github-dark-border grid grid-cols-2 gap-3">
                                     <div>
                                         <p className="text-[8px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">Check-In</p>
                                         <div className="space-y-2">
@@ -285,6 +286,7 @@ const ShiftManagement = () => {
                         >
                             Close
                         </button>
+                        </div>
                     </div>
                 </div>,
                 document.body
@@ -292,9 +294,10 @@ const ShiftManagement = () => {
 
             {/* Create New Shift Modal Overlay */}
             {isAddModalOpen && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 px-4">
-                    <div className="bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border/50 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto shadow-xl">
-                        <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-github-dark-border/50 mb-3">
+                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
+                        <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-github-dark-border mb-3">
                             <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">Create Shift</h2>
                             <button onClick={() => setIsAddModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
                                 <X size={14} />
@@ -309,7 +312,7 @@ const ShiftManagement = () => {
                                     placeholder="e.g. Morning Shift"
                                     value={newShiftName}
                                     onChange={(e) => setNewShiftName(e.target.value)}
-                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg px-2.5 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
                                 />
                             </div>
 
@@ -321,7 +324,7 @@ const ShiftManagement = () => {
                                             type="time" 
                                             value={newStartTime}
                                             onChange={(e) => setNewStartTime(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
+                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
                                         />
                                         <Clock size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                     </div>
@@ -333,7 +336,7 @@ const ShiftManagement = () => {
                                             type="time" 
                                             value={newEndTime}
                                             onChange={(e) => setNewEndTime(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
+                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
                                         />
                                         <Clock size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                     </div>
@@ -347,13 +350,13 @@ const ShiftManagement = () => {
                                         type="number" 
                                         value={newGracePeriod}
                                         onChange={(e) => setNewGracePeriod(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border/50 rounded-lg pl-2.5 pr-9 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50"
+                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-9 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50"
                                     />
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">mins</span>
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center py-1.5 border-b border-t border-slate-100 dark:border-github-dark-border/50">
+                            <div className="flex justify-between items-center py-1.5 border-b border-t border-slate-100 dark:border-github-dark-border">
                                 <div>
                                     <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Calc</p>
                                     <p className="text-[8px] text-slate-500 dark:text-github-dark-muted mt-0.5">Enable auto OT tracking</p>
@@ -366,7 +369,7 @@ const ShiftManagement = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-200 dark:border-github-dark-border/30">
+                            <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-200 dark:border-github-dark-border">
                                 <div className="flex items-center gap-1.5 mb-3">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-slate-500 dark:text-github-dark-muted">
                                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -431,6 +434,7 @@ const ShiftManagement = () => {
                             >
                                 Save Shift
                             </button>
+                        </div>
                         </div>
                     </div>
                 </div>,

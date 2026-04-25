@@ -101,7 +101,7 @@ const ForgotPassword = () => {
             if (!response.ok) throw new Error(data.message || "Failed to reset password");
 
             toast.success("Password reset successfully! Please login.");
-            navigate('/mobile-view/login');
+            navigate('/login');
         } catch (error) {
             toast.error(error.message);
         } finally {
@@ -263,7 +263,7 @@ const ForgotPassword = () => {
 
                 {/* Footer Back to Login */}
                 <div className="mt-8 text-center">
-                    <Link to="/mobile-view/login" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-white transition-colors">
+                    <Link to="/login" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-white transition-colors">
                         <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
                         Back to Login
                     </Link>
