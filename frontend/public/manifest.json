@@ -1,0 +1,20 @@
+{
+  "short_name": "MANO",
+  "name": "MANO Attendance",
+  "icons": [
+    {
+      "src": "/mano-logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/mano-logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#030507",
+  "background_color": "#030507"
+}
