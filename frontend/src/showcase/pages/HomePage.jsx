@@ -46,7 +46,20 @@ export default function HomePage() {
 
                         <div className="hero-actions">
                             <Link to="/get-started" className="btn-primary" onClick={revealContent}>{homeData.ctaPrimary}</Link>
-                            <button onClick={revealContent} className="btn-ghost" style={{ cursor: 'pointer' }}>{homeData.ctaSecondary}</button>
+                            <a 
+                                href="#contact" 
+                                className="btn-ghost" 
+                                onClick={(e) => {
+                                    revealContent();
+                                    // Smooth scroll fallback if the hash scroll fails due to late rendering
+                                    setTimeout(() => {
+                                        const el = document.getElementById('contact');
+                                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                    }, 100);
+                                }}
+                            >
+                                {homeData.ctaSecondary}
+                            </a>
                         </div>
 
                         <ul className="check-list">

@@ -15,11 +15,26 @@ const CHUNKS_FILE = process.env.WEBSITE_CHAT_CHUNKS_FILE
     || path.resolve(__dirname, '../../../../knowledge_base/chunks.json');
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const MAX_CONTEXT_CHUNKS = Number(process.env.WEBSITE_CHAT_TOP_K || 8);
+const WEBSITE_CHAT_DEBUG = String(process.env.WEBSITE_CHAT_DEBUG || '').toLowerCase() === 'true';
+const FEATURE_KEYWORDS = [
+    { name: 'Simple Time In & Time Out', keywords: ['time in', 'time out', 'clock in', 'clock out', 'attendance logging', 'punch in', 'punch out'] },
+    { name: 'Live Command Center', keywords: ['command center', 'live dashboard', 'live attendance', 'live activity'] },
+    { name: 'Detailed Attendance & Matrix Reports', keywords: ['attendance report', 'matrix report', 'payroll report', 'export report', 'attendance logs'] },
+    { name: 'Holiday & Leave Management', keywords: ['leave', 'holiday', 'leave request', 'leave approval', 'leave balance'] },
+    { name: 'Ask HR AI Assistant', keywords: ['ask hr', 'ai assistant', 'chatbot', 'policy question'] },
+    { name: 'Generative Policy Builder', keywords: ['policy builder', 'policy generation', 'shift policy', 'prompt policy'] },
+    { name: 'Smart DAR Insights', keywords: ['dar', 'daily activity report', 'smart dar', 'productivity insights'] },
+    { name: 'Advanced Geofencing', keywords: ['geofencing', 'geo fencing', 'location tracking', 'gps', 'geofence'] },
+    { name: 'Facial Camera Verification', keywords: ['face verification', 'facial verification', 'webcam verification', 'biometric'] },
+];
 
 let embeddingPipelinePromise;
 let chromaClient;
 let collectionPromise;
 let groqClient;
+let localChunkIndexPromise;
+let chromaUnavailable = false;
+let hasLoggedChromaFallback = false;
 
 function getGroqClient() {
     if (!process.env.GROQ_API_KEY) {
@@ -40,7 +55,15 @@ async function getEmbeddingPipeline() {
 
 function getChromaClient() {
     if (!chromaClient) {
-        chromaClient = new ChromaClient({ path: CHROMA_URL });
+        const url = new URL(CHROMA_URL);
+        const ssl = url.protocol === 'https:';
+        const port = Number(url.port || (ssl ? 443 : 80));
+
+        chromaClient = new ChromaClient({
+            host: url.hostname,
+            port,
+            ssl,
+        });
     }
     return chromaClient;
 }
@@ -61,6 +84,26 @@ function toMetadata(chunk) {
         section_num: Number(chunk?.section_num || 0),
         section_heading: String(chunk?.section_heading || ''),
     };
+}
+
+function cosineSimilarity(a = [], b = []) {
+    const length = Math.min(a.length, b.length);
+    if (length === 0) return 0;
+
+    let dot = 0;
+    let magA = 0;
+    let magB = 0;
+
+    for (let i = 0; i < length; i += 1) {
+        const av = Number(a[i] || 0);
+        const bv = Number(b[i] || 0);
+        dot += av * bv;
+        magA += av * av;
+        magB += bv * bv;
+    }
+
+    if (magA === 0 || magB === 0) return 0;
+    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
 }
 
 async function getCollection() {
@@ -126,6 +169,62 @@ async function bootstrapCollection(collection) {
     });
 }
 
+async function getLocalChunkIndex() {
+    if (!localChunkIndexPromise) {
+        localChunkIndexPromise = (async () => {
+            const fileContent = await fs.readFile(CHUNKS_FILE, 'utf-8');
+            const chunks = JSON.parse(fileContent);
+
+            if (!Array.isArray(chunks) || chunks.length === 0) {
+                return [];
+            }
+
+            const indexed = [];
+            for (let i = 0; i < chunks.length; i += 1) {
+                const item = chunks[i] || {};
+                const content = String(item.content || '').trim();
+                if (!content) continue;
+
+                indexed.push({
+                    content,
+                    metadata: toMetadata(item),
+                    embedding: await embedText(content),
+                });
+            }
+
+            return indexed;
+        })();
+    }
+
+    return localChunkIndexPromise;
+}
+
+async function queryLocalIndex(queryEmbedding) {
+    const localIndex = await getLocalChunkIndex();
+    if (!localIndex.length) {
+        return { documents: [[]], metadatas: [[]], distances: [[]] };
+    }
+
+    const ranked = localIndex
+        .map((item) => {
+            const similarity = cosineSimilarity(queryEmbedding, item.embedding);
+            return {
+                doc: item.content,
+                metadata: item.metadata,
+                distance: 1 - similarity,
+                similarity,
+            };
+        })
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, Math.max(1, MAX_CONTEXT_CHUNKS));
+
+    return {
+        documents: [ranked.map((item) => item.doc)],
+        metadatas: [ranked.map((item) => item.metadata)],
+        distances: [ranked.map((item) => item.distance)],
+    };
+}
+
 function buildContextBlocks(queryResult) {
     const docs = queryResult?.documents?.[0] || [];
     const metas = queryResult?.metadatas?.[0] || [];
@@ -145,7 +244,18 @@ function buildContextBlocks(queryResult) {
     }).filter((item) => item.content.length > 0);
 }
 
-function buildPrompt(question, contextBlocks) {
+function detectRequestedFeatures(question) {
+    const normalized = String(question || '').toLowerCase();
+    if (!normalized) return [];
+
+    const matches = FEATURE_KEYWORDS
+        .filter((feature) => feature.keywords.some((keyword) => normalized.includes(keyword)))
+        .map((feature) => feature.name);
+
+    return [...new Set(matches)];
+}
+
+function buildPrompt(question, contextBlocks, requestedFeatures = []) {
     const contextText = contextBlocks
         .map((item, idx) => {
             const header = [
@@ -159,11 +269,31 @@ function buildPrompt(question, contextBlocks) {
         })
         .join('\n\n--------------------\n\n');
 
+    const isSpecificFeatureQuestion = requestedFeatures.length > 0;
+    const specificFeatureInstructions = isSpecificFeatureQuestion
+        ? [
+            `User requested specific feature explanation for: ${requestedFeatures.join(', ')}.`,
+            'Explain ONLY the requested feature(s), unless the user explicitly asks for all features.',
+            'For each feature, use this structure with plain text labels (no markdown symbols):',
+            '<Feature Name>:',
+            'How it works: ...',
+            'Why it matters: ...',
+            'Keep each explanation practical and end-user friendly.',
+        ]
+        : [
+            'When the user asks about features, modules, capabilities, or highlights, respond in a numbered point format.',
+            'For each point, include the feature name and a clear 1-2 sentence description.',
+            'Do not return a single comma-separated list for feature explanations.',
+            'Keep numbered feature lists concise (typically 5-8 points unless user asks for more).',
+        ];
+
     return [
         'You are the official pre-login website assistant for MANO-Attendance.',
         'Answer ONLY from the provided context.',
         'Start directly with the answer content.',
         'Do not repeat the user question.',
+        ...specificFeatureInstructions,
+        'Do not use markdown symbols like ** or __ in the final answer.',
         'Do not use preambles like: "To answer your question", "According to the provided context", "Here is the answer".',
         'If the answer is not present, reply exactly: "I do not have that information on the website right now."',
         'Keep answers concise, factual, and user-friendly.',
@@ -178,6 +308,7 @@ function buildPrompt(question, contextBlocks) {
 
 function sanitizeModelAnswer(rawAnswer) {
     let text = String(rawAnswer || '').replace(/\r\n?/g, '\n').trim();
+    text = text.replace(/\*\*/g, '').trim();
     text = text.replace(/^User question:\s*.*$/gim, '').trim();
     text = text.replace(/^Answer:\s*/i, '').trim();
     text = text.replace(/^Answer\s+from\s+Source\s+\d+\s*:\s*/i, '').trim();
@@ -195,14 +326,34 @@ export async function answerWebsiteQuestion(question) {
         throw new Error('Question is required');
     }
 
-    const collection = await getCollection();
-    const queryEmbedding = await embedText(trimmed);
+    const requestedFeatures = detectRequestedFeatures(trimmed);
+    const retrievalQuery = requestedFeatures.length > 0
+        ? `${trimmed}\nFocus features: ${requestedFeatures.join(', ')}`
+        : trimmed;
 
-    const queryResult = await collection.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: MAX_CONTEXT_CHUNKS,
-        include: ['documents', 'metadatas', 'distances'],
-    });
+    const queryEmbedding = await embedText(retrievalQuery);
+    let queryResult;
+
+    if (!chromaUnavailable) {
+        try {
+            const collection = await getCollection();
+            queryResult = await collection.query({
+                queryEmbeddings: [queryEmbedding],
+                nResults: MAX_CONTEXT_CHUNKS,
+                include: ['documents', 'metadatas', 'distances'],
+            });
+        } catch (error) {
+            chromaUnavailable = true;
+            if (!hasLoggedChromaFallback && WEBSITE_CHAT_DEBUG) {
+                hasLoggedChromaFallback = true;
+                console.warn('[website-chatbot] Chroma unavailable, using local chunk index fallback:', error?.message || error);
+            }
+        }
+    }
+
+    if (!queryResult) {
+        queryResult = await queryLocalIndex(queryEmbedding);
+    }
 
     const contextBlocks = buildContextBlocks(queryResult);
 
@@ -214,7 +365,7 @@ export async function answerWebsiteQuestion(question) {
     }
 
     const groq = getGroqClient();
-    const prompt = buildPrompt(trimmed, contextBlocks);
+    const prompt = buildPrompt(trimmed, contextBlocks, requestedFeatures);
 
     const completion = await groq.chat.completions.create({
         model: GROQ_MODEL,

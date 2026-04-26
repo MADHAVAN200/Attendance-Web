@@ -5,7 +5,7 @@ const solutions = [
     { title: "Live Command Center", path: "/#features" },
     { title: "Matrix Attendance Reports", path: "/#features" },
     { title: "Holiday & Leave Management", path: "/#features" },
-    { title: "AI \"Ask HR\" Assistant", path: "/#features" },
+    { title: "Ask AI Assistant", path: "/#features" },
     { title: "Generative AI Policy Builder", path: "/#features" },
 ];
 

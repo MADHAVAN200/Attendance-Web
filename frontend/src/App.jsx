@@ -77,6 +77,73 @@ import WebsiteChatbotWidget from "./showcase/components/WebsiteChatbotWidget";
 import useDeviceType from "./showcase/hooks/useDeviceType";
 import "./showcase/showcase.css";
 
+const SEO_BASE_URL = "https://attendance.mano.co.in";
+
+function upsertMetaTag(selector, attributes) {
+  let el = document.head.querySelector(selector);
+  if (!el) {
+    el = document.createElement("meta");
+    document.head.appendChild(el);
+  }
+
+  Object.entries(attributes).forEach(([key, value]) => {
+    el.setAttribute(key, value);
+  });
+}
+
+function upsertCanonical(url) {
+  let link = document.head.querySelector('link[rel="canonical"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.setAttribute("rel", "canonical");
+    document.head.appendChild(link);
+  }
+  link.setAttribute("href", url);
+}
+
+function SeoManager() {
+  const location = useLocation();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const path = location.pathname;
+    const isPublicLanding = path === "/" && !user;
+    const isLoginPage = path === "/login";
+    const isForgotPassword = path === "/forgot-password";
+
+    const title = isPublicLanding
+      ? "MANO Attendance | Smart Attendance & Workforce Management"
+      : isLoginPage
+        ? "MANO Attendance Login | Secure Portal Access"
+        : isForgotPassword
+          ? "Forgot Password | MANO Attendance"
+          : "MANO Attendance";
+
+    const description = isPublicLanding
+      ? "MANO Attendance: The ultimate smart attendance and workforce management platform with geofencing, AI insights, and payroll reports."
+      : isLoginPage
+        ? "Access the MANO Attendance secure login portal. Manage your workforce, track live attendance, and generate reports."
+        : "MANO Attendance workforce platform.";
+
+    const canonicalPath = isPublicLanding || isLoginPage || isForgotPassword ? path : "/";
+    const canonicalUrl = `${SEO_BASE_URL}${canonicalPath}`;
+    const robots = isPublicLanding || isLoginPage || isForgotPassword ? "index, follow" : "noindex, nofollow";
+
+    document.title = title;
+    upsertCanonical(canonicalUrl);
+
+    upsertMetaTag('meta[name="description"]', { name: "description", content: description });
+    upsertMetaTag('meta[name="robots"]', { name: "robots", content: robots });
+    upsertMetaTag('meta[property="og:title"]', { property: "og:title", content: title });
+    upsertMetaTag('meta[property="og:description"]', { property: "og:description", content: description });
+    upsertMetaTag('meta[property="og:url"]', { property: "og:url", content: canonicalUrl });
+    upsertMetaTag('meta[name="twitter:title"]', { name: "twitter:title", content: title });
+    upsertMetaTag('meta[name="twitter:description"]', { name: "twitter:description", content: description });
+  }, [location.pathname, user]);
+
+  return null;
+}
+
 // Component to handle role-based dashboard view
 const DashboardHandler = () => {
   const { user } = useAuth();
@@ -171,6 +238,7 @@ function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
+        <SeoManager />
         <ScaleManager />
         <ToastContainer position="top-right" autoClose={3000} />
         <Routes>
