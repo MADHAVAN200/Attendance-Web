@@ -5,6 +5,25 @@ import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
 export const authenticateJWT = catchAsync(async (req, res, next) => {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DEV ONLY: Auth bypass — set DISABLE_AUTH=true in .env to skip JWT checks.
+    // Double-gated: only active when NODE_ENV=development AND DISABLE_AUTH=true.
+    // APIs that read req.user will still work via the mock super_admin below.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH === 'true') {
+        console.warn('⚠️  [DEV] Auth bypass active — DISABLE_AUTH=true. All requests treated as super_admin.');
+        req.user = {
+            user_id: 0,
+            id: 0,
+            user_name: 'Dev Bypass',
+            email: 'dev@local',
+            user_type: 'super_admin',
+            org_id: null
+        };
+        return next();
+    }
+
     let token;
     const authHeader = req.headers['authorization'];
 

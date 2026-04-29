@@ -118,6 +118,52 @@ async function cleanupDeletedUsers() {
 }
 
 /**
+ * Cleanup Organizations Pending Deletion
+ * Permanently deletes organizations (and all associated data) whose
+ * deletion_scheduled_at date has passed.
+ */
+async function cleanupDeletedOrganizations() {
+    try {
+        console.log('🧹 Running cleanupDeletedOrganizations...');
+
+        const now = new Date();
+
+        const orgsToDelete = await attendanceDB('organizations')
+            .where('status', 'pending_deletion')
+            .andWhere('deletion_scheduled_at', '<=', now)
+            .select('org_id', 'org_name', 'org_code');
+
+        console.log(`Found ${orgsToDelete.length} organization(s) to permanently delete.`);
+
+        for (const org of orgsToDelete) {
+            // Delete all data associated with this organization inside a transaction.
+            // Add more tables here as your schema grows.
+            await attendanceDB.transaction(async (trx) => {
+                await trx('attendance_records')
+                    .whereIn('user_id', trx('users').select('user_id').where('org_id', org.org_id))
+                    .del();
+
+                await trx('refresh_tokens')
+                    .whereIn('user_id', trx('users').select('user_id').where('org_id', org.org_id))
+                    .del();
+
+                await trx('users').where('org_id', org.org_id).del();
+
+                await trx('organizations').where('org_id', org.org_id).del();
+            });
+
+            console.log(`🗑️  Permanently deleted organization: ${org.org_name} (${org.org_code})`);
+        }
+
+        if (orgsToDelete.length > 0) {
+            console.log('✅ Cleanup of pending-deletion organizations completed.');
+        }
+    } catch (error) {
+        console.error('❌ Error cleaning up pending-deletion organizations:', error);
+    }
+}
+
+/**
  * Run all cleanup tasks.
  */
 export async function runCleanup() {
@@ -125,6 +171,7 @@ export async function runCleanup() {
     await cleanupRefreshTokens();
     await cleanupAttendanceImages();
     await cleanupDeletedUsers();
+    await cleanupDeletedOrganizations();
     console.log('✅ All cleanup tasks completed.');
 }
 

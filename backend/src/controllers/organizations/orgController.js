@@ -130,3 +130,61 @@ export const updateOrgAdmin = catchAsync(async (req, res, next) => {
 
     res.status(200).json({ success: true, message: "Admin user updated successfully" });
 });
+
+/**
+ * DELETE /organizations/:id
+ * Marks an organization for deletion. The org and all its data will be permanently
+ * purged by the cleanup scheduler after DELETION_GRACE_DAYS (~2–3 months).
+ */
+const DELETION_GRACE_DAYS = 75; // ~2.5 months
+ 
+export const deleteOrganization = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const org = await attendanceDB('organizations').where('org_id', id).first();
+    if (!org) throw new AppError('Organization not found', 404);
+
+    if (org.status === 'pending_deletion') {
+        throw new AppError('Organization is already scheduled for deletion', 409);
+    }
+
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + DELETION_GRACE_DAYS);
+
+    await attendanceDB('organizations').where('org_id', id).update({
+        status: 'pending_deletion',
+        deletion_requested_at: attendanceDB.fn.now(),
+        deletion_scheduled_at: deletionDate,
+        deletion_requested_by: req.user?.user_id || null
+    });
+
+    res.status(200).json({
+        success: true,
+        message: `Organization marked for deletion. It will be permanently deleted on ${deletionDate.toISOString().split('T')[0]} (in ${DELETION_GRACE_DAYS} days).`,
+        deletion_scheduled_at: deletionDate
+    });
+});
+
+/**
+ * POST /organizations/:id/cancel-deletion
+ * Cancels a pending deletion, restoring the organization to active status.
+ */
+export const cancelOrgDeletion = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const org = await attendanceDB('organizations').where('org_id', id).first();
+    if (!org) throw new AppError('Organization not found', 404);
+
+    if (org.status !== 'pending_deletion') {
+        throw new AppError('Organization is not scheduled for deletion', 400);
+    }
+
+    await attendanceDB('organizations').where('org_id', id).update({
+        status: 'active',
+        deletion_requested_at: null,
+        deletion_scheduled_at: null,
+        deletion_requested_by: null
+    });
+
+    res.status(200).json({ success: true, message: 'Organization deletion cancelled. Status restored to active.' });
+});
