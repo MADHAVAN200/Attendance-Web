@@ -1,100 +1,147 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
 import {
-    Search,
-    Filter,
-    Clock,
-    UserCheck,
-    UserX,
-    Activity,
-    MapPin,
-    Calendar,
-    ChevronDown,
-    FileText,
-    CheckCircle,
-    XCircle,
-    AlertCircle,
-    X,
-    LogIn,
-    LogOut,
-    History
+    Search, Filter, Clock, UserCheck, UserX, Activity, MapPin, Calendar,
+    ChevronDown, FileText, CheckCircle, XCircle, AlertCircle, X, LogIn,
+    LogOut, History, PieChart as PieChartIcon, BarChart as BarChartIcon,
+    RefreshCcw, MoreVertical, LayoutGrid, ArrowRight, Eye, Info,
+    ChevronRight, Map, Camera
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
+import {
+    PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    Tooltip, ResponsiveContainer, AreaChart, Area
+} from 'recharts';
 
-const AttendanceMonitoring = () => {
-    const { avatarTimestamp } = useAuth();
+const MobileAttendanceMonitoring = () => {
+    const { avatarTimestamp, user: currentUser } = useAuth();
+    const TABS = ['dashboard', 'analytics', 'requests'];
 
     // UI State
-    const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'requests'
+    const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'analytics' | 'requests'
+    const [direction, setDirection] = useState(0); // -1 for left, 1 for right
+    const [loading, setLoading] = useState(true);
+    const [lastSynced, setLastSynced] = useState(new Date());
 
     // Data State
     const [attendanceData, setAttendanceData] = useState([]);
     const [stats, setStats] = useState({ present: 0, late: 0, absent: 0, active: 0 });
-    const [loading, setLoading] = useState(true);
+    const [correctionRequests, setCorrectionRequests] = useState([]);
+    const [requestCount, setRequestCount] = useState(0);
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedDept, setSelectedDept] = useState('All Departments');
+    const [selectedDept, setSelectedDept] = useState('All');
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-    // Popup State
+    // Selection/Popup State
     const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [requestSubTab, setRequestSubTab] = useState('PENDING');
 
-    // Hardcoded Departments as per requirement
-    const DEPARTMENTS = ['All Departments', 'Engineering', 'Design', 'Sales'];
+    const DEPARTMENTS = ['All', 'Sales', 'Retail', 'Logistics', 'Operations', 'IT', 'HR'];
 
-    // --- FETCH DASHBOARD DATA ---
-    const fetchDashboardData = async (silent = false) => {
+    const handleTabChange = (newTab) => {
+        const currentIndex = TABS.indexOf(activeTab);
+        const newIndex = TABS.indexOf(newTab);
+        setDirection(newIndex > currentIndex ? 1 : -1);
+        setActiveTab(newTab);
+    };
+
+    const handleDragEnd = (event, info) => {
+        const swipeThreshold = 50;
+        const currentIndex = TABS.indexOf(activeTab);
+
+        if (info.offset.x < -swipeThreshold && currentIndex < TABS.length - 1) {
+            // Swipe Left -> Next Tab
+            handleTabChange(TABS[currentIndex + 1]);
+        } else if (info.offset.x > swipeThreshold && currentIndex > 0) {
+            // Swipe Right -> Prev Tab
+            handleTabChange(TABS[currentIndex - 1]);
+        }
+    };
+
+    const slideVariants = {
+        enter: (direction) => ({
+            x: direction > 0 ? '100%' : '-100%',
+            opacity: 0
+        }),
+        center: {
+            x: 0,
+            opacity: 1
+        },
+        exit: (direction) => ({
+            x: direction < 0 ? '100%' : '-100%',
+            opacity: 0
+        })
+    };
+
+    // --- DATA FETCHING (Feature Parity with Web) ---
+    const fetchData = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            const [usersRes, attendanceRes] = await Promise.all([
+            const [usersRes, attendanceRes, requestsRes] = await Promise.all([
                 adminService.getAllUsers(),
-                attendanceService.getRealTimeAttendance(selectedDate)
+                attendanceService.getRealTimeAttendance(selectedDate),
+                attendanceService.getCorrectionRequests({ limit: 50 })
             ]);
 
-            const users = usersRes.users || [];
+            const users = (usersRes.users || []).filter(u => u.is_active && !u.is_deleted);
             const records = attendanceRes.data || [];
+            const requests = requestsRes.data || [];
 
+            // Merge Data Logic (Synchronized with Web)
             const mergedData = users.map(user => {
                 const userRecords = records.filter(r => r.user_id === user.user_id);
-                // Sort records by time to get chronological sessions
-                userRecords.sort((a, b) => new Date(a.time_in) - new Date(b.time_in));
-
-                let status = 'Absent';
+                
                 let sessions = [];
-                let shift = user.shift_name || 'General Shift';
+                let totalMin = 0;
+                let status = 'Absent';
+                let lastLocation = '-';
 
                 if (userRecords.length > 0) {
-                    const latest = userRecords[userRecords.length - 1]; // Last record is latest
+                    sessions = userRecords.map(r => {
+                        const inTime = new Date(r.time_in);
+                        const formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        
+                        let outStr = '-';
+                        let isActive = true;
 
-                    if (latest.shift_name) shift = latest.shift_name;
-
-                    sessions = userRecords.map((r, index) => ({
-                        id: index + 1,
-                        in: new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                        out: r.time_out ? new Date(r.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : null,
-                        locationIn: r.time_in_address || 'Unknown Location',
-                        locationOut: r.time_out_address || null,
-                        reason: r.late_reason || r.manual_entry_reason || '',
-                        isLate: r.late_minutes > 0
-                    }));
-
-                    if (userRecords.some(r => !r.time_out)) {
-                        status = latest.late_minutes > 0 ? 'Late' : 'Active';
-                        // If active but late, priority to Late? Or Active? Image shows "Late" badge prominently.
-                        // Let's prioritize Active for status, but show Late badge if late.
-                        if (userRecords.some(r => r.late_minutes > 0)) {
-                            // complex status logic? 
-                            // If currently active: 'Active'
-                            // If entered late: 'Late'
-                            status = latest.late_minutes > 0 ? 'Late' : 'Active';
+                        if (r.time_out) {
+                            const outTime = new Date(r.time_out);
+                            outStr = formatTime(outTime);
+                            isActive = false;
+                            totalMin += Math.max(0, (outTime - inTime) / 60000);
                         } else {
-                            status = 'Active';
+                            totalMin += Math.max(0, (new Date() - inTime) / 60000);
                         }
+
+                        return {
+                            rawIn: inTime,
+                            rawOut: r.time_out ? new Date(r.time_out) : null,
+                            in: formatTime(inTime),
+                            out: outStr,
+                            isActive,
+                            inLocation: r.time_in_address || 'Unknown',
+                            outLocation: r.time_out_address || null,
+                            isLate: (r.late_minutes || 0) > 0,
+                            lateReason: r.late_reason,
+                            inImage: r.time_in_image,
+                            outImage: r.time_out_image
+                        };
+                    });
+
+                    const latest = userRecords[0];
+                    lastLocation = latest.time_in_address || 'Unknown';
+                    const isCurrentlyActive = sessions.some(s => s.isActive);
+
+                    if (isCurrentlyActive) {
+                        status = (latest.late_minutes > 0) ? 'Late Active' : 'Active';
                     } else {
                         status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
                     }
@@ -104,236 +151,459 @@ const AttendanceMonitoring = () => {
                     id: user.user_id,
                     name: user.user_name || 'Unknown',
                     role: user.desg_name || 'Employee',
-                    avatar: user.profile_image_url,
+                    avatar: user.profile_image_url || (user.user_name || 'U').charAt(0).toUpperCase(),
                     department: user.dept_name || 'General',
                     status,
                     sessions,
-                    shift
+                    totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-',
+                    location: lastLocation
                 };
             });
 
-            // Filter by requested departments if user belongs to them, otherwise exclude?
-            // "Under All Departments, only show: Engineering, Design, Sales." 
-            // This implies we filter the LIST of employees to only those in these depts? 
-            // Or just the filter dropdown? Usually filter dropdown. 
-            // But if I strictly follow "Only show: Engineering...", I might hide others. 
-            // Let's assume filter dropdown options are restricted, but data shows all unless filtered.
-            // Actually, "only show: Engineering..." usually means the dropdown options.
-
-            // Sort: status priority
-            const statusPriority = { 'Active': 1, 'Late': 2, 'Present': 3, 'Absent': 4 };
-            mergedData.sort((a, b) => (statusPriority[a.status] || 99) - (statusPriority[b.status] || 99));
+            // Sort: Active/Present first
+            mergedData.sort((a, b) => {
+                const priority = { 'Active': 1, 'Late Active': 2, 'Late': 3, 'Present': 4, 'Absent': 5 };
+                return (priority[a.status] || 99) - (priority[b.status] || 99);
+            });
 
             setAttendanceData(mergedData);
             setStats({
-                present: mergedData.filter(d => d.status === 'Present').length,
-                late: mergedData.filter(d => d.status === 'Late').length,
+                present: mergedData.filter(d => d.status !== 'Absent').length,
+                late: mergedData.filter(d => d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: mergedData.filter(d => d.status === 'Active').length
+                active: mergedData.filter(d => d.status.includes('Active')).length
             });
 
+            setCorrectionRequests(requests);
+            setRequestCount(requests.filter(r => (r.status || '').toLowerCase() === 'pending').length);
+
         } catch (error) {
-            console.error("Dashboard sync failed", error);
+            console.error("Sync failed", error);
         } finally {
             if (!silent) setLoading(false);
+            setLastSynced(new Date());
         }
     };
 
     useEffect(() => {
-        if (activeTab === 'dashboard') {
-            fetchDashboardData();
-        }
-    }, [activeTab, selectedDate]);
+        fetchData();
+        const interval = setInterval(() => fetchData(true), 15000);
+        return () => clearInterval(interval);
+    }, [selectedDate]);
 
+    // --- ANALYTICS DATA PROCESSING (Ported from Web) ---
+    const chartData = useMemo(() => {
+        if (!attendanceData.length) return { status: [], timeline: [], departments: [], frequency: [] };
 
-    // --- FILTER ---
-    const filteredEmployees = attendanceData.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesDept = selectedDept === 'All Departments' || item.department === selectedDept;
+        // 1. Status Pie
+        const active = attendanceData.filter(d => d.status.includes('Active')).length;
+        const present = attendanceData.filter(d => d.status === 'Present').length;
+        const late = attendanceData.filter(d => d.status === 'Late').length;
+        const absent = attendanceData.filter(d => d.status === 'Absent').length;
+
+        const status = [
+            { name: 'Active', value: active, color: '#3b82f6' },
+            { name: 'Present', value: present, color: '#10b981' },
+            { name: 'Late', value: late, color: '#f59e0b' },
+            { name: 'Absent', value: absent, color: '#ef4444' },
+        ].filter(d => d.value > 0);
+
+        // 2. Timeline (Hourly with Repeats)
+        const hourlyData = {};
+        for (let i = 8; i <= 20; i++) hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
+        
+        attendanceData.forEach(item => {
+            item.sessions.forEach((s, idx) => {
+                const h = s.rawIn.getHours();
+                if (hourlyData[h]) {
+                    if (idx === 0) hourlyData[h].checkins++;
+                    else hourlyData[h].repeats++;
+                }
+                
+                const outH = s.rawOut ? s.rawOut.getHours() : 20;
+                for (let j = h; j <= outH; j++) {
+                    if (hourlyData[j]) hourlyData[j].active++;
+                }
+            });
+        });
+
+        const timeline = Object.keys(hourlyData).map(h => ({
+            time: h > 12 ? `${h-12}PM` : `${h}AM`,
+            checkins: hourlyData[h].checkins,
+            repeats: hourlyData[h].repeats,
+            active: hourlyData[h].active
+        }));
+
+        // 3. Department Breakdown
+        const deptStats = {};
+        attendanceData.forEach(item => {
+            const dept = item.department || 'General';
+            if (!deptStats[dept]) deptStats[dept] = { name: dept, Present: 0, Absent: 0, Late: 0 };
+
+            if (item.status === 'Absent') deptStats[dept].Absent++;
+            else if (item.status.includes('Late')) deptStats[dept].Late++;
+            else deptStats[dept].Present++;
+        });
+        const departments = Object.values(deptStats);
+
+        // 4. Login Frequency
+        const freq = { '1 Session': 0, '2 Sessions': 0, '3 Sessions': 0, '4+ Sessions': 0 };
+        attendanceData.forEach(item => {
+            if (item.status !== 'Absent') {
+                const count = item.sessions.length;
+                if (count === 1) freq['1 Session']++;
+                else if (count === 2) freq['2 Sessions']++;
+                else if (count === 3) freq['3 Sessions']++;
+                else if (count >= 4) freq['4+ Sessions']++;
+            }
+        });
+        const frequency = Object.entries(freq).map(([name, value]) => ({ name, value }));
+
+        return { status, timeline, departments, frequency };
+    }, [attendanceData]);
+
+    // --- FILTERED DATA ---
+    const filteredEmployees = attendanceData.filter(e => {
+        const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesDept = selectedDept === 'All' || e.department === selectedDept;
         return matchesSearch && matchesDept;
     });
 
-    const timedInEmployees = filteredEmployees.filter(e => e.status !== 'Absent');
-    const notTimedInEmployees = filteredEmployees.filter(e => e.status === 'Absent');
+    const activeEmployees = filteredEmployees.filter(e => e.status !== 'Absent');
+    const absentEmployees = filteredEmployees.filter(e => e.status === 'Absent');
 
     return (
-        <MobileDashboardLayout title="Live Attendance">
-            <div className="min-h-screen bg-slate-50 dark:bg-github-dark-subtle transition-colors relative pb-20">
+        <MobileDashboardLayout title="Live Monitoring">
+            <div className="min-h-screen bg-slate-50 dark:bg-github-dark-bg transition-colors duration-300 pb-24">
+                
+                {/* --- PREMIUM HEADER & TABS --- */}
+                <div className="sticky top-0 z-20 bg-white/80 dark:bg-github-dark-subtle/80 backdrop-blur-xl border-b border-slate-100 dark:border-white/5 px-4 pt-4">
+                    <div className="flex bg-slate-100 dark:bg-black/20 p-1 rounded-xl mb-4">
+                        {TABS.map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => handleTabChange(tab)}
+                                className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 relative ${
+                                    activeTab === tab 
+                                        ? 'bg-white dark:bg-indigo-600 text-indigo-600 dark:text-white shadow-sm' 
+                                        : 'text-slate-400 dark:text-github-dark-muted hover:text-slate-600'
+                                }`}
+                            >
+                                {tab === 'requests' && requestCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white dark:border-github-dark-subtle">
+                                        {requestCount}
+                                    </span>
+                                )}
+                                {tab}
+                            </button>
+                        ))}
+                    </div>
 
-                {/* --- TABS --- */}
-                <div className="bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-none flex shadow-sm mb-4">
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
-                        ${activeTab === 'dashboard'
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-github-dark-text shadow-sm'
-                                : 'text-slate-500 dark:text-github-dark-muted'
-                            }`}
-                    >
-                        <Activity size={18} className={activeTab === 'dashboard' ? 'text-slate-900 dark:text-github-dark-text' : 'text-slate-400'} />
-                        Dashboard
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('requests')}
-                        className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
-                        ${activeTab === 'requests'
-                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
-                                : 'text-slate-500 dark:text-github-dark-muted'
-                            }`}
-                    >
-                        <FileText size={18} className={activeTab === 'requests' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
-                        Requests
-                    </button>
-                </div>
-
-                {/* --- DASHBOARD --- */}
-                {activeTab === 'dashboard' && (
-                    <div className="px-4 space-y-4 animate-in fade-in slide-in-from-left-4">
-
-                        {/* Date & Filter */}
-                        <div className="flex justify-between items-center gap-3">
-                            <div className="relative flex-1">
-                                <select
-                                    value={selectedDept}
-                                    onChange={(e) => setSelectedDept(e.target.value)}
-                                    className="w-full appearance-none pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-bold text-slate-700 dark:text-github-dark-text outline-none shadow-sm"
-                                >
-                                    {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    {/* Quick Stats Banner (Closely Packed) */}
+                    <div className="flex items-center justify-between pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex -space-x-2">
+                                {activeEmployees.slice(0, 3).map((e, i) => (
+                                    <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-github-dark-subtle bg-slate-200 overflow-hidden shadow-sm">
+                                        {e.avatar.length > 1 ? <img src={`${e.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[8px] font-black">{e.avatar}</div>}
+                                    </div>
+                                ))}
+                                {activeEmployees.length > 3 && (
+                                    <div className="w-6 h-6 rounded-full border-2 border-white dark:border-github-dark-subtle bg-indigo-500 flex items-center justify-center text-[8px] text-white font-black">
+                                        +{activeEmployees.length - 3}
+                                    </div>
+                                )}
                             </div>
-
-                            <div className="relative w-36">
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full min-w-0 pl-9 pr-2 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-bold text-slate-700 dark:text-github-dark-text outline-none shadow-sm"
-                                />
-                                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            </div>
+                            <span className="text-[10px] font-black text-slate-500 dark:text-github-dark-muted uppercase tracking-tighter">
+                                {activeEmployees.length} PRESENT TODAY
+                            </span>
                         </div>
-
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <StatCard label="Total Present" value={stats.present} icon={UserCheck} color="indigo" />
-                            <StatCard label="Late" value={stats.late} icon={Clock} color="amber" />
-                            <StatCard label="Absent" value={stats.absent} icon={UserX} color="red" />
-                            <StatCard label="Active Now" value={stats.active} icon={Activity} color="emerald" />
-                        </div>
-
-                        {/* Search */}
-                        <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-sm font-medium outline-none shadow-sm dark:text-github-dark-text"
-                            />
-                        </div>
-
-                        {/* Employee List */}
-                        <div className="space-y-3 pb-8">
-                            {loading ? (
-                                <div className="py-8 text-center text-slate-400 text-xs">Loading...</div>
-                            ) : filteredEmployees.length > 0 ? (
-                                <>
-                                    {/* Timed In Employees */}
-                                    {timedInEmployees.map(emp => (
-                                        <div
-                                            key={emp.id}
-                                            onClick={() => setSelectedEmployee(emp)}
-                                            className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm relative group active:scale-[0.99] transition-transform cursor-pointer"
-                                        >
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-github-dark-border">
-                                                        {emp.avatar ? (
-                                                            <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <span className="text-slate-500 font-bold text-sm">{emp.name.charAt(0)}</span>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{emp.name}</h4>
-                                                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted font-medium">{emp.role}</p>
-                                                    </div>
-                                                </div>
-                                                <StatusBadge status={emp.status} />
-                                            </div>
-
-                                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-github-dark-border">
-                                                <div>
-                                                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time In</p>
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
-                                                        {emp.sessions[emp.sessions.length - 1]?.in || '--:--'}
-                                                    </span>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time Out</p>
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
-                                                        {emp.sessions[emp.sessions.length - 1]?.out || <span className="text-emerald-500">Active</span>}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Divider */}
-                                    {notTimedInEmployees.length > 0 && timedInEmployees.length > 0 && (
-                                        <div className="flex items-center gap-3 py-2">
-                                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted whitespace-nowrap">Not Timed In</span>
-                                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                                        </div>
-                                    )}
-
-                                    {/* Not Timed In Employees */}
-                                    {notTimedInEmployees.map(emp => (
-                                        <div
-                                            key={emp.id}
-                                            className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm opacity-60"
-                                        >
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-github-dark-border">
-                                                        {emp.avatar ? (
-                                                            <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <span className="text-slate-500 font-bold text-sm">{emp.name.charAt(0)}</span>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{emp.name}</h4>
-                                                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted font-medium">{emp.role}</p>
-                                                    </div>
-                                                </div>
-                                                <StatusBadge status={emp.status} />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </>
-                            ) : (
-                                <div className="py-10 text-center text-slate-400 text-sm">No employees found</div>
-                            )}
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-full text-[9px] font-black uppercase">
+                            <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                            </span>
+                            Live
                         </div>
                     </div>
-                )}
+                </div>
 
-                {/* --- REQUESTS --- */}
-                {activeTab === 'requests' && <RequestsView />}
+                <div className="overflow-hidden">
+                    <AnimatePresence mode="wait" custom={direction} initial={false}>
+                        <motion.div
+                            key={activeTab}
+                            custom={direction}
+                            variants={slideVariants}
+                            initial="enter"
+                            animate="center"
+                            exit="exit"
+                            transition={{
+                                x: { type: "spring", stiffness: 300, damping: 30 },
+                                opacity: { duration: 0.2 }
+                            }}
+                            drag="x"
+                            dragConstraints={{ left: 0, right: 0 }}
+                            dragElastic={0.2}
+                            onDragEnd={handleDragEnd}
+                            className="px-4 py-6 space-y-6"
+                        >
+                            {/* --- DASHBOARD VIEW --- */}
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-6">
+                                    {/* Toolbar */}
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1 group">
+                                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search employees..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-3 bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold outline-none shadow-sm focus:ring-2 focus:ring-indigo-500/20 transition-all dark:text-white"
+                                            />
+                                        </div>
+                                        <button className="w-12 h-12 bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl flex items-center justify-center text-slate-400 shadow-sm active:scale-90 transition-transform">
+                                            <Filter size={18} />
+                                        </button>
+                                    </div>
 
-                {/* --- POPUP MODAL --- */}
-                {selectedEmployee && (
-                    <SessionDetailsModal
-                        employee={selectedEmployee}
-                        date={selectedDate}
-                        onClose={() => setSelectedEmployee(null)}
-                    />
-                )}
+                                    {/* Stats Grid */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <CompactStatCard label="Present" value={stats.present} color="emerald" icon={UserCheck} />
+                                        <CompactStatCard label="Late" value={stats.late} color="amber" icon={Clock} />
+                                        <CompactStatCard label="Active" value={stats.active} color="blue" icon={Activity} />
+                                        <CompactStatCard label="Absent" value={stats.absent} color="rose" icon={UserX} />
+                                    </div>
 
+                                    {/* List Section */}
+                                    <div className="space-y-3">
+                                        {loading && !attendanceData.length ? (
+                                            [1,2,3].map(i => <div key={i} className="h-24 bg-slate-100 dark:bg-github-dark-subtle animate-pulse rounded-3xl" />)
+                                        ) : filteredEmployees.length > 0 ? (
+                                            <>
+                                                {activeEmployees.map(emp => (
+                                                    <CompactEmployeeCard key={emp.id} employee={emp} onClick={() => setSelectedEmployee(emp)} avatarTimestamp={avatarTimestamp} />
+                                                ))}
+                                                
+                                                {absentEmployees.length > 0 && (
+                                                    <div className="flex items-center gap-4 py-4">
+                                                        <div className="h-px bg-slate-200 dark:bg-white/5 flex-1" />
+                                                        <span className="text-[10px] font-black text-slate-300 dark:text-github-dark-muted uppercase tracking-widest">NOT CHECKED IN</span>
+                                                        <div className="h-px bg-slate-200 dark:bg-white/5 flex-1" />
+                                                    </div>
+                                                )}
+
+                                                {absentEmployees.map(emp => (
+                                                    <CompactEmployeeCard key={emp.id} employee={emp} onClick={() => setSelectedEmployee(emp)} avatarTimestamp={avatarTimestamp} />
+                                                ))}
+                                            </>
+                                        ) : (
+                                            <div className="text-center py-20 bg-white dark:bg-github-dark-subtle rounded-3xl border-2 border-dashed border-slate-100 dark:border-white/5">
+                                                <p className="text-slate-400 font-bold text-sm">No employees found</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- ANALYTICS VIEW --- */}
+                            {activeTab === 'analytics' && (
+                                <div className="space-y-6">
+                                    {/* Attendance Pie */}
+                                    <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5">
+                                        <h4 className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-6 flex items-center gap-2">
+                                            <PieChartIcon size={12} className="text-indigo-500" /> Attendance Distribution
+                                        </h4>
+                                        <div className="h-48 flex items-center justify-center">
+                                            <div className="w-1/2 h-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie
+                                                            data={chartData.status}
+                                                            cx="50%"
+                                                            cy="50%"
+                                                            innerRadius={35}
+                                                            outerRadius={55}
+                                                            paddingAngle={5}
+                                                            dataKey="value"
+                                                        >
+                                                            {chartData.status.map((entry, i) => (
+                                                                <Cell key={i} fill={entry.color} stroke="none" />
+                                                            ))}
+                                                        </Pie>
+                                                        <Tooltip 
+                                                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', fontSize: '10px' }}
+                                                        />
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                            <div className="w-1/2 space-y-2 pl-4">
+                                                {chartData.status.map((d, i) => (
+                                                    <div key={i} className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
+                                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{d.name}: {d.value}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Activity Timeline */}
+                                    <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h4 className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest flex items-center gap-2">
+                                                <Activity size={12} className="text-emerald-500" /> Peak Hours Velocity
+                                            </h4>
+                                            <div className="flex gap-3">
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                    <span className="text-[8px] font-black text-slate-400">ACTIVE</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                                    <span className="text-[8px] font-black text-slate-400">NEW</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="h-48">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={chartData.timeline}>
+                                                    <defs>
+                                                        <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                                        </linearGradient>
+                                                        <linearGradient id="colorNew" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#88888820" />
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700 }} />
+                                                    <YAxis hide />
+                                                    <Tooltip 
+                                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                                    />
+                                                    <Area type="monotone" name="Active Staff" dataKey="active" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorActive)" />
+                                                    <Area type="monotone" name="New Check-ins" dataKey="checkins" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorNew)" />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* Department Metrics */}
+                                    <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5">
+                                        <h4 className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-6 flex items-center gap-2">
+                                            <LayoutGrid size={12} className="text-purple-500" /> Department Health
+                                        </h4>
+                                        <div className="h-56">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={chartData.departments} margin={{ left: -30 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#88888820" />
+                                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 800 }} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 800 }} />
+                                                    <Tooltip 
+                                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                                    />
+                                                    <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                                                    <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
+                                                    <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* Login Frequency */}
+                                    <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5">
+                                        <h4 className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-6 flex items-center gap-2">
+                                            <BarChartIcon size={12} className="text-rose-500" /> Session Intensity
+                                        </h4>
+                                        <div className="h-48">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={chartData.frequency} layout="vertical" margin={{ left: -10 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#88888820" />
+                                                    <XAxis type="number" hide />
+                                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 800 }} width={70} />
+                                                    <Tooltip 
+                                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                                    />
+                                                    <Bar dataKey="value" name="Employees" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={12} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- REQUESTS VIEW --- */}
+                            {activeTab === 'requests' && (
+                                <div className="space-y-4">
+                                    <div className="flex bg-slate-100 dark:bg-black/20 p-1 rounded-xl">
+                                        {['PENDING', 'HISTORY'].map(f => (
+                                            <button 
+                                                key={f} 
+                                                onClick={() => setRequestSubTab(f)}
+                                                className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                                                    requestSubTab === f 
+                                                        ? 'bg-white dark:bg-indigo-600 text-indigo-600 dark:text-white shadow-sm' 
+                                                        : 'text-slate-400 dark:text-github-dark-muted'
+                                                }`}
+                                            >
+                                                {f}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    
+                                    {(() => {
+                                        const filtered = correctionRequests.filter(r => {
+                                            const status = (r.status || '').toUpperCase();
+                                            return requestSubTab === 'PENDING' ? status === 'PENDING' : status !== 'PENDING';
+                                        });
+
+                                        return filtered.length > 0 ? (
+                                            filtered.map(req => (
+                                                <button 
+                                                    key={req.acr_id} 
+                                                    onClick={() => setSelectedRequest(req)}
+                                                    className="w-full bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm flex items-center justify-between text-left active:scale-95 transition-all"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm">
+                                                            {req.user_name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-sm font-black text-slate-800 dark:text-white leading-none mb-1">{req.user_name}</h4>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{req.correction_type} • {new Date(req.request_date).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                                                        (req.status || '').toLowerCase() === 'pending' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                                                    }`}>
+                                                        {req.status}
+                                                    </span>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-20 bg-white dark:bg-github-dark-subtle rounded-2xl border border-dashed border-slate-200 dark:border-white/5">
+                                                <p className="text-slate-400 font-bold text-sm">No {requestSubTab.toLowerCase()} requests</p>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+
+                {/* --- MODALS --- */}
+                <AnimatePresence>
+                    {selectedEmployee && (
+                        <EmployeeDetailModal employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} date={selectedDate} />
+                    )}
+                    {selectedRequest && (
+                        <RequestDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} onUpdate={fetchData} />
+                    )}
+                </AnimatePresence>
             </div>
         </MobileDashboardLayout>
     );
@@ -341,429 +611,261 @@ const AttendanceMonitoring = () => {
 
 // --- SUB-COMPONENTS ---
 
-const StatCard = ({ label, value, icon: Icon, color }) => {
+const CompactStatCard = ({ label, value, color, icon: Icon }) => {
     const colors = {
-        indigo: 'bg-indigo-50 text-indigo-600',
-        amber: 'bg-amber-50 text-amber-600',
-        red: 'bg-red-50 text-red-500',
-        emerald: 'bg-emerald-50 text-emerald-600',
+        emerald: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600',
+        amber: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600',
+        rose: 'bg-rose-50 dark:bg-rose-500/10 text-rose-600',
+        blue: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600',
     };
-
     return (
-        <div className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border h-24 flex flex-col justify-between">
-            <div className="flex justify-between items-start">
-                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">{label}</span>
-                <div className={`p-1.5 rounded-lg ${colors[color]} dark:bg-opacity-20`}>
-                    <Icon size={14} />
-                </div>
+        <div className="bg-white dark:bg-github-dark-subtle p-4 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
+                <Icon size={18} strokeWidth={2.5} />
             </div>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-github-dark-text">{value}</span>
+            <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{label}</p>
+                <p className="text-lg font-black text-slate-800 dark:text-white leading-none">{value}</p>
+            </div>
         </div>
     );
 };
 
-const StatusBadge = ({ status }) => {
-    const styles = {
-        'Active': 'bg-emerald-100 text-emerald-700',
-        'Late': 'bg-amber-100 text-amber-700',
-        'Present': 'bg-blue-100 text-blue-700',
-        'Absent': 'bg-slate-100 text-slate-500'
-    };
+const CompactEmployeeCard = ({ employee, onClick, avatarTimestamp }) => {
+    const isAbsent = employee.status === 'Absent';
     return (
-        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${styles[status] || styles['Absent']}`}>
-            {status}
-        </span>
-    );
-};
-
-const RequestsView = () => {
-    const { user } = useAuth();
-    const [subTab, setSubTab] = useState('pending'); // 'pending' | 'history'
-    const [requests, setRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    const [selectedRequest, setSelectedRequest] = useState(null);
-    const [isFetchingDetails, setIsFetchingDetails] = useState(false);
-    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-
-    const handleRequestClick = async (req) => {
-        if (isFetchingDetails) return;
-        try {
-            setIsFetchingDetails(true);
-            const requestId = req.acr_id || req.request_id || req.id;
-            const res = await attendanceService.getCorrectionDetails(requestId);
-            const details = res.data || res;
-            setSelectedRequest({ ...req, ...details });
-        } catch (error) {
-            console.error("Failed to fetch correction details:", error);
-            toast.error(error.message || "Failed to fetch request details");
-            setSelectedRequest(req);
-        } finally {
-            setIsFetchingDetails(false);
-        }
-    };
-
-    const handleUpdateStatus = async (requestId, status) => {
-        if (!requestId) return;
-        try {
-            setIsUpdatingStatus(true);
-            await attendanceService.updateCorrectionStatus(requestId, status, '');
-            toast.success(`Request ${status.toLowerCase()} successfully`);
-
-            setRequests(prev => prev.map(req => {
-                const id = req.acr_id || req.request_id || req.id;
-                if (id === requestId) {
-                    return { ...req, status: status, approved_by: user?.name, updated_at: new Date().toISOString() };
-                }
-                return req;
-            }));
-
-            setTimeout(() => {
-                setSelectedRequest(null);
-            }, 300);
-
-        } catch (error) {
-            console.error('Failed to update status', error);
-            toast.error(error.message || 'Failed to update request');
-        } finally {
-            setIsUpdatingStatus(false);
-        }
-    };
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            try {
-                const res = await attendanceService.getCorrectionRequests();
-                const all = res.data || [];
-
-                // Parse correction_data if it's a string
-                const parsed = all.map(r => {
-                    let correctionData = r.correction_data;
-                    if (typeof correctionData === 'string') {
-                        try { correctionData = JSON.parse(correctionData); } catch { correctionData = {}; }
-                    }
-                    return { ...r, correction_data_parsed: correctionData || {} };
-                });
-
-                // Case-insensitive filter
-                const filtered = subTab === 'pending'
-                    ? parsed.filter(r => (r.status || '').toLowerCase() === 'pending')
-                    : parsed.filter(r => ['approved', 'rejected'].includes((r.status || '').toLowerCase()));
-
-                setRequests(filtered);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, [subTab]);
-
-    return (
-        <div className="px-4 space-y-4 animate-in fade-in slide-in-from-right-4">
-            <div className="flex gap-2">
-                <button
-                    onClick={() => setSubTab('pending')}
-                    className={`px-6 py-2 rounded-full text-xs font-bold transition-all
-                    ${subTab === 'pending'
-                            ? 'bg-indigo-500 text-white shadow-md'
-                            : 'bg-transparent border border-slate-200 dark:border-github-dark-border text-slate-400'}`}
-                >
-                    Pending
-                </button>
-                <button
-                    onClick={() => setSubTab('history')}
-                    className={`px-6 py-2 rounded-full text-xs font-bold transition-all
-                    ${subTab === 'history'
-                            ? 'bg-indigo-500 text-white shadow-md'
-                            : 'bg-transparent border border-slate-200 dark:border-github-dark-border text-slate-400'}`}
-                >
-                    History
-                </button>
-            </div>
-
-            <div className="space-y-3 pb-8">
-                {loading ? (
-                    <div className="py-10 text-center text-slate-400 text-xs">Loading requests...</div>
-                ) : requests.length > 0 ? (
-                    requests.map(req => (
-                        <div
-                            key={req.acr_id}
-                            onClick={() => handleRequestClick(req)}
-                            className={`bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-                                    {req.user_name ? req.user_name.charAt(0) : 'U'}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{req.user_name}</h4>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">{req.correction_type || 'Correction'}</span>
-                                        <span className="text-[10px] text-slate-300">•</span>
-                                        <span className="text-xs text-slate-400">
-                                            {new Date(req.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                    ${(req.status || '').toLowerCase() === 'approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
-                                        (req.status || '').toLowerCase() === 'rejected' ? 'bg-red-100 text-red-500 dark:bg-red-900/20 dark:text-red-400' :
-                                            'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>
-                                    {(req.status || 'PENDING').toUpperCase()}
-                                </span>
-                                {req.submitted_at && (
-                                    <p className="text-[10px] text-slate-400 mt-1">{new Date(req.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
-                                )}
-                            </div>
-                        </div>
-                    ))
+        <div 
+            onClick={onClick}
+            className={`bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm flex items-center gap-4 active:scale-95 transition-all relative overflow-hidden ${isAbsent ? 'opacity-70 grayscale-[0.5]' : ''}`}
+        >
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200 dark:border-white/10 shrink-0">
+                {employee.avatar.length > 1 ? (
+                    <img src={`${employee.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
                 ) : (
-                    <div className="py-20 text-center">
-                        <p className="text-slate-400 text-sm">No requests found</p>
+                    <div className="w-full h-full flex items-center justify-center text-indigo-500 font-black">{employee.avatar}</div>
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start mb-1">
+                    <h4 className="font-black text-sm text-slate-800 dark:text-white truncate pr-2 leading-none">{employee.name}</h4>
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        employee.status.includes('Active') ? 'bg-indigo-100 text-indigo-600 animate-pulse' :
+                        employee.status.includes('Late') ? 'bg-amber-100 text-amber-600' :
+                        employee.status === 'Present' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                        {employee.status}
+                    </span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-tighter truncate">{employee.role} • {employee.department}</p>
+                
+                {!isAbsent && employee.sessions.length > 0 && (
+                    <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50 dark:border-white/5">
+                        <div className="flex items-center gap-1">
+                            <Clock size={10} className="text-slate-300" />
+                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-300">
+                                {employee.sessions[0].in} → {employee.sessions[0].out === '-' ? 'Active' : employee.sessions[0].out}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 truncate flex-1">
+                            <MapPin size={10} className="text-indigo-400 shrink-0" />
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted truncate">{employee.location}</span>
+                        </div>
                     </div>
                 )}
             </div>
-
-            {/* --- CORRECTION DETAILS VIEW MODAL --- */}
-            {selectedRequest && createPortal(
-                <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center sm:p-4">
-                    <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={() => setSelectedRequest(null)}></div>
-                    <div className="relative z-10 bg-white dark:bg-github-dark-bg w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
-                        {/* Header Pull Bar (Mobile) */}
-                        <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
-                            <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
-                        </div>
-
-                        {/* Modal Header */}
-                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-github-dark-border shrink-0">
-                            <div>
-                                <h3 className="font-bold text-2xl text-slate-900 dark:text-github-dark-text">Request #{selectedRequest.acr_id || selectedRequest.request_id || selectedRequest.id}</h3>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                                        {(selectedRequest.user_name || user?.user_name || 'U').charAt(0)}
-                                    </div>
-                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted">By {selectedRequest.user_name || user?.user_name || 'Employee'}{selectedRequest.designation ? ` (${selectedRequest.designation})` : ''}</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-github-dark-subtle sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Content Scrollable Area */}
-                        <div className="px-6 py-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
-
-                            {/* Correction Details */}
-                            <section>
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Correction Details</h4>
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
-                                        <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-1">Request Type</span>
-                                        <span className="font-bold text-slate-800 dark:text-github-dark-text text-sm uppercase">{selectedRequest.correction_type || 'CORRECTION'}</span>
-                                    </div>
-                                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
-                                        <span className="text-xs text-indigo-500/70 dark:text-indigo-400/70 mb-1">Method</span>
-                                        <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.correction_method || selectedRequest.correction_data_parsed?.method || 'FIX TIMINGS'}</span>
-                                    </div>
-                                </div>
-                                <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm">
-                                    <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-3 block">Requested Sessions</span>
-                                    <div className="space-y-2">
-                                        {(() => {
-                                            const sessions = selectedRequest.correction_data_parsed?.sessions || selectedRequest.details?.sessions;
-                                            if (sessions && sessions.length > 0) {
-                                                return sessions.map((s, i) => (
-                                                    <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-github-dark-text">
-                                                        <span>In: {s.in || s.time_in || '--:--'}</span>
-                                                        <span>Out: {s.out || s.time_out || '--:--'}</span>
-                                                    </div>
-                                                ));
-                                            }
-                                            return <p className="text-sm text-slate-400 italic">No sessions requested</p>;
-                                        })()}
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* Justification */}
-                            <section>
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Justification & Comments</h4>
-                                <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm flex items-start gap-3">
-                                    <FileText size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                                    <p className="text-sm font-medium italic text-slate-600 dark:text-slate-300">
-                                        "{selectedRequest.reason || selectedRequest.comments || 'No comment provided'}"
-                                    </p>
-                                </div>
-                            </section>
-
-                            {/* Audit Trail */}
-                            <section>
-                                <div className="border-t border-slate-100 dark:border-github-dark-border mb-6"></div>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <History size={14} className="text-slate-400" />
-                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Trail</h4>
-                                </div>
-
-                                <div className="relative pl-3 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
-                                    {/* Submited */}
-                                    <div className="relative">
-                                        <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-github-dark-bg border-2 border-indigo-500"></div>
-                                        <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text">Submitted</h5>
-                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
-                                            {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'User'}
-                                        </p>
-                                    </div>
-
-                                    {/* Final Status (if processed) */}
-                                    {(selectedRequest.status || 'PENDING').toUpperCase() !== 'PENDING' && (
-                                        <div className="relative">
-                                            <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-github-dark-bg border-2 
-                                                    ${(selectedRequest.status).toUpperCase() === 'APPROVED' ? 'border-emerald-500' : 'border-rose-500'}`}>
-                                            </div>
-                                            <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text drop-shadow-sm capitalize">
-                                                {(selectedRequest.status).toLowerCase()}
-                                            </h5>
-                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
-                                                {new Date(selectedRequest.updated_at || Date.now()).toLocaleString()} • by {selectedRequest.approved_by || 'Admin/HR'}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* Admin/HR Action Buttons (Bottom Fixed) */}
-                        {['admin', 'hr', 'manager'].includes((user?.user_type || user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
-                            <div className="px-6 py-4 border-t border-slate-100 dark:border-github-dark-border bg-white dark:bg-github-dark-bg shrink-0 sm:rounded-b-[2rem] flex gap-3">
-                                <button
-                                    onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'REJECTED')}
-                                    disabled={isUpdatingStatus}
-                                    className="flex-1 py-3.5 bg-white dark:bg-dark-card border border-rose-200 dark:border-rose-900 shadow-sm text-rose-600 dark:text-rose-500 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
-                                >
-                                    Reject
-                                </button>
-                                <button
-                                    onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'APPROVED')}
-                                    disabled={isUpdatingStatus}
-                                    className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
-                                >
-                                    {isUpdatingStatus ? <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : 'Accept'}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>,
-                document.body
-            )}
         </div>
     );
 };
 
-const SessionDetailsModal = ({ employee, date, onClose }) => {
+const EmployeeDetailModal = ({ employee, onClose, date }) => {
     return createPortal(
-        <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center">
-            <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-md bg-white dark:bg-github-dark-subtle rounded-t-3xl sm:rounded-3xl p-6 pb-10 shadow-2xl transform transition-transform animate-in slide-in-from-bottom-10 duration-300">
-
-                {/* Drag Handle */}
-                <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
-
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-github-dark-subtle flex items-center justify-center overflow-hidden border-2 border-white dark:border-github-dark-border shadow-sm">
-                        {employee.avatar ? (
-                            <img src={employee.avatar} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-xl font-bold text-indigo-600">{employee.name.charAt(0)}</span>
-                        )}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-end">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+            <motion.div 
+                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                className="relative w-full bg-slate-50 dark:bg-github-dark-bg rounded-t-2xl p-6 pb-12 max-h-[90vh] overflow-y-auto"
+            >
+                <div className="w-12 h-1 bg-slate-200 dark:bg-white/10 rounded-full mx-auto mb-8" />
+                
+                <div className="flex items-center gap-5 mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-white dark:bg-github-dark-subtle border-2 border-white dark:border-white/10 overflow-hidden shadow-xl">
+                        {employee.avatar.length > 1 ? <img src={employee.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl font-black text-indigo-500">{employee.avatar}</div>}
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-github-dark-text leading-tight">{employee.name}</h3>
-                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">{employee.role}</p>
+                        <h3 className="text-xl font-black text-slate-800 dark:text-white leading-none mb-2">{employee.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest">{employee.role}</span>
+                            <span className="w-1 h-1 rounded-full bg-slate-300" />
+                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{employee.department}</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Date */}
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">
-                    Daily Sessions ({new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })})
-                </h4>
+                <div className="space-y-6">
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex justify-between">
+                        <span>Daily Activity</span>
+                        <span className="text-slate-300">{new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </h4>
 
-                {/* Timeline */}
-                <div className="space-y-0 relative pl-4">
-                    {/* Vertical Line */}
-                    <div className="absolute left-[27px] top-4 bottom-4 w-0.5 bg-slate-100 dark:bg-github-dark-subtle"></div>
-
-                    {employee.sessions.map((session, idx) => (
-                        <div key={idx} className="relative flex items-start gap-6 pb-8 last:pb-0">
-                            {/* Number Badge */}
-                            <div className="relative z-10 flex-shrink-0 w-12 h-12 rounded-full bg-indigo-50 dark:bg-github-dark-subtle border border-indigo-100 dark:border-github-dark-border flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm shadow-sm">
-                                {idx + 1}
-                            </div>
-
-                            {/* Session Data */}
-                            <div className="flex-1 pt-1">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Time In</p>
-                                        <p className="text-base font-bold text-slate-900 dark:text-github-dark-text">{session.in}</p>
+                    {employee.sessions.length > 0 ? (
+                        employee.sessions.map((s, i) => (
+                            <div key={i} className="bg-white dark:bg-github-dark-subtle p-5 rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm space-y-4">
+                                <div className="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-white/5">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Clock size={12} /> Session #{employee.sessions.length - i}
+                                    </span>
+                                    {s.isActive && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 animate-pulse">Active</span>}
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><LogIn size={12} /></div>
+                                            <span className="text-lg font-black text-slate-800 dark:text-white">{s.in}</span>
+                                        </div>
+                                        <div className="flex items-start gap-1.5 p-2 bg-slate-50 dark:bg-black/20 rounded-xl">
+                                            <MapPin size={10} className="text-indigo-400 mt-0.5 shrink-0" />
+                                            <span className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted leading-tight">{s.inLocation}</span>
+                                        </div>
+                                        {s.inImage && (
+                                            <div className="aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-white/10">
+                                                <img src={s.inImage} className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Time Out</p>
-                                        <p className="text-base font-bold text-slate-900 dark:text-github-dark-text">
-                                            {session.out || <span className="text-emerald-500">Active</span>}
-                                        </p>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><LogOut size={12} /></div>
+                                            <span className="text-lg font-black text-slate-800 dark:text-white">{s.out}</span>
+                                        </div>
+                                        {s.outLocation && (
+                                            <div className="flex items-start gap-1.5 p-2 bg-slate-50 dark:bg-black/20 rounded-xl">
+                                                <MapPin size={10} className="text-indigo-400 mt-0.5 shrink-0" />
+                                                <span className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted leading-tight">{s.outLocation}</span>
+                                            </div>
+                                        )}
+                                        {s.outImage && (
+                                            <div className="aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-white/10">
+                                                <img src={s.outImage} className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-
-                                {/* Time In Location */}
-                                {session.locationIn && (
-                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-github-dark-muted mt-3 bg-slate-50 dark:bg-github-dark-subtle/50 p-2.5 rounded-xl">
-                                        <LogIn size={14} className="mt-0.5 text-emerald-500 flex-shrink-0" />
-                                        <div>
-                                            <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">In Location</span>
-                                            <span className="leading-relaxed">{session.locationIn}</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Time Out Location */}
-                                {session.locationOut && (
-                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-github-dark-muted mt-1.5 bg-slate-50 dark:bg-github-dark-subtle/50 p-2.5 rounded-xl">
-                                        <LogOut size={14} className="mt-0.5 text-red-400 flex-shrink-0" />
-                                        <div>
-                                            <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Out Location</span>
-                                            <span className="leading-relaxed">{session.locationOut}</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {(session.isLate || session.reason) && (
-                                    <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/10 p-2.5 rounded-xl mt-2">
-                                        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                                        <span className="font-medium">
-                                            {session.isLate ? `Late Entry` : 'Correction'}{session.reason ? `: ${session.reason}` : ''}
-                                        </span>
-                                    </div>
-                                )}
                             </div>
+                        ))
+                    ) : (
+                        <div className="py-12 bg-white dark:bg-github-dark-subtle rounded-2xl border-2 border-dashed border-slate-100 dark:border-white/5 flex flex-col items-center justify-center text-slate-300">
+                            <Activity size={32} className="mb-2 opacity-20" />
+                            <p className="text-sm font-bold opacity-50">No activity logged</p>
                         </div>
-                    ))}
+                    )}
                 </div>
 
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
-                >
-                    <X size={20} />
+                <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 active:scale-90 transition-all">
+                    <X size={24} />
                 </button>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>,
+        document.body
     );
 };
 
-export default AttendanceMonitoring;
+const RequestDetailModal = ({ request, onClose, onUpdate }) => {
+    const [comment, setComment] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleAction = async (status) => {
+        setIsProcessing(true);
+        try {
+            await attendanceService.updateCorrectionStatus(request.acr_id || request.id, status, comment);
+            toast.success(`Request ${status} successfully`);
+            onUpdate();
+            onClose();
+        } catch (error) {
+            toast.error(error.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    return createPortal(
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-end">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-lg" onClick={onClose} />
+            <motion.div 
+                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                className="relative w-full bg-white dark:bg-github-dark-bg rounded-t-2xl p-8 pb-12 shadow-2xl"
+            >
+                <div className="w-12 h-1 bg-slate-200 dark:bg-white/10 rounded-full mx-auto mb-8" />
+                
+                <div className="mb-8">
+                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-2 block">Correction Request</span>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{request.user_name}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{request.correction_type} • Request Date: {new Date(request.request_date).toLocaleDateString()}</p>
+                </div>
+
+                <div className="space-y-6 mb-8">
+                    <div className="bg-slate-50 dark:bg-github-dark-subtle p-5 rounded-2xl space-y-4">
+                        <div className="flex items-center gap-3 text-slate-400">
+                            <FileText size={16} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Reason / Justification</span>
+                        </div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300 italic leading-relaxed">"{request.reason || 'No justification provided'}"</p>
+                    </div>
+
+                    {request.status?.toUpperCase() === 'PENDING' ? (
+                        <div className="space-y-3">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Decision Comment</span>
+                            <textarea 
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                placeholder="Add internal review comment..."
+                                className="w-full bg-slate-50 dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white"
+                                rows={3}
+                            />
+                        </div>
+                    ) : (
+                        <div className="bg-indigo-50 dark:bg-indigo-500/10 p-5 rounded-2xl space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Decision</span>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                    request.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                                }`}>
+                                    {request.status}
+                                </span>
+                            </div>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                {request.admin_comment || "No comment provided."}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {request.status?.toUpperCase() === 'PENDING' && (
+                    <div className="flex gap-4">
+                        <button 
+                            onClick={() => handleAction('REJECTED')}
+                            disabled={isProcessing}
+                            className="flex-1 py-4 bg-white dark:bg-github-dark-subtle border-2 border-rose-100 dark:border-rose-500/20 text-rose-500 font-black rounded-xl active:scale-95 transition-all shadow-sm disabled:opacity-50"
+                        >
+                            Reject
+                        </button>
+                        <button 
+                            onClick={() => handleAction('APPROVED')}
+                            disabled={isProcessing}
+                            className="flex-1 py-4 bg-emerald-500 text-white font-black rounded-xl active:scale-95 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                        >
+                            Approve
+                        </button>
+                    </div>
+                )}
+
+                <button onClick={onClose} className="absolute top-8 right-8 p-2 text-slate-400 hover:text-slate-600 active:scale-90 transition-all">
+                    <X size={24} />
+                </button>
+            </motion.div>
+        </motion.div>,
+        document.body
+    );
+};
+
+export default MobileAttendanceMonitoring;

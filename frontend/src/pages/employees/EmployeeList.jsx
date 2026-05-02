@@ -26,6 +26,7 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmployeeFormContent from '../../components/employees/EmployeeFormContent';
+import ConfirmationModal from '../../components/modals/ConfirmationModal';
 
 const EmployeeList = () => {
     const navigate = useNavigate();
@@ -38,6 +39,15 @@ const EmployeeList = () => {
     const [statusFilter, setStatusFilter] = useState('Active');
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [sidebarMode, setSidebarMode] = useState('view'); // 'view' | 'edit'
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info',
+        onConfirm: () => {},
+        confirmText: 'Confirm'
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Fetch Employees on Mount
     useEffect(() => {
@@ -77,54 +87,103 @@ const EmployeeList = () => {
         }
     };
 
-    const handleDelete = async (e, id) => {
+    const handleDelete = (e, id) => {
         e.stopPropagation();
-        if (!window.confirm("Are you sure you want to move this user to trash?")) return;
-        try {
-            await adminService.deleteUser(id);
-            toast.success("User moved to trash");
-            fetchEmployees(); // Refresh to update lists
-        } catch (err) {
-            toast.error(err.message || "Failed to delete user");
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Move to Trash",
+            message: "Are you sure you want to move this employee to trash? They will be inactive until restored.",
+            type: 'warning',
+            confirmText: "Move to Trash",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.deleteUser(id);
+                    toast.success("User moved to trash");
+                    fetchEmployees();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete user");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        });
     };
 
-    const handleForceDelete = async (e, id) => {
+    const handleForceDelete = (e, id) => {
         e.stopPropagation();
-        if (!window.confirm("PERMANENT DELETE WARNING:\nThis will remove all user data, attendance records, and images.\nThis action CANNOT be undone.\n\nAre you sure?")) return;
-        try {
-            await adminService.forceDeleteUser(id);
-            toast.success("User permanently deleted");
-            setEmployees(prev => prev.filter(e => e.id !== id));
-        } catch (err) {
-            toast.error(err.message || "Failed to delete user");
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Permanent Delete",
+            message: "WARNING: This will permanently remove all user data, attendance records, and images. This action cannot be undone.",
+            type: 'danger',
+            confirmText: "Delete Permanently",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.forceDeleteUser(id);
+                    toast.success("User permanently deleted");
+                    setEmployees(prev => prev.filter(e => e.id !== id));
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete user");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        });
     };
 
-    const handleRestore = async (e, id) => {
+    const handleRestore = (e, id) => {
         e.stopPropagation();
-        try {
-            await adminService.restoreUser(id);
-            toast.success("User restored (Status: Inactive)");
-            fetchEmployees();
-        } catch (err) {
-            toast.error(err.message || "Failed to restore user");
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Restore Employee",
+            message: "Restore this employee from trash? Their status will be set to Inactive.",
+            type: 'info',
+            confirmText: "Restore",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.restoreUser(id);
+                    toast.success("User restored (Status: Inactive)");
+                    fetchEmployees();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (err) {
+                    toast.error(err.message || "Failed to restore user");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        });
     };
 
-    const handleToggleStatus = async (e, id, currentStatus) => {
+    const handleToggleStatus = (e, id, currentStatus) => {
         e.stopPropagation();
         const newStatus = !currentStatus;
         const action = newStatus ? "activate" : "deactivate";
-        if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
-
-        try {
-            await adminService.toggleUserStatus(id, newStatus);
-            toast.success(`User ${action}d successfully`);
-            fetchEmployees();
-        } catch (err) {
-            toast.error(err.message || `Failed to ${action} user`);
-        }
+        
+        setConfirmModal({
+            isOpen: true,
+            title: `${action.charAt(0).toUpperCase() + action.slice(1)} Employee`,
+            message: `Are you sure you want to ${action} this employee?`,
+            type: newStatus ? 'info' : 'warning',
+            confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.toggleUserStatus(id, newStatus);
+                    toast.success(`User ${action}d successfully`);
+                    fetchEmployees();
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                } catch (err) {
+                    toast.error(err.message || `Failed to ${action} user`);
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        });
     };
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -557,6 +616,16 @@ const EmployeeList = () => {
                             )}
                         </motion.div>
                     </>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {confirmModal.isOpen && (
+                    <ConfirmationModal
+                        {...confirmModal}
+                        isSubmitting={isSubmitting}
+                        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                    />
                 )}
             </AnimatePresence>
         </DashboardLayout>

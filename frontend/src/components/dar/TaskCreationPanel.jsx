@@ -5,6 +5,7 @@ import { X, Plus, Clock, AlertCircle, Trash2, Calendar, ChevronLeft, ChevronRigh
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import MiniCalendar from '../dar/MiniCalendar';
+import MobileConfirmModal from '../MobileConfirmModal';
 
 const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attendanceIntervals = [], highlightTaskId, initialDate, lastCreateRequest, onDateChange, isAbsent = false, draftTasks, onDraftUpdate }) => {
 
@@ -55,6 +56,61 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
     const [showReasonModal, setShowReasonModal] = useState(false);
     const [reason, setReason] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [openCategoryIdx, setOpenCategoryIdx] = useState(null);
+    const dropdownRef = useRef(null);
+
+    // --- CONFIRM MODAL STATE ---
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info',
+        onConfirm: () => {},
+        confirmText: 'Confirm'
+    });
+
+    // Handle physical back button to close panel and its modals
+    useEffect(() => {
+        const handlePopState = () => {
+            if (showCalendar) {
+                setShowCalendar(false);
+                return;
+            }
+            if (showReasonModal) {
+                setShowReasonModal(false);
+                return;
+            }
+            if (confirmModal.isOpen) {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                return;
+            }
+            // If nothing else is open, close the panel itself
+            onClose();
+        };
+
+        const isAnyThingOpen = true; // The panel itself is open
+
+        if (isAnyThingOpen) {
+            window.history.pushState({ panelOpen: true }, '');
+            window.addEventListener('popstate', handlePopState);
+        }
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, [showCalendar, showReasonModal, confirmModal.isOpen, onClose]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setOpenCategoryIdx(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleSaveClick = async () => {
         // Filter for unsaved OR (Today + Planned) tasks
@@ -114,7 +170,14 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                     }
                 }
             } catch (err) {
-                alert(`Failed to save "${task.title}": ${err.response?.data?.message}`);
+                setConfirmModal({
+                    isOpen: true,
+                    title: 'Save Failed',
+                    message: `Failed to save "${task.title}": ${err.response?.data?.message || err.message}`,
+                    type: 'warning',
+                    confirmText: 'Dismiss',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
                 return; // Stop on error
             }
         }
@@ -156,7 +219,14 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
             }
         } catch (err) {
             console.error(err);
-            alert("Failed to submit request: " + (err.response?.data?.message || err.message));
+            setConfirmModal({
+                isOpen: true,
+                title: 'Submission Error',
+                message: "Failed to submit request: " + (err.response?.data?.message || err.message),
+                type: 'warning',
+                confirmText: 'Retry',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -357,7 +427,8 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
         };
 
         const newIndex = inputs.length;
-        setInputs([...inputs, newTask]);
+        const updatedInputs = [...inputs, newTask];
+        setInputs(updatedInputs);
 
         onUpdate({
             id: newTask.id,
@@ -368,8 +439,7 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
             type: 'task',
             date: date
         });
-        setInputs(newInputs);
-        if (onDraftUpdate) onDraftUpdate(newInputs); // Sync draft to parent
+        if (onDraftUpdate) onDraftUpdate(updatedInputs); // Sync draft to parent
     };
 
     const handleDelete = async (index) => {
@@ -387,7 +457,14 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                     await api.delete(`/dar/events/delete/${task.id}`);
                 }
             } catch (err) {
-                alert("Failed to delete entry: " + err.response?.data?.message);
+                setConfirmModal({
+                    isOpen: true,
+                    title: 'Delete Failed',
+                    message: "Failed to delete entry: " + (err.response?.data?.message || err.message),
+                    type: 'warning',
+                    confirmText: 'Dismiss',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
                 return;
             }
         }
@@ -540,87 +617,127 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                             {/* Indicator Line */}
                             <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${task.error ? 'bg-red-400' : 'bg-gray-200 group-hover:bg-indigo-500'}`}></div>
 
-                            {/* Top Row: Type Logic & TITLE */}
-                            <div className="flex items-center justify-between relative border-b border-gray-50 pb-2 mb-1 gap-2">
-                                {/* Type Selector */}
-                                <div className="flex items-center bg-gray-100 dark:bg-slate-700 p-0.5 rounded-lg mr-2 shrink-0">
-                                    <button
-                                        onClick={() => handleInputChange(i, 'type', 'TASK')}
-                                        className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${task.type === 'TASK' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-gray-400 opacity-60'}`}
-                                    >
-                                        TASK
-                                    </button>
-                                    <button
-                                        onClick={() => handleInputChange(i, 'type', 'MEETING')}
-                                        className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${task.type === 'MEETING' ? 'bg-white dark:bg-slate-600 text-purple-600 shadow-sm' : 'text-gray-400 opacity-60'}`}
-                                    >
-                                        MTG
-                                    </button>
+                            {/* Top Row: Type Logic, TITLE & Actions */}
+                            <div className="flex items-center justify-between gap-3 border-b border-gray-50 dark:border-github-dark-border/50 pb-2 mb-1">
+                                <div className="flex items-center flex-1 min-w-0 gap-2">
+                                    {/* Type Selector */}
+                                    <div className="flex items-center bg-gray-100 dark:bg-slate-700 p-0.5 rounded-lg shrink-0">
+                                        {(!lastCreateRequest || lastCreateRequest.type === 'TASK') && (
+                                            <button
+                                                onClick={() => handleInputChange(i, 'type', 'TASK')}
+                                                className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${task.type === 'TASK' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-gray-400 opacity-60'}`}
+                                            >
+                                                TASK
+                                            </button>
+                                        )}
+                                        {(!lastCreateRequest || lastCreateRequest.type === 'MEETING' || lastCreateRequest.type === 'EVENT') && (
+                                            <button
+                                                onClick={() => handleInputChange(i, 'type', 'MEETING')}
+                                                className={`px-1.5 py-0.5 text-[9px] font-black rounded-md transition-all ${task.type === 'MEETING' ? 'bg-white dark:bg-slate-600 text-purple-600 shadow-sm' : 'text-gray-400 opacity-60'}`}
+                                            >
+                                                MTG
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* TITLE INPUT */}
+                                    <input
+                                        type="text"
+                                        placeholder={task.type === 'TASK' ? `TASK ${i + 1 < 10 ? '0' + (i + 1) : i + 1}` : 'Meeting Title'}
+                                        value={task.title}
+                                        onChange={(e) => handleInputChange(i, 'title', e.target.value)}
+                                        className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
+                                    />
                                 </div>
 
-                                {/* TITLE INPUT */}
-                                <input
-                                    type="text"
-                                    placeholder={task.type === 'TASK' ? `TASK ${i + 1 < 10 ? '0' + (i + 1) : i + 1}` : 'Meeting Title'}
-                                    value={task.title}
-                                    onChange={(e) => handleInputChange(i, 'title', e.target.value)}
-                                    className="flex-1 min-w-0 text-xs font-bold text-gray-600 dark:text-gray-200 placeholder:text-gray-300 dark:placeholder:text-slate-500 placeholder:font-bold bg-transparent border-none p-0 focus:ring-0 uppercase tracking-wider"
-                                />
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <AnimatePresence mode="wait">
+                                        {task.type === 'TASK' ? (
+                                            <motion.div
+                                                key="task-category"
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="relative"
+                                                ref={openCategoryIdx === i ? dropdownRef : null}
+                                            >
+                                                <button
+                                                    onClick={() => setOpenCategoryIdx(openCategoryIdx === i ? null : i)}
+                                                    className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-full border border-indigo-100 dark:border-indigo-500/20 transition-all hover:bg-indigo-100 dark:hover:bg-indigo-500/20 active:scale-95"
+                                                >
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                                                        {task.category || 'General'}
+                                                    </span>
+                                                    <div className={`text-indigo-500 transition-transform duration-200 ${openCategoryIdx === i ? 'rotate-180' : ''}`}>
+                                                        <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                                        </svg>
+                                                    </div>
+                                                </button>
 
-                                <AnimatePresence mode="wait">
-                                    {task.type === 'TASK' ? (
-                                        <motion.div
-                                            key="task-category"
-                                            initial={{ opacity: 0, x: 10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: 10 }}
-                                            className="relative flex-shrink-0"
-                                        >
-                                            <div className="flex items-center gap-1 pl-3 pr-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 transition-colors">
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                                                    {task.category || 'General'}
-                                                </span>
-                                                <div className="text-indigo-500">
-                                                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                            <select
-                                                value={task.category || 'General'}
-                                                onChange={(e) => handleInputChange(i, 'category', e.target.value)}
-                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+                                                {/* Custom Dropdown Menu */}
+                                                <AnimatePresence>
+                                                    {openCategoryIdx === i && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            className="absolute right-0 mt-1.5 w-36 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-100 dark:border-white/10 overflow-hidden z-50 py-1"
+                                                        >
+                                                            {availableCategories.map(cat => (
+                                                                <button
+                                                                    key={cat}
+                                                                    onClick={() => {
+                                                                        handleInputChange(i, 'category', cat);
+                                                                        setOpenCategoryIdx(null);
+                                                                    }}
+                                                                    className={`w-full text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-between ${
+                                                                        (task.category || 'General') === cat 
+                                                                        ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' 
+                                                                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
+                                                                    }`}
+                                                                >
+                                                                    {cat}
+                                                                    {(task.category || 'General') === cat && <div className="w-1 h-1 rounded-full bg-indigo-500" />}
+                                                                </button>
+                                                            ))}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </motion.div>
+                                        ) : (
+                                            <motion.div
+                                                key="meeting-options"
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="flex items-center gap-1"
                                             >
-                                                {availableCategories.map(cat => (
-                                                    <option key={cat} value={cat}>{cat}</option>
-                                                ))}
-                                            </select>
-                                        </motion.div>
-                                    ) : (
-                                        <motion.div
-                                            key="meeting-options"
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: -10 }}
-                                            className="flex items-center gap-1.5 shrink-0"
-                                        >
-                                            <button
-                                                onClick={() => handleInputChange(i, 'locationType', 'online')}
-                                                className={`p-1 rounded-md border transition-all ${task.locationType === 'online' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-transparent text-gray-300 border-gray-100'}`}
-                                                title="Online Meeting"
-                                            >
-                                                <Video size={10} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleInputChange(i, 'locationType', 'offline')}
-                                                className={`p-1 rounded-md border transition-all ${task.locationType === 'offline' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-transparent text-gray-300 border-gray-100'}`}
-                                                title="In-Person"
-                                            >
-                                                <MapPin size={10} />
-                                            </button>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                                <button
+                                                    onClick={() => handleInputChange(i, 'locationType', 'online')}
+                                                    className={`p-1 rounded-md border transition-all ${task.locationType === 'online' ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-transparent text-gray-300 border-gray-100'}`}
+                                                >
+                                                    <Video size={10} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleInputChange(i, 'locationType', 'offline')}
+                                                    className={`p-1 rounded-md border transition-all ${task.locationType === 'offline' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-transparent text-gray-300 border-gray-100'}`}
+                                                >
+                                                    <MapPin size={10} />
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* Delete Action Button */}
+                                    <button
+                                        onClick={() => handleDelete(i)}
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        title="Delete Entry"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="space-y-3">
@@ -671,12 +788,9 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                                 </AnimatePresence>
 
                                 {/* Time Intervals */}
-                                {/* Time Intervals & Actions Row */}
-                                <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-100 dark:border-github-dark-border">
-                                    {/* Time Group */}
-                                    <div className="flex-1 flex items-center gap-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg p-1.5 border border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-800 transition-colors">
+                                <div className="pt-2 border-t border-dashed border-gray-100 dark:border-github-dark-border">
+                                    <div className="w-full flex items-center gap-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg p-2 border border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-800 transition-colors">
                                         <Clock size={14} className={task.error ? "text-red-400 ml-1" : "text-gray-400 dark:text-github-dark-muted ml-1"} />
-
                                         <div className="flex items-center gap-1 flex-1">
                                             <input
                                                 type="time"
@@ -693,15 +807,6 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                                             />
                                         </div>
                                     </div>
-
-                                    {/* Delete Action */}
-                                    <button
-                                        onClick={() => handleDelete(i)}
-                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                        title="Delete Task"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
                                 </div>
                                 {task.error && (
                                     <span className="text-[10px] text-red-500 font-medium flex items-center gap-1 mt-1">
@@ -806,6 +911,15 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                 document.body
             )}
 
+            <MobileConfirmModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                confirmText={confirmModal.confirmText}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+            />
         </motion.div >
     );
 };

@@ -21,7 +21,12 @@ export const NotificationProvider = ({ children }) => {
                 setUnreadCount(response.unread_count);
             }
         } catch (error) {
-            console.error("Failed to fetch notifications:", error);
+            // If 403 Forbidden, it means the user isn't authorized for notifications (e.g., certain admin roles)
+            if (error.message.includes("403") || error.message.includes("Forbidden")) {
+                console.warn("Notifications are not enabled for this account type.");
+            } else {
+                console.error("Failed to fetch notifications:", error);
+            }
         }
     }, [user]);
 
