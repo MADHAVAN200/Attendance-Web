@@ -12,7 +12,10 @@ import {
     Moon,
     Hourglass,
     XCircle,
-    CheckCircle2
+    CheckCircle2,
+    Settings2,
+    Calendar,
+    ChevronRight
 } from 'lucide-react';
 
 const ShiftManagement = () => {
@@ -42,7 +45,7 @@ const ShiftManagement = () => {
             endTime: '14:00',
             gracePeriod: 0,
             overtime: false,
-            color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
+            color: 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400',
             validation: {
                 checkInGPS: true,
                 checkInSelfie: true,
@@ -57,8 +60,8 @@ const ShiftManagement = () => {
             startTime: '18:00',
             endTime: '02:30',
             gracePeriod: 0,
-            overtime: false,
-            color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
+            overtime: true,
+            color: 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400',
             validation: {
                 checkInGPS: false,
                 checkInSelfie: false,
@@ -73,8 +76,9 @@ const ShiftManagement = () => {
     const [selectedShift, setSelectedShift] = useState(null);
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     
-    // Create Shift Form State
+    // Create/Edit Shift Form State
     const [newShiftName, setNewShiftName] = useState('');
     const [newStartTime, setNewStartTime] = useState('09:00');
     const [newEndTime, setNewEndTime] = useState('18:00');
@@ -90,26 +94,8 @@ const ShiftManagement = () => {
         setIsViewModalOpen(true);
     };
 
-    const handleSaveShift = () => {
-        const newShift = {
-            id: Date.now(),
-            name: newShiftName || 'Unnamed Shift',
-            type: 'Shift',
-            startTime: newStartTime,
-            endTime: newEndTime,
-            gracePeriod: parseInt(newGracePeriod) || 0,
-            overtime: newOvertime,
-            color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
-            validation: {
-                checkInGPS: newValCheckInGps,
-                checkInSelfie: newValCheckInSelfie,
-                checkOutGPS: newValCheckOutGps,
-                checkOutSelfie: newValCheckOutSelfie
-            }
-        };
-        setShifts([newShift, ...shifts]);
-        setIsAddModalOpen(false);
-        // Reset form
+    const handleOpenAddModal = () => {
+        setIsEditing(false);
         setNewShiftName('');
         setNewStartTime('09:00');
         setNewEndTime('18:00');
@@ -119,322 +105,433 @@ const ShiftManagement = () => {
         setNewValCheckInSelfie(true);
         setNewValCheckOutGps(false);
         setNewValCheckOutSelfie(false);
+        setIsAddModalOpen(true);
+    };
+
+    const handleOpenEditModal = () => {
+        if (!selectedShift) return;
+        setIsEditing(true);
+        setNewShiftName(selectedShift.name);
+        setNewStartTime(selectedShift.startTime);
+        setNewEndTime(selectedShift.endTime);
+        setNewGracePeriod(selectedShift.gracePeriod.toString());
+        setNewOvertime(selectedShift.overtime);
+        setNewValCheckInGps(selectedShift.validation?.checkInGPS || false);
+        setNewValCheckInSelfie(selectedShift.validation?.checkInSelfie || false);
+        setNewValCheckOutGps(selectedShift.validation?.checkOutGPS || false);
+        setNewValCheckOutSelfie(selectedShift.validation?.checkOutSelfie || false);
+        
+        setIsViewModalOpen(false);
+        setIsAddModalOpen(true);
+    };
+
+    const handleSaveShift = () => {
+        if (isEditing) {
+            setShifts(prev => prev.map(s => s.id === selectedShift.id ? {
+                ...s,
+                name: newShiftName || 'Unnamed Shift',
+                startTime: newStartTime,
+                endTime: newEndTime,
+                gracePeriod: parseInt(newGracePeriod) || 0,
+                overtime: newOvertime,
+                validation: {
+                    checkInGPS: newValCheckInGps,
+                    checkInSelfie: newValCheckInSelfie,
+                    checkOutGPS: newValCheckOutGps,
+                    checkOutSelfie: newValCheckOutSelfie
+                }
+            } : s));
+        } else {
+            const newShift = {
+                id: Date.now(),
+                name: newShiftName || 'Unnamed Shift',
+                type: 'Shift',
+                startTime: newStartTime,
+                endTime: newEndTime,
+                gracePeriod: parseInt(newGracePeriod) || 0,
+                overtime: newOvertime,
+                color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
+                validation: {
+                    checkInGPS: newValCheckInGps,
+                    checkInSelfie: newValCheckInSelfie,
+                    checkOutGPS: newValCheckOutGps,
+                    checkOutSelfie: newValCheckOutSelfie
+                }
+            };
+            setShifts([newShift, ...shifts]);
+        }
+        
+        setIsAddModalOpen(false);
+        setIsEditing(false);
     };
 
     return (
         <MobileDashboardLayout title="Shift Management">
-            <div className="px-2 pb-6 pt-2 space-y-3">
-                {/* Top Card */}
-                <div className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border flex justify-between items-center">
+            <div className="px-2 pb-24 pt-2 space-y-4">
+                {/* Header Stats / Info Card */}
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-github-dark-border flex justify-between items-center bg-gradient-to-br from-white to-slate-50/50 dark:from-dark-card dark:to-github-dark-subtle/30">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">Active Shifts</h2>
-                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted max-w-[150px] mt-0.5">Manage work timings & grace</p>
+                        <h2 className="text-[15px] font-bold text-slate-800 dark:text-github-dark-text tracking-tight">Active Shifts</h2>
+                        <p className="text-[11px] text-slate-500 dark:text-github-dark-muted font-medium mt-0.5">Total {shifts.length} configured shifts</p>
                     </div>
                     <button 
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="flex items-center gap-1 px-3 py-2 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-500/20 hover:bg-indigo-600 active:scale-95 transition-all"
+                        onClick={handleOpenAddModal}
+                        className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 active:scale-90 transition-all"
                     >
-                        <Plus size={14} />
-                        Add Shift
+                        <Plus size={22} strokeWidth={2.5} />
                     </button>
                 </div>
 
-                {/* Shifts List */}
-                <div className="space-y-3">
+                {/* Shifts List - High Density Grid */}
+                <div className="grid grid-cols-1 gap-3">
                     {shifts.map((shift) => (
                         <div 
                             key={shift.id} 
                             onClick={() => handleOpenViewModal(shift)}
-                            className="bg-white dark:bg-dark-card rounded-xl p-4 shadow-sm border border-slate-200 dark:border-github-dark-border relative cursor-pointer active:scale-[0.98] transition-all"
+                            className="group bg-white dark:bg-dark-card rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-github-dark-border relative cursor-pointer active:scale-[0.98] transition-all overflow-hidden"
                         >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-9 h-9 rounded-lg ${shift.color} flex items-center justify-center`}>
-                                        <Clock size={16} />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 dark:text-github-dark-text text-[13px]">{shift.name}</h3>
-                                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted font-medium mt-0.5">{shift.type}</p>
-                                    </div>
+                            {/* Accent line */}
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${shift.color.split(' ')[2]} opacity-70`}></div>
+                            
+                            <div className="flex items-center gap-3">
+                                {/* Icon/Avatar Area */}
+                                <div className={`w-11 h-11 rounded-xl ${shift.color} flex items-center justify-center shrink-0 shadow-sm`}>
+                                    <Clock size={20} strokeWidth={2.5} />
                                 </div>
-                                <button className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full" onClick={(e) => e.stopPropagation()}>
-                                    <MoreVertical size={14} />
-                                </button>
-                            </div>
 
-                            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-github-dark-border">
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-slate-500 dark:text-github-dark-muted">Timing</span>
-                                    <span className="font-bold text-slate-700 dark:text-github-dark-text font-mono tracking-wide">{shift.startTime.substring(0,5)} - {shift.endTime.substring(0,5)}</span>
+                                {/* Content Area */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="font-bold text-slate-800 dark:text-github-dark-text text-[14px] truncate tracking-tight">{shift.name}</h3>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted border border-slate-200/50 dark:border-github-dark-border uppercase tracking-wider">{shift.type}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3 mt-1.5">
+                                        <div className="flex items-center gap-1">
+                                            <Calendar size={10} className="text-slate-400" />
+                                            <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text font-mono">{shift.startTime} - {shift.endTime}</span>
+                                        </div>
+                                        <div className="h-3 w-[1px] bg-slate-200 dark:bg-github-dark-border"></div>
+                                        <div className="flex items-center gap-1">
+                                            <AlertTriangle size={10} className="text-amber-500" />
+                                            <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">{shift.gracePeriod}m</span>
+                                        </div>
+                                        {shift.overtime && (
+                                            <>
+                                                <div className="h-3 w-[1px] bg-slate-200 dark:bg-github-dark-border"></div>
+                                                <div className="flex items-center gap-1">
+                                                    <Zap size={10} className="text-indigo-500" />
+                                                    <span className="text-[11px] font-bold text-indigo-500 uppercase tracking-tighter">OT</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-slate-500 dark:text-github-dark-muted flex items-center gap-1 min-w-0"><AlertTriangle size={10} className="text-amber-500" /> Grace Period</span>
-                                    <span className="font-bold text-slate-700 dark:text-github-dark-text">{shift.gracePeriod} Mins</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-slate-500 dark:text-github-dark-muted flex items-center gap-1 min-w-0"><Zap size={10} className="text-indigo-500 dark:text-indigo-400" /> Overtime</span>
-                                    <span className="font-bold text-slate-700 dark:text-github-dark-text">
-                                        {shift.overtime ? `On` : 'Off'}
-                                    </span>
-                                </div>
+
+                                <ChevronRight size={18} className="text-slate-300 dark:text-github-dark-muted group-hover:text-indigo-500 transition-colors" />
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* View Shift Modal Overlay */}
+            {/* Bottom Sheet: View Shift Details */}
             {isViewModalOpen && selectedShift && createPortal(
-                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="flex min-h-full items-center justify-center p-4">
-                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
-                        <div className="flex justify-between items-center mb-3">
-                            <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate pr-2">{selectedShift.name}</h2>
-                            <button onClick={() => setIsViewModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
-                                <X size={14} />
-                            </button>
-                        </div>
-                        
-                        <p className="text-[9px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-3">Shift Details</p>
-
-                        <div className="space-y-3">
-                            {/* Timing & Schedule */}
-                            <div>
-                                <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Timing & Schedule</p>
-                                <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
-                                        <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
-                                            <Sun size={12} />
-                                        </div>
-                                        <div>
-                                            <p className="text-[8px] uppercase font-bold text-slate-500 dark:text-github-dark-muted">Start Time</p>
-                                            <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text mt-0.5">{selectedShift.startTime.substring(0,5)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
-                                        <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
-                                            <Moon size={12} />
-                                        </div>
-                                        <div>
-                                            <p className="text-[8px] uppercase font-bold text-slate-500 dark:text-github-dark-muted">End Time</p>
-                                            <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text mt-0.5">{selectedShift.endTime.substring(0,5)}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
-                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-md">
-                                        <Hourglass size={12} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] uppercase font-bold text-slate-500 dark:text-github-dark-muted">Grace Period</p>
-                                        <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text mt-0.5">{selectedShift.gracePeriod} Minutes</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Overtime Configuration */}
-                            <div>
-                                <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Overtime Config</p>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-2.5 flex items-center gap-2 border border-slate-100 dark:border-github-dark-border">
-                                    <div className="p-1 bg-slate-200 dark:bg-slate-700/50 text-slate-600 dark:text-github-dark-muted rounded-md">
-                                        {selectedShift.overtime ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400"/> : <XCircle size={12} />}
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] uppercase font-bold text-slate-500 dark:text-github-dark-muted">Status</p>
-                                        <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text mt-0.5">{selectedShift.overtime ? 'Enabled' : 'Disabled'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Attendance Validation */}
-                            <div>
-                                <p className="text-[9px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-1.5">Validation</p>
-                                <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-100 dark:border-github-dark-border grid grid-cols-2 gap-3">
-                                    <div>
-                                        <p className="text-[8px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">Check-In</p>
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                {selectedShift.validation?.checkInGPS ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400" /> : <XCircle size={12} className="text-slate-400 dark:text-github-dark-muted" />}
-                                                <span className={`text-[10px] font-bold ${selectedShift.validation?.checkInGPS ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-github-dark-muted'}`}>GPS {selectedShift.validation?.checkInGPS ? 'Req' : 'Opt'}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                {selectedShift.validation?.checkInSelfie ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400" /> : <XCircle size={12} className="text-slate-400 dark:text-github-dark-muted" />}
-                                                <span className={`text-[10px] font-bold ${selectedShift.validation?.checkInSelfie ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-github-dark-muted'}`}>Selfie {selectedShift.validation?.checkInSelfie ? 'Req' : 'Opt'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">Check-Out</p>
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                {selectedShift.validation?.checkOutGPS ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400" /> : <XCircle size={12} className="text-slate-400 dark:text-github-dark-muted" />}
-                                                <span className={`text-[10px] font-bold ${selectedShift.validation?.checkOutGPS ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-github-dark-muted'}`}>GPS {selectedShift.validation?.checkOutGPS ? 'Req' : 'Opt'}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                {selectedShift.validation?.checkOutSelfie ? <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400" /> : <XCircle size={12} className="text-slate-400 dark:text-github-dark-muted" />}
-                                                <span className={`text-[10px] font-bold ${selectedShift.validation?.checkOutSelfie ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-github-dark-muted'}`}>Selfie {selectedShift.validation?.checkOutSelfie ? 'Req' : 'Opt'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button 
-                            onClick={() => setIsViewModalOpen(false)}
-                            className="w-full mt-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-[0.98]"
+                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsViewModalOpen(false)}>
+                    <div className="flex min-h-full items-end justify-center">
+                        <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative bg-white dark:bg-dark-card w-full rounded-t-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-500 border-t border-slate-200/50 dark:border-github-dark-border"
                         >
-                            Close
-                        </button>
+                            {/* Handle */}
+                            <div className="flex justify-center pt-3 pb-2">
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                            </div>
+
+                            <div className="p-6 pt-2">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-12 h-12 rounded-2xl ${selectedShift.color} flex items-center justify-center shadow-lg shadow-indigo-500/10`}>
+                                            <Clock size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-slate-800 dark:text-github-dark-text tracking-tight leading-tight">{selectedShift.name}</h2>
+                                            <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-[0.15em] mt-0.5">{selectedShift.type} Configuration</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={handleOpenEditModal}
+                                            className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                                        >
+                                            <Settings2 size={20} />
+                                        </button>
+                                        <button 
+                                            onClick={() => setIsViewModalOpen(false)} 
+                                            className="w-10 h-10 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted rounded-full flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-5">
+                                    {/* Timing Section */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg">
+                                                    <Sun size={14} />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Starts</span>
+                                            </div>
+                                            <p className="text-xl font-black text-slate-800 dark:text-github-dark-text font-mono">{selectedShift.startTime}</p>
+                                        </div>
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                                    <Moon size={14} />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ends</span>
+                                            </div>
+                                            <p className="text-xl font-black text-slate-800 dark:text-github-dark-text font-mono">{selectedShift.endTime}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Config Stats */}
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border divide-y divide-slate-200/50 dark:divide-github-dark-border">
+                                        <div className="flex justify-between items-center pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Hourglass size={16} className="text-slate-400" />
+                                                <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Grace Period</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text bg-white dark:bg-github-dark-subtle px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-github-dark-border">{selectedShift.gracePeriod} Minutes</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-3">
+                                            <div className="flex items-center gap-2">
+                                                <Zap size={16} className="text-indigo-500" />
+                                                <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Overtime Tracking</span>
+                                            </div>
+                                            <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${selectedShift.overtime ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-github-dark-muted'}`}>
+                                                {selectedShift.overtime ? 'Active' : 'Off'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Validation Grid */}
+                                    <div>
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1">Validation Rules</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-bold text-slate-800 dark:text-github-dark-text">Check-In</p>
+                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.validation?.checkInGPS ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
+                                                    <CheckCircle2 size={14} className={selectedShift.validation?.checkInGPS ? 'text-emerald-500' : 'text-slate-300'} />
+                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">GPS Req</span>
+                                                </div>
+                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.validation?.checkInSelfie ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
+                                                    <CheckCircle2 size={14} className={selectedShift.validation?.checkInSelfie ? 'text-emerald-500' : 'text-slate-300'} />
+                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">Selfie Req</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-bold text-slate-800 dark:text-github-dark-text">Check-Out</p>
+                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.validation?.checkOutGPS ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
+                                                    <CheckCircle2 size={14} className={selectedShift.validation?.checkOutGPS ? 'text-emerald-500' : 'text-slate-300'} />
+                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">GPS Req</span>
+                                                </div>
+                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.validation?.checkOutSelfie ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
+                                                    <CheckCircle2 size={14} className={selectedShift.validation?.checkOutSelfie ? 'text-emerald-500' : 'text-slate-300'} />
+                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">Selfie Req</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                                    <button 
+                                        onClick={() => setIsViewModalOpen(false)}
+                                        className="w-full py-4 bg-slate-900 dark:bg-github-dark-subtle text-white dark:text-github-dark-text text-sm font-bold rounded-2xl shadow-xl active:scale-[0.98] transition-all"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>,
                 document.body
             )}
 
-            {/* Create New Shift Modal Overlay */}
+            {/* Bottom Sheet: Create/Edit Shift */}
             {isAddModalOpen && createPortal(
-                <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="flex min-h-full items-center justify-center p-4">
-                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-xl p-4 border border-slate-200 dark:border-github-dark-border animate-in zoom-in-95 duration-200 shadow-xl mx-auto">
-                        <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-github-dark-border mb-3">
-                            <h2 className="text-sm font-bold text-slate-800 dark:text-github-dark-text">Create Shift</h2>
-                            <button onClick={() => setIsAddModalOpen(false)} className="p-1 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted hover:text-slate-800 dark:hover:text-white rounded-full transition-colors flex-shrink-0">
-                                <X size={14} />
-                            </button>
-                        </div>
-                        
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-[9px] font-bold text-slate-500 dark:text-github-dark-muted mb-1">Shift Name</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="e.g. Morning Shift"
-                                    value={newShiftName}
-                                    onChange={(e) => setNewShiftName(e.target.value)}
-                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg px-2.5 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
-                                />
+                <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsAddModalOpen(false)}>
+                    <div className="flex min-h-full items-end justify-center">
+                        <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative bg-white dark:bg-dark-card w-full rounded-t-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-500 border-t border-slate-200/50 dark:border-github-dark-border max-h-[92vh] flex flex-col"
+                        >
+                            {/* Handle */}
+                            <div className="flex justify-center pt-3 pb-2 shrink-0">
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 dark:text-github-dark-muted mb-1">Start Time</label>
-                                    <div className="relative">
-                                        <input 
-                                            type="time" 
-                                            value={newStartTime}
-                                            onChange={(e) => setNewStartTime(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
-                                        />
-                                        <Clock size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 dark:text-github-dark-muted mb-1">End Time</label>
-                                    <div className="relative">
-                                        <input 
-                                            type="time" 
-                                            value={newEndTime}
-                                            onChange={(e) => setNewEndTime(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-6 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50 appearance-none"
-                                        />
-                                        <Clock size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-[9px] font-bold text-slate-500 dark:text-github-dark-muted mb-1">Grace Period (Mins)</label>
-                                <div className="relative">
-                                    <input 
-                                        type="number" 
-                                        value={newGracePeriod}
-                                        onChange={(e) => setNewGracePeriod(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/80 border border-slate-200 dark:border-github-dark-border rounded-lg pl-2.5 pr-9 py-1.5 text-[11px] text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500/50"
-                                    />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">mins</span>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-between items-center py-1.5 border-b border-t border-slate-100 dark:border-github-dark-border">
-                                <div>
-                                    <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Calc</p>
-                                    <p className="text-[8px] text-slate-500 dark:text-github-dark-muted mt-0.5">Enable auto OT tracking</p>
-                                </div>
-                                <div 
-                                    className={`w-8 h-4 rounded-full p-0.5 cursor-pointer transition-colors ${newOvertime ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                                    onClick={() => setNewOvertime(!newOvertime)}
-                                >
-                                    <div className={`w-3 h-3 rounded-full bg-white transition-transform ${newOvertime ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 dark:bg-github-dark-subtle/80 rounded-lg p-3 border border-slate-200 dark:border-github-dark-border">
-                                <div className="flex items-center gap-1.5 mb-3">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-slate-500 dark:text-github-dark-muted">
-                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                        <circle cx="12" cy="10" r="3"></circle>
-                                    </svg>
-                                    <p className="text-[11px] font-bold text-slate-800 dark:text-github-dark-text">Attendance Validation</p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
+                            <div className="flex-1 overflow-y-auto px-6 pt-2 pb-8">
+                                <div className="flex justify-between items-center mb-6">
                                     <div>
-                                        <p className="text-[8px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">Check-In</p>
-                                        <div className="space-y-2">
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <div className={`w-3 h-3 rounded flex items-center justify-center border ${newValCheckInGps ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-500 bg-white dark:bg-transparent'}`}>
-                                                    {newValCheckInGps && <CheckCircle2 size={10} className="text-white bg-indigo-500 rounded-full"/>}
-                                                </div>
-                                                <input type="checkbox" className="hidden" checked={newValCheckInGps} onChange={() => setNewValCheckInGps(!newValCheckInGps)} />
-                                                <span className="text-[10px] text-slate-600 dark:text-slate-300">GPS Req</span>
-                                            </label>
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <div className={`w-3 h-3 rounded flex items-center justify-center border ${newValCheckInSelfie ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-500 bg-white dark:bg-transparent'}`}>
-                                                    {newValCheckInSelfie && <CheckCircle2 size={10} className="text-white bg-indigo-500 rounded-full"/>}
-                                                </div>
-                                                <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
-                                                <span className="text-[10px] text-slate-600 dark:text-slate-300">Selfie Req</span>
-                                            </label>
+                                        <h2 className="text-xl font-black text-slate-800 dark:text-github-dark-text tracking-tight">{isEditing ? 'Edit Shift' : 'Create Shift'}</h2>
+                                        <p className="text-xs text-slate-500 font-medium">{isEditing ? 'Modify existing configuration' : 'Configure new work timings'}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsAddModalOpen(false)} 
+                                        className="w-10 h-10 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted rounded-full flex items-center justify-center"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-6">
+                                    {/* Name Input */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shift Name</label>
+                                        <div className="relative group">
+                                            <Settings2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. Regular Day Shift"
+                                                value={newShiftName}
+                                                onChange={(e) => setNewShiftName(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-semibold text-slate-800 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all"
+                                            />
                                         </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[8px] font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-widest mb-2">Check-Out</p>
-                                        <div className="space-y-2">
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <div className={`w-3 h-3 rounded flex items-center justify-center border ${newValCheckOutGps ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-500 bg-white dark:bg-transparent'}`}>
-                                                    {newValCheckOutGps && <CheckCircle2 size={10} className="text-white bg-indigo-500 rounded-full"/>}
+
+                                    {/* Time Grid */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Time</label>
+                                            <div className="relative group">
+                                                <Sun size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
+                                                <input 
+                                                    type="time" 
+                                                    value={newStartTime}
+                                                    onChange={(e) => setNewStartTime(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-black text-slate-800 dark:text-github-dark-text font-mono appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">End Time</label>
+                                            <div className="relative group">
+                                                <Moon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                                                <input 
+                                                    type="time" 
+                                                    value={newEndTime}
+                                                    onChange={(e) => setNewEndTime(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-black text-slate-800 dark:text-github-dark-text font-mono appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Grace Period Slider-style Input */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between items-center mb-1 px-1">
+                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Grace Period</label>
+                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{newGracePeriod} mins</span>
+                                        </div>
+                                        <div className="relative group">
+                                            <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input 
+                                                type="number" 
+                                                value={newGracePeriod}
+                                                onChange={(e) => setNewGracePeriod(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-16 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Minutes</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Toggles */}
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border flex justify-between items-center group active:bg-slate-100 dark:active:bg-github-dark-subtle transition-colors" onClick={() => setNewOvertime(!newOvertime)}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-xl transition-colors ${newOvertime ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-400'}`}>
+                                                <Zap size={18} fill={newOvertime ? 'currentColor' : 'none'} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[13px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Tracking</p>
+                                                <p className="text-[10px] text-slate-500 font-medium">Automate OT calculations</p>
+                                            </div>
+                                        </div>
+                                        <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${newOvertime ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${newOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                        </div>
+                                    </div>
+
+                                    {/* Validation Section */}
+                                    <div className="space-y-4 pt-2">
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Validation Requirements</p>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Check-In Column */}
+                                            <div className="space-y-3">
+                                                <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Check-In
+                                                </p>
+                                                <div className="space-y-2">
+                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                            {newValCheckInGps && <CheckCircle2 size={14} className="text-white" />}
+                                                        </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckInGps} onChange={() => setNewValCheckInGps(!newValCheckInGps)} />
+                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                            {newValCheckInSelfie && <CheckCircle2 size={14} className="text-white" />}
+                                                        </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
+                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
+                                                    </label>
                                                 </div>
-                                                <input type="checkbox" className="hidden" checked={newValCheckOutGps} onChange={() => setNewValCheckOutGps(!newValCheckOutGps)} />
-                                                <span className="text-[10px] text-slate-600 dark:text-slate-300">GPS Req</span>
-                                            </label>
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <div className={`w-3 h-3 rounded flex items-center justify-center border ${newValCheckOutSelfie ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 dark:border-slate-500 bg-white dark:bg-transparent'}`}>
-                                                    {newValCheckOutSelfie && <CheckCircle2 size={10} className="text-white bg-indigo-500 rounded-full"/>}
+                                            </div>
+
+                                            {/* Check-Out Column */}
+                                            <div className="space-y-3">
+                                                <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Check-Out
+                                                </p>
+                                                <div className="space-y-2">
+                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                            {newValCheckOutGps && <CheckCircle2 size={14} className="text-white" />}
+                                                        </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckOutGps} onChange={() => setNewValCheckOutGps(!newValCheckOutGps)} />
+                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                            {newValCheckOutSelfie && <CheckCircle2 size={14} className="text-white" />}
+                                                        </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
+                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
+                                                    </label>
                                                 </div>
-                                                <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
-                                                <span className="text-[10px] text-slate-600 dark:text-slate-300">Selfie Req</span>
-                                            </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-2 mt-4">
-                            <button 
-                                onClick={() => setIsAddModalOpen(false)}
-                                className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-github-dark-subtle dark:hover:bg-slate-700 text-slate-700 dark:text-github-dark-text text-[11px] font-bold rounded-lg transition-all active:scale-[0.98]"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={handleSaveShift}
-                                className="w-full py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all active:scale-[0.98]"
-                            >
-                                Save Shift
-                            </button>
-                        </div>
+                                <div className="mt-10 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+                                    <button 
+                                        onClick={handleSaveShift}
+                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <CheckCircle2 size={20} />
+                                        {isEditing ? 'Update Shift Configuration' : 'Save New Shift'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>,
@@ -445,3 +542,4 @@ const ShiftManagement = () => {
 };
 
 export default ShiftManagement;
+
