@@ -19,7 +19,11 @@ const errorHandler = (err, req, res, next) => {
     }
 
     if (process.env.NODE_ENV === 'development') {
-        console.error('ERROR 💥', err);
+        if (err.isOperational) {
+            console.warn(`⚠️  [OperationalError] ${err.statusCode} - ${err.message}`);
+        } else {
+            console.error('ERROR 💥', err);
+        }
     }
 
     const isDevelopment = process.env.NODE_ENV === 'development';

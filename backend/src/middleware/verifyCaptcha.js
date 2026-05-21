@@ -191,6 +191,12 @@ function verifyWordCaptcha(captchaId, captchaText) {
  * Supports both Google reCAPTCHA v2 and word-based captcha
  */
 export const verifyCaptcha = async (req, res, next) => {
+    // Bypass verification if captcha is explicitly disabled via env
+    if (process.env.ENABLE_CAPTCHA === 'false') {
+        console.log('🔓 CAPTCHA verification disabled via env. Bypassing...');
+        return next();
+    }
+
     const { captchaToken, captchaId, captchaText } = req.body;
 
     try {

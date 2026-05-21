@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, Shield, Activity, Zap, Cp
 import ReCAPTCHA from "react-google-recaptcha";
 
 const Login = () => {
+    const isCaptchaEnabled = String(import.meta.env.VITE_ENABLE_CAPTCHA).toLowerCase().trim() !== 'false';
     const { login } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
@@ -20,6 +21,8 @@ const Login = () => {
     const [isDark, setIsDark] = useState(true);
 
     useEffect(() => {
+        console.log("🔒 [Vite Env Check] VITE_ENABLE_CAPTCHA:", import.meta.env.VITE_ENABLE_CAPTCHA);
+        console.log("🔒 CAPTCHA is Enabled on Frontend?", isCaptchaEnabled);
         const handleResize = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener("resize", handleResize);
 
@@ -40,15 +43,15 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Skip captcha for mobile OR if not set in env (for dev convenience)
-        if (!isMobile && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+        // Skip captcha for mobile OR if not set in env (for dev convenience) OR if captcha is disabled via env
+        if (isCaptchaEnabled && !isMobile && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
             toast.error("Please complete the security check.");
             return;
         }
 
         setLoading(true);
         try {
-            await login(formData.identifier, formData.password);
+            await login(formData.identifier, formData.password, isCaptchaEnabled ? captchaToken : undefined);
             toast.success("Identity Verified. Access Granted.");
             navigate("/");
         } catch (err) {
@@ -228,7 +231,7 @@ const Login = () => {
                             </div>
 
                             {/* ReCAPTCHA (Desktop only) */}
-                            {!isMobile && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+                            {isCaptchaEnabled && !isMobile && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
                                 <div className="flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90 translate-x-[-15px]">
                                     <ReCAPTCHA
                                         sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}

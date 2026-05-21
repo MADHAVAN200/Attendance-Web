@@ -1,7 +1,7 @@
 import express from 'express';
 import * as authController from '../../controllers/auth/authController.js';
 import { authenticateJWT } from '../../middleware/auth.js';
-import { generateCaptcha } from '../../middleware/verifyCaptcha.js';
+import { generateCaptcha, verifyCaptcha } from '../../middleware/verifyCaptcha.js';
 import { authLimiter, loginIpLimiter } from '../../middleware/rateLimiter.js';
 
 const router = express.Router();
@@ -10,7 +10,7 @@ const router = express.Router();
 router.get("/captcha/generate", generateCaptcha);
 
 // Public Routes (Rate-Limited)
-router.post('/login', loginIpLimiter, authLimiter, authController.login);
+router.post('/login', loginIpLimiter, authLimiter, verifyCaptcha, authController.login);
 router.post('/super-admin/login', loginIpLimiter, authLimiter, authController.superAdminLogin);
 router.post('/forgot-password', authLimiter, authController.requestPasswordReset);
 router.post('/verify-otp', authLimiter, authController.verifyOtp);

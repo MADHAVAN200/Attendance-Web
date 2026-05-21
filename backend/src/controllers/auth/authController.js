@@ -12,8 +12,6 @@ export const login = catchAsync(async (req, res, next) => {
         throw new AppError("Username and password are required.", 400);
     }
 
-    // TODO: Verify captchaToken using authService equivalent if needed
-
     const reqInfo = {
         ip: req.clientIp || req.ip,
         userAgent: req.get('User-Agent') || 'Unknown'
