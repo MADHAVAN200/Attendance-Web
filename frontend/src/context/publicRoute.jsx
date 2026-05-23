@@ -12,7 +12,7 @@ const PublicRoute = ({ children }) => {
 
   // If user is logged in, redirect to dashboard. Otherwise render the public page (Login)
   
-  return user ? <Navigate to="/" replace /> : (children || <Outlet />);
+  return user ? <Navigate to="/dashboard" replace /> : (children || <Outlet />);
 };
 
 export default PublicRoute;

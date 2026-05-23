@@ -41,7 +41,7 @@ const SuperAdminLogin = () => {
         try {
             await superAdminLogin(formData.email, formData.password);
             toast.success("Super Admin authenticated. System Access Granted.");
-            navigate("/");
+            navigate("/dashboard");
         } catch (err) {
             const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Invalid credentials";
             toast.error(errorMessage);

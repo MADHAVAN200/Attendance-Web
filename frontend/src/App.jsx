@@ -106,11 +106,10 @@ function upsertCanonical(url) {
 
 function SeoManager() {
   const location = useLocation();
-  const { user } = useAuth();
 
   useEffect(() => {
     const path = location.pathname;
-    const isPublicLanding = path === "/" && !user;
+    const isPublicLanding = path === "/";
     const isLoginPage = path === "/login";
     const isForgotPassword = path === "/forgot-password";
 
@@ -144,7 +143,7 @@ function SeoManager() {
     upsertMetaTag('meta[name="twitter:title"]', { name: "twitter:title", content: title });
     upsertMetaTag('meta[name="twitter:description"]', { name: "twitter:description", content: description });
     upsertMetaTag('meta[name="twitter:image"]', { name: "twitter:image", content: `${SEO_BASE_URL}/showcase/rag-assistant.png` });
-  }, [location.pathname, user]);
+  }, [location.pathname]);
 
   return null;
 }
@@ -190,54 +189,29 @@ const ShowcaseShell = ({ children }) => {
 };
 
 const RootHandler = () => {
-  const { user, authChecked } = useAuth();
   const { device } = useDeviceType();
-
-  // For SEO: If we are not logged in (or checking), show the showcase landing.
-  // This prevents Googlebot from seeing a blank page during the auth check delay.
-  if (!user && !authChecked) {
-    const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
-    return (
-      <ShowcaseShell>
-        <PageComp />
-      </ShowcaseShell>
-    );
-  }
-
-  if (!authChecked) {
-    return null;
-  }
-
-  if (!user) {
-    const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
-    return (
-      <ShowcaseShell>
-        <PageComp />
-      </ShowcaseShell>
-    );
-  }
+  const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
 
   return (
-    <ProtectedRoute allowedRoles={["admin", "hr", "employee", "super_admin"]}>
-      <DashboardHandler />
-    </ProtectedRoute>
+    <ShowcaseShell>
+      <PageComp />
+    </ShowcaseShell>
   );
 };
 
 const ScaleManager = () => {
   const location = useLocation();
-  const { user } = useAuth();
 
   useEffect(() => {
-    // Showcase is only shown on "/" when no user is logged in.
-    const isShowcase = !user && location.pathname === "/";
+    // Showcase is shown on "/"
+    const isShowcase = location.pathname === "/";
 
     if (isShowcase) {
       document.documentElement.classList.remove("platform-zoomed");
     } else {
       document.documentElement.classList.add("platform-zoomed");
     }
-  }, [location.pathname, user]);
+  }, [location.pathname]);
 
   return null;
 };
@@ -281,7 +255,7 @@ function App() {
             <Route path="/unauthorized" element={<Unauthorized />} />
             {/* Common Routes (Accessible by all authenticated users: Admin, HR, Employee) */}
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr', 'employee', 'super_admin']} />}>
-              <Route path="/" element={<DashboardHandler />} />
+              <Route path="/dashboard" element={<DashboardHandler />} />
               <Route path="/attendance" element={<ResponsiveRoute DesktopComponent={Attendance} MobileComponent={MobileAttendance} />} />
               <Route path="/holidays" element={<ResponsiveRoute DesktopComponent={HolidayManagement} MobileComponent={MobileHolidayManagement} />} />
               <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
