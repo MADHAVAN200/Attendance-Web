@@ -6,7 +6,7 @@ const REFRESH_TOKEN_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 Days
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 export const login = catchAsync(async (req, res, next) => {
-    const { user_input, user_password, captchaToken } = req.body;
+    const { user_input, user_password, captchaToken, rememberMe } = req.body;
 
     if (!user_input || !user_password) {
         throw new AppError("Username and password are required.", 400);
@@ -17,15 +17,20 @@ export const login = catchAsync(async (req, res, next) => {
         userAgent: req.get('User-Agent') || 'Unknown'
     };
 
-    const { accessToken, refreshToken, user } = await authService.authenticateUser(user_input, user_password, reqInfo);
+    const { accessToken, refreshToken, user } = await authService.authenticateUser(user_input, user_password, reqInfo, rememberMe === true);
 
-    res.cookie('refreshToken', refreshToken, {
+    const cookieOptions = {
         httpOnly: true,
         secure: IS_PROD,
         sameSite: 'Lax',
-        maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
         path: '/'
-    });
+    };
+
+    if (rememberMe === true) {
+        cookieOptions.maxAge = REFRESH_TOKEN_COOKIE_MAX_AGE;
+    }
+
+    res.cookie('refreshToken', refreshToken, cookieOptions);
 
     res.status(200).json({ accessToken, user });
 });
@@ -94,19 +99,24 @@ export const refreshToken = catchAsync(async (req, res, next) => {
     };
 
     try {
-        const { accessToken, refreshToken: newRefreshToken } = await authService.refreshAuthTokens(currentRefreshToken, reqInfo);
+        const { accessToken, refreshToken: newRefreshToken, rememberMe } = await authService.refreshAuthTokens(currentRefreshToken, reqInfo);
 
-        res.cookie('refreshToken', newRefreshToken, {
+        const cookieOptions = {
             httpOnly: true,
             secure: IS_PROD,
             sameSite: 'Lax',
-            maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
             path: '/'
-        });
+        };
+
+        if (rememberMe === true) {
+            cookieOptions.maxAge = REFRESH_TOKEN_COOKIE_MAX_AGE;
+        }
+
+        res.cookie('refreshToken', newRefreshToken, cookieOptions);
 
         res.json({ accessToken });
     } catch (err) {
-        res.clearCookie('refreshToken');
+        res.clearCookie('refreshToken', { path: '/' });
         throw err; // Passed to the global error handler which will send the AppError
     }
 });

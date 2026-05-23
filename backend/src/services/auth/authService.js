@@ -9,7 +9,7 @@ import { sendEmail } from './emailService.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 
-export const authenticateUser = async (userInput, password, reqInfo) => {
+export const authenticateUser = async (userInput, password, reqInfo, rememberMe = false) => {
     const user = await attendanceDB('users')
         .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
         .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
@@ -50,7 +50,7 @@ export const authenticateUser = async (userInput, password, reqInfo) => {
     const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
     const refreshToken = TokenService.generateRefreshToken();
 
-    await TokenService.saveRefreshToken(user.user_id, refreshToken, reqInfo.ip, reqInfo.userAgent);
+    await TokenService.saveRefreshToken(user.user_id, refreshToken, reqInfo.ip, reqInfo.userAgent, rememberMe);
 
     try {
         EventBus.emitActivityLog({
@@ -149,7 +149,7 @@ export const refreshAuthTokens = async (refreshToken, reqInfo) => {
             };
             const newAccessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
             const newRefreshToken = jwt.sign({ id: admin.id, user_type: 'super_admin_refresh' }, process.env.JWT_REFRESH_SECRET, { expiresIn: '12h' });
-            return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+            return { accessToken: newAccessToken, refreshToken: newRefreshToken, rememberMe: false };
         }
     } catch (err) {
         if (err.name === 'TokenExpiredError') throw new AppError("Session expired. Please re-login.", 403);
@@ -162,7 +162,7 @@ export const refreshAuthTokens = async (refreshToken, reqInfo) => {
 
     if (result.error) throw new AppError("Security Alert: Token reuse detected. Re-login required.", 403);
 
-    const { user, gracePeriodActive, activeRefreshToken } = result;
+    const { user, gracePeriodActive, activeRefreshToken, refreshTokenRecord } = result;
 
     let newRefreshToken;
 
@@ -185,7 +185,11 @@ export const refreshAuthTokens = async (refreshToken, reqInfo) => {
 
     const newAccessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 
-    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+    return { 
+        accessToken: newAccessToken, 
+        refreshToken: newRefreshToken, 
+        rememberMe: refreshTokenRecord?.remember_me === 1 
+    };
 };
 
 export const getCurrentUser = async (userId, userType) => {

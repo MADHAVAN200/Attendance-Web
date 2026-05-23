@@ -15,17 +15,21 @@ export function generateRefreshToken() {
  * @param {string} token 
  * @param {string} ipAddress 
  * @param {string} userAgent 
+ * @param {boolean} rememberMe
  */
-export async function saveRefreshToken(userId, token, ipAddress, userAgent) {
+
+export async function saveRefreshToken(userId, token, ipAddress, userAgent, rememberMe = false) {
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30); // 30 Days validity
+    const validityDays = rememberMe ? 30 : 30;
+    expiresAt.setDate(expiresAt.getDate() + validityDays);
 
     await attendanceDB('refresh_tokens').insert({
         user_id: userId,
         token: token,
         expires_at: expiresAt,
         ip_address: ipAddress,
-        user_agent: userAgent
+        user_agent: userAgent,
+        remember_me: rememberMe ? 1 : 0
     });
 }
 
@@ -119,8 +123,14 @@ export async function revokeAllTokensForUser(userId) {
  * @param {string} token 
  */
 export async function extendRefreshToken(token) {
+    const record = await attendanceDB('refresh_tokens')
+        .where('token', token)
+        .first();
+
+    const isRememberMe = record?.remember_me === 1;
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    const validityDays = isRememberMe ? 30 : 30;
+    expiresAt.setDate(expiresAt.getDate() + validityDays);
 
     await attendanceDB('refresh_tokens')
         .where('token', token)
