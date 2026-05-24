@@ -11,8 +11,6 @@ import {
     Lock,
     Unlock,
     Download,
-    ChevronLeft,
-    ChevronRight,
     Trash2,
     UserCheck,
     UserX,
@@ -186,9 +184,6 @@ const EmployeeList = () => {
         });
     };
 
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
-
     // Filter and Sort Logic
     const filteredEmployees = employees
         .filter(employee => {
@@ -199,17 +194,6 @@ const EmployeeList = () => {
             return matchesSearch && matchesStatus;
         })
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: 'base' }));
-
-    // Pagination Logic
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
-
-    // Reset to page 1 when filters change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, statusFilter]);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -315,7 +299,7 @@ const EmployeeList = () => {
                                         </td>
                                     </tr>
                                 ) : filteredEmployees.length > 0 ? (
-                                    currentItems.map((employee) => (
+                                    filteredEmployees.map((employee) => (
                                         <tr
                                             key={employee.id}
                                             onClick={() => handleOpenSidebar(employee, 'view')}
@@ -397,14 +381,16 @@ const EmployeeList = () => {
                                                                 {employee.is_active ? <UserX size={18} /> : <UserCheck size={18} />}
                                                             </button>
                                                             
-                                                            <Link
-                                                                to={`/employees/edit/${employee.id}`}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleOpenSidebar(employee, 'edit');
+                                                                }}
                                                                 title="Edit"
-                                                                onClick={(e) => e.stopPropagation()}
                                                                 className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                                                             >
                                                                 <Edit2 size={18} />
-                                                            </Link>
+                                                            </button>
 
                                                             {/* Delete Button (Disabled for Admins) */}
                                                             <button
@@ -438,63 +424,6 @@ const EmployeeList = () => {
                             </tbody>
                         </table>
                     </div>
-
-                    {/* Pagination */}
-                    {filteredEmployees.length > 0 && (
-                        <div className="px-6 py-4 border-t border-slate-200 dark:border-github-dark-border flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <span className="text-sm text-slate-500 dark:text-github-dark-muted">
-                                Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredEmployees.length)} of {filteredEmployees.length} results
-                            </span>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
-                                    className="p-2 text-slate-500 hover:text-indigo-600 dark:text-github-dark-muted dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <ChevronLeft size={20} />
-                                </button>
-
-                                <div className="flex items-center gap-1">
-                                    {(() => {
-                                        const pages = [];
-                                        const maxButtons = 5;
-                                        let startPage = Math.max(1, currentPage - 2);
-                                        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-
-                                        if (endPage - startPage + 1 < maxButtons) {
-                                            startPage = Math.max(1, endPage - maxButtons + 1);
-                                        }
-
-                                        for (let i = startPage; i <= endPage; i++) {
-                                            pages.push(i);
-                                        }
-
-                                        return pages.map(pageNum => (
-                                            <button
-                                                key={pageNum}
-                                                onClick={() => setCurrentPage(pageNum)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors
-                                                    ${currentPage === pageNum
-                                                        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
-                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                                            >
-                                                {pageNum}
-                                            </button>
-                                        ));
-                                    })()}
-                                </div>
-
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages}
-                                    className="p-2 text-slate-500 hover:text-indigo-600 dark:text-github-dark-muted dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <ChevronRight size={20} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
             </div>

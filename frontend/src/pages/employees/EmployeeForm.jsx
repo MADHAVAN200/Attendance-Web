@@ -18,7 +18,7 @@ const EmployeeForm = () => {
 
     return (
         <DashboardLayout title={isEditMode ? "Edit Employee" : "Add New Employee"}>
-            <div className="max-w-5xl mx-auto">
+            <div className="w-full">
                 <EmployeeFormContent 
                     userId={id} 
                     onSuccess={handleSuccess} 

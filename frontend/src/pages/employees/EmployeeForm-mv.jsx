@@ -256,14 +256,14 @@ const EmployeeForm = () => {
                     )}
 
                     {/* PERSONAL INFORMATION */}
-                    <div className="mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <User size={14} /> Personal Information
+                    <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border p-5 rounded-3xl shadow-xl shadow-indigo-500/5 mb-6">
+                        <h3 className="text-xs font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider mb-5 flex items-center gap-2">
+                            <User size={14} className="text-indigo-500" /> Personal Information
                         </h3>
 
                         <div className="flex flex-col gap-4">
                             {/* Full Name */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Full Name</label>
                                 <input
                                     type="text"
@@ -271,13 +271,13 @@ const EmployeeForm = () => {
                                     placeholder="Enter full name"
                                     value={formData.user_name}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text transition-all"
                                     required
                                 />
                             </div>
 
                             {/* Password */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Password</label>
                                 <input
                                     type="password"
@@ -285,12 +285,12 @@ const EmployeeForm = () => {
                                     placeholder="Enter password"
                                     value={formData.user_password}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text transition-all"
                                 />
                             </div>
 
                             {/* Email */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Email Address</label>
                                 <input
                                     type="email"
@@ -298,13 +298,13 @@ const EmployeeForm = () => {
                                     placeholder="Enter email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text transition-all"
                                     required
                                 />
                             </div>
 
                             {/* Phone */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Phone Number</label>
                                 <input
                                     type="tel"
@@ -312,30 +312,30 @@ const EmployeeForm = () => {
                                     placeholder="Enter phone number"
                                     value={formData.phone_no}
                                     onChange={handleChange}
-                                    className="w-full px-3 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text transition-all"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {/* WORK DETAILS */}
-                    <div className="mb-2">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Briefcase size={14} /> Work Details
+                    <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border p-5 rounded-3xl shadow-xl shadow-indigo-500/5 mb-6">
+                        <h3 className="text-xs font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider mb-5 flex items-center gap-2">
+                            <Briefcase size={14} className="text-indigo-500" /> Work Details
                         </h3>
 
                         <div className="flex flex-col gap-4">
                             {/* Department */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Department</label>
                                 <div className="relative">
                                     <select
                                         name="dept_id"
                                         value={formData.dept_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text appearance-none cursor-pointer transition-all"
                                     >
-                                        <option value="">Select</option>
+                                        <option value="">Select Department</option>
                                         {departments.map(d => (
                                             <option key={d.dept_id} value={d.dept_id}>{d.dept_name}</option>
                                         ))}
@@ -345,16 +345,16 @@ const EmployeeForm = () => {
                             </div>
 
                             {/* Designation */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Designation / Role</label>
                                 <div className="relative">
                                     <select
                                         name="desg_id"
                                         value={formData.desg_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text appearance-none cursor-pointer transition-all"
                                     >
-                                        <option value="">Select</option>
+                                        <option value="">Select Role</option>
                                         {designations.map(d => (
                                             <option key={d.desg_id} value={d.desg_id}>{d.desg_name}</option>
                                         ))}
@@ -364,16 +364,16 @@ const EmployeeForm = () => {
                             </div>
 
                             {/* Shift Time */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Shift Time</label>
                                 <div className="relative">
                                     <select
                                         name="shift_id"
                                         value={formData.shift_id}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text appearance-none cursor-pointer transition-all"
                                     >
-                                        <option value="">Select</option>
+                                        <option value="">Select Shift</option>
                                         {shifts.map(s => (
                                             <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>
                                         ))}
@@ -383,18 +383,18 @@ const EmployeeForm = () => {
                             </div>
 
                             {/* User Type */}
-                            <div className="space-y-1.5 col-span-1">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">User Type</label>
                                 <div className="relative">
                                     <select
                                         name="user_type"
                                         value={formData.user_type}
                                         onChange={handleChange}
-                                        className="w-full pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm appearance-none"
+                                        className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-slate-800 dark:text-github-dark-text appearance-none cursor-pointer transition-all"
                                     >
                                         <option value="employee">Employee</option>
                                         <option value="admin">Admin</option>
-                                        <option value="HR">HR</option>
+                                        <option value="hr">HR</option>
                                     </select>
                                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                 </div>

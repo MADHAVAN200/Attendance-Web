@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, X, User, Mail, Phone, Briefcase, Clock, Camera, Plus } from 'lucide-react';
+import { Save, X, User, Mail, Phone, Briefcase, Clock, Camera, Plus, ChevronDown } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
@@ -227,9 +227,16 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
     if (isLoading) return <div className="p-8 text-center text-slate-500 text-sm italic">Loading...</div>;
 
     return (
-        <form onSubmit={handleSubmit} className={`flex flex-col h-full bg-white dark:bg-dark-card ${isSidebarMode ? '' : 'space-y-6'}`}>
+        <form 
+            onSubmit={handleSubmit} 
+            className={`flex flex-col ${
+                isSidebarMode 
+                    ? 'h-full bg-white dark:bg-dark-card' 
+                    : 'space-y-6 w-full'
+            }`}
+        >
             {/* Header Actions */}
-            <div className={`flex items-center justify-between ${isSidebarMode ? 'p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20 sticky top-0 z-10' : 'mb-6'}`}>
+            <div className={`flex items-center justify-between ${isSidebarMode ? 'p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20 sticky top-0 z-10' : 'mb-8 pb-4 border-b border-slate-200 dark:border-github-dark-border'}`}>
                 <button type="button" onClick={onCancel} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-300 transition-colors">
                     <X size={18} />
                     <span className="text-sm font-bold uppercase tracking-wider">Cancel</span>
@@ -237,36 +244,36 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                 <button
                     type="submit"
                     disabled={isSaving}
-                    className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95 disabled:opacity-70 uppercase tracking-widest"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95 disabled:opacity-70 uppercase tracking-widest"
                 >
                     <Save size={16} />
                     <span>{isSaving ? 'Saving...' : 'Save'}</span>
                 </button>
             </div>
 
-            <div className={`flex-1 overflow-y-auto ${isSidebarMode ? 'p-5' : ''} custom-scrollbar`}>
-                <div className={`flex flex-col ${isSidebarMode ? 'gap-6' : 'md:flex-row-reverse gap-8 xl:gap-12'}`}>
+            <div className={`${isSidebarMode ? 'flex-1 overflow-y-auto p-5 custom-scrollbar' : ''}`}>
+                <div className={`flex flex-col ${isSidebarMode ? 'gap-6' : 'md:flex-row-reverse items-center justify-center gap-8 xl:gap-16'}`}>
                     
                     {/* Profile Picture */}
-                    <div className={`${isSidebarMode ? 'flex flex-col items-center mb-4' : 'w-full md:w-1/3 flex flex-col items-end pt-8'}`}>
+                    <div className={`${isSidebarMode ? 'flex flex-col items-center mb-4' : 'w-full md:w-1/4 flex flex-col items-center justify-center'}`}>
                         <div className="relative group">
-                            <div className={`absolute top-0 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-tr from-indigo-400 to-purple-400 blur-2xl opacity-20 pointer-events-none ${isSidebarMode ? 'w-32 h-32' : 'w-48 h-48 md:w-64 md:h-64'}`}></div>
-                            <div className={`relative rounded-full border-4 border-white dark:border-github-dark-border shadow-xl overflow-hidden bg-slate-100 dark:bg-github-dark-subtle flex items-center justify-center text-slate-400 z-10 ${isSidebarMode ? 'w-24 h-24' : 'w-48 h-48 md:w-56 md:h-56'}`}>
+                            <div className={`absolute top-0 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-tr from-indigo-400 to-purple-400 blur-2xl opacity-20 pointer-events-none ${isSidebarMode ? 'w-32 h-32' : 'w-48 h-48 md:w-56 md:h-56'}`}></div>
+                            <div className={`relative rounded-full border-4 border-white dark:border-github-dark-border shadow-xl overflow-hidden bg-slate-100 dark:bg-github-dark-subtle flex items-center justify-center text-slate-400 z-10 ${isSidebarMode ? 'w-24 h-24' : 'w-48 h-48 md:w-48 md:h-48'}`}>
                                 {formData.profile_image ? (
                                     <img src={formData.profile_image} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
                                     <User size={isSidebarMode ? 40 : 80} className="opacity-50" />
                                 )}
                             </div>
-                            <label className="absolute bottom-0 right-0 z-20 w-8 h-8 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center cursor-pointer shadow-lg border border-slate-100 dark:border-github-dark-border hover:scale-110 transition-transform">
-                                <Camera size={16} />
+                            <label className="absolute bottom-0 right-2 z-20 w-10 h-10 bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center cursor-pointer shadow-lg border border-slate-100 dark:border-github-dark-border hover:scale-110 transition-transform">
+                                <Camera size={18} />
                                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
                             </label>
                         </div>
                     </div>
 
                     {/* Form Fields */}
-                    <div className={`${isSidebarMode ? 'space-y-6' : 'w-full md:w-2/3 space-y-6'}`}>
+                    <div className={`${isSidebarMode ? 'space-y-6' : 'w-full md:w-3/4 space-y-6'}`}>
                         {/* Section 1: Personal Info */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
@@ -274,48 +281,48 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Personal Info</h4>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
+                            <div className={`grid gap-4 ${isSidebarMode ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Full Name</label>
                                     <input
                                         type="text"
                                         name="user_name"
                                         value={formData.user_name}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
+                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
                                         required
                                     />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Password</label>
                                     <input
                                         type="password"
                                         name="user_password"
                                         value={formData.user_password}
                                         onChange={handleChange}
                                         placeholder={isEditMode ? "Leave blank to keep" : "Enter password"}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
+                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
                                         required={!isEditMode}
                                     />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Email</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Email</label>
                                     <input
                                         type="email"
                                         name="email"
                                         value={formData.email}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
+                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
                                     />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Phone</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Phone</label>
                                     <input
                                         type="tel"
                                         name="phone_no"
                                         value={formData.phone_no}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
+                                        className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-github-dark-text"
                                     />
                                 </div>
                             </div>
@@ -328,14 +335,14 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Work Details</h4>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="space-y-1 relative" ref={deptContainerRef}>
+                            <div className={`grid gap-4 ${isSidebarMode ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                                <div className="space-y-1.5 relative" ref={deptContainerRef}>
                                     <div className="flex items-center justify-between mb-1 px-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Department</label>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Department</label>
                                         <button
                                             type="button"
                                             onClick={() => setActivePopover(activePopover === 'dept' ? null : 'dept')}
-                                            className="text-indigo-500 hover:text-indigo-600"
+                                            className="text-indigo-500 hover:text-indigo-600 transition-colors"
                                         >
                                             <Plus size={14} />
                                         </button>
@@ -346,24 +353,27 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                             onClose={() => setActivePopover(null)}
                                         />
                                     </div>
-                                    <select
-                                        name="dept_id"
-                                        value={formData.dept_id}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
-                                    >
-                                        <option value="">Select Dept</option>
-                                        {departments.map(d => <option key={d.dept_id} value={d.dept_id}>{d.dept_name}</option>)}
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            name="dept_id"
+                                            value={formData.dept_id}
+                                            onChange={handleChange}
+                                            className="w-full pl-4 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
+                                        >
+                                            <option value="">Select Dept</option>
+                                            {departments.map(d => <option key={d.dept_id} value={d.dept_id}>{d.dept_name}</option>)}
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                <div className="space-y-1 relative" ref={desgContainerRef}>
+                                <div className="space-y-1.5 relative" ref={desgContainerRef}>
                                     <div className="flex items-center justify-between mb-1 px-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Designation</label>
+                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Designation / Role</label>
                                         <button
                                             type="button"
                                             onClick={() => setActivePopover(activePopover === 'desg' ? null : 'desg')}
-                                            className="text-indigo-500 hover:text-indigo-600"
+                                            className="text-indigo-500 hover:text-indigo-600 transition-colors"
                                         >
                                             <Plus size={14} />
                                         </button>
@@ -374,29 +384,51 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                             onClose={() => setActivePopover(null)}
                                         />
                                     </div>
-                                    <select
-                                        name="desg_id"
-                                        value={formData.desg_id}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
-                                    >
-                                        <option value="">Select Role</option>
-                                        {designations.map(d => <option key={d.desg_id} value={d.desg_id}>{d.desg_name}</option>)}
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            name="desg_id"
+                                            value={formData.desg_id}
+                                            onChange={handleChange}
+                                            className="w-full pl-4 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
+                                        >
+                                            <option value="">Select Role</option>
+                                            {designations.map(d => <option key={d.desg_id} value={d.desg_id}>{d.desg_name}</option>)}
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">User Type</label>
-                                    <select
-                                        name="user_type"
-                                        value={formData.user_type}
-                                        onChange={handleChange}
-                                        className="w-full px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
-                                    >
-                                        <option value="employee">Employee</option>
-                                        {currentUser?.user_type === 'admin' && <option value="hr">HR</option>}
-                                        {formData.user_type === 'admin' && <option value="admin">Admin</option>}
-                                    </select>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Shift Time</label>
+                                    <div className="relative">
+                                        <select
+                                            name="shift_id"
+                                            value={formData.shift_id}
+                                            onChange={handleChange}
+                                            className="w-full pl-4 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
+                                        >
+                                            <option value="">Select Shift</option>
+                                            {shifts.map(s => <option key={s.shift_id} value={s.shift_id}>{s.shift_name}</option>)}
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">User Type</label>
+                                    <div className="relative">
+                                        <select
+                                            name="user_type"
+                                            value={formData.user_type}
+                                            onChange={handleChange}
+                                            className="w-full pl-4 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
+                                        >
+                                            <option value="employee">Employee</option>
+                                            {currentUser?.user_type === 'admin' && <option value="hr">HR</option>}
+                                            {formData.user_type === 'admin' && <option value="admin">Admin</option>}
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
