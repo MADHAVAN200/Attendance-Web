@@ -158,15 +158,20 @@ const MobileAttendanceMonitoring = () => {
                         
                         let outStr = '-';
                         let isActive = true;
+                        let durationMin = 0;
 
                         if (r.time_out) {
                             const outTime = new Date(r.time_out);
                             outStr = formatTime(outTime);
                             isActive = false;
-                            totalMin += Math.max(0, (outTime - inTime) / 60000);
+                            durationMin = Math.max(0, (outTime - inTime) / 60000);
+                            totalMin += durationMin;
                         } else {
-                            totalMin += Math.max(0, (new Date() - inTime) / 60000);
+                            durationMin = Math.max(0, (new Date() - inTime) / 60000);
+                            totalMin += durationMin;
                         }
+
+                        const sessionHours = `${(durationMin / 60).toFixed(1)} hrs`;
 
                         return {
                             rawIn: inTime,
@@ -183,7 +188,8 @@ const MobileAttendanceMonitoring = () => {
                             inLat: r.time_in_lat,
                             inLng: r.time_in_lng,
                             outLat: r.time_out_lat,
-                            outLng: r.time_out_lng
+                            outLng: r.time_out_lng,
+                            hours: sessionHours
                         };
                     });
 
@@ -283,29 +289,33 @@ const MobileAttendanceMonitoring = () => {
 
         // 2. Timeline (Hourly with Repeats)
         const hourlyData = {};
-        for (let i = 8; i <= 20; i++) hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
+        for (let i = 0; i <= 23; i++) hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
         
         attendanceData.forEach(item => {
             item.sessions.forEach((s, idx) => {
                 const h = s.rawIn.getHours();
-                if (hourlyData[h]) {
+                if (hourlyData.hasOwnProperty(h)) {
                     if (idx === 0) hourlyData[h].checkins++;
                     else hourlyData[h].repeats++;
                 }
                 
-                const outH = s.rawOut ? s.rawOut.getHours() : 20;
+                const outH = s.rawOut ? s.rawOut.getHours() : 23;
                 for (let j = h; j <= outH; j++) {
-                    if (hourlyData[j]) hourlyData[j].active++;
+                    if (hourlyData.hasOwnProperty(j)) hourlyData[j].active++;
                 }
             });
         });
 
-        const timeline = Object.keys(hourlyData).map(h => ({
-            time: h > 12 ? `${h-12}PM` : `${h}AM`,
-            checkins: hourlyData[h].checkins,
-            repeats: hourlyData[h].repeats,
-            active: hourlyData[h].active
-        }));
+        const timeline = Object.keys(hourlyData).map(key => {
+            const h = parseInt(key);
+            const label = h === 0 ? '12AM' : h === 12 ? '12PM' : h > 12 ? `${h-12}PM` : `${h}AM`;
+            return {
+                time: label,
+                checkins: hourlyData[key].checkins,
+                repeats: hourlyData[key].repeats,
+                active: hourlyData[key].active
+            };
+        });
 
         // 3. Department Breakdown
         const deptStats = {};
@@ -812,8 +822,8 @@ const MobileAttendanceMonitoring = () => {
 // --- SUB-COMPONENTS ---
 
 const TimelineView = ({ data, loading, onSelect, avatarTimestamp }) => {
-    const startHour = 6;
-    const totalHours = 16;
+    const startHour = 0;
+    const totalHours = 24;
 
     const timeToPct = (date) => {
         if (!date) return null;
@@ -826,16 +836,16 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp }) => {
     return (
         <div className="bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500">
             <div className="overflow-x-auto custom-scrollbar">
-                <div className="min-w-[800px]">
+                <div className="min-w-[1500px]">
                     {/* Timeline Header */}
-                    <div className="flex bg-slate-50 dark:bg-github-dark-subtle/50 border-b border-slate-200 dark:border-github-dark-border">
-                        <div className="w-[150px] shrink-0 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-slate-50 dark:bg-github-dark-subtle/50 z-20">
+                    <div className="flex bg-slate-50 dark:bg-github-dark-subtle border-b border-slate-200 dark:border-github-dark-border">
+                        <div className="w-[150px] shrink-0 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-slate-50 dark:bg-github-dark-subtle z-30">
                             Employee
                         </div>
                         <div className="flex-1 flex">
-                            {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                            {Array.from({ length: 24 }, (_, i) => i).map(hour => (
                                 <div key={hour} className="flex-1 py-3 text-center text-[9px] font-black text-slate-400 border-r border-slate-200 dark:border-github-dark-border/30 last:border-r-0">
-                                    {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                                    {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
                                 </div>
                             ))}
                         </div>
@@ -851,7 +861,7 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp }) => {
                             data.map((item) => (
                                 <div key={item.id} className="flex hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors group cursor-pointer h-16 items-center" onClick={() => onSelect(item)}>
                                     {/* Employee Info (Sticky) */}
-                                    <div className="w-[150px] shrink-0 px-4 flex items-center gap-2 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-github-dark-subtle/30 z-10">
+                                    <div className="w-[150px] shrink-0 px-4 flex items-center gap-2 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-github-dark-subtle z-20">
                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] overflow-hidden shrink-0 ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500/10 to-purple-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20'}`}>
                                             {item.avatar.startsWith('http') ? (
                                                 <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
@@ -861,14 +871,16 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp }) => {
                                         </div>
                                         <div className="min-w-0">
                                             <p className="font-black text-[10px] text-slate-800 dark:text-github-dark-text truncate leading-tight">{item.name}</p>
-                                            <p className="text-[8px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-tighter truncate">{item.totalHours} Hrs</p>
+                                            <p className="text-[8px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-tighter truncate">
+                                                {item.totalHours && item.totalHours.toLowerCase().includes('hrs') ? item.totalHours : `${item.totalHours} Hrs`}
+                                            </p>
                                         </div>
                                     </div>
 
                                     {/* Timeline Grid */}
                                     <div className="flex-1 relative flex h-full items-center">
                                         <div className="absolute inset-0 flex">
-                                            {Array.from({ length: 16 }).map((_, i) => (
+                                            {Array.from({ length: 24 }).map((_, i) => (
                                                 <div key={i} className="flex-1 border-r border-slate-100 dark:border-github-dark-border/30 last:border-r-0"></div>
                                             ))}
                                         </div>

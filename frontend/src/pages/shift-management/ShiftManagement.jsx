@@ -197,6 +197,7 @@ const ShiftManagement = () => {
         setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, shift_id: newShiftId } : u));
         try {
             await adminService.assignUserShift(userId, newShiftId);
+            toast.success("Staff shift assignment updated successfully!");
         } catch (err) {
             toast.error(err.message || 'Failed to update assignment');
             loadUsers(); // rollback
@@ -299,7 +300,7 @@ const ShiftManagement = () => {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                    <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
                         {isLoadingShifts && (
                             <div className="py-10 text-center text-slate-400 text-sm">Loading shifts...</div>
                         )}
@@ -366,7 +367,7 @@ const ShiftManagement = () => {
                                     <X size={20} />
                                 </button>
                             </div>
-                            <form onSubmit={handleSaveShift} className="flex-1 overflow-y-auto p-5 space-y-5">
+                            <form onSubmit={handleSaveShift} className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-5">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Shift Name</label>
                                     <input
@@ -639,7 +640,7 @@ const ShiftManagement = () => {
                                 </div>
                             </div>
 
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6">
                                     {/* Summary Cards */}
                                     <div className="grid grid-cols-4 gap-4">
                                         {[
@@ -791,7 +792,7 @@ const ShiftManagement = () => {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                    <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-0.5">
                         {loadingUsers && <p className="text-sm text-slate-400 px-3 py-4 text-center">Loading users...</p>}
                         {!loadingUsers && filteredUsers.map(user => {
                             const isAssigned = selectedShift && user.shift_id === selectedShift.id;

@@ -31,10 +31,13 @@ import {
     Scan,
     XCircle,
     Image as ImageIcon,
-    Eye
+    Eye,
+    FileClock
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
+import MobileDatePicker from '../../components/MobileDatePicker';
+import MonthPicker from '../../components/MonthPicker';
 import {
     AreaChart,
     Area,
@@ -57,6 +60,13 @@ import { useAuth } from '../../context/AuthContext';
 const MobileAttendancePage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const [avatarTimestamp] = useState(Date.now());
+
+    const SUB_TABS = [
+        { id: 'history', label: 'History', icon: History },
+        { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+        { id: 'corrections', label: 'Corrections', icon: FileClock }
+    ];
 
     // --- STATE ---
     const [mainTab, setMainTab] = useState('attendance'); // 'attendance', 'my_attendance'
@@ -338,6 +348,7 @@ const MobileAttendancePage = () => {
             };
 
             await attendanceService.submitCorrectionRequest(payload);
+            toast.success("Correction request submitted successfully!");
             setShowConfirmSubmit(false);
             setShowSuccessPopup(true);
             setIsCorrectionOpen(false);
@@ -725,7 +736,7 @@ const MobileAttendancePage = () => {
                                         </div>
                                     )}
 
-                                    <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth">
+                                    <div className="flex gap-3 overflow-x-auto py-5 px-1 no-scrollbar scroll-smooth">
                                         {scrollerDates.map((date) => {
                                             const dateStr = date.toISOString().split('T')[0];
                                             const isSelected = dateStr === selectedDate;
@@ -879,21 +890,33 @@ const MobileAttendancePage = () => {
                                 exit={{ opacity: 0, y: -20 }}
                                 className="space-y-6"
                             >
-                                {/* Logs Subtabs - Standardized */}
-                                <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/5 shadow-inner gap-1.5">
-                                    {['history', 'analytics', 'corrections'].map(t => (
-                                        <button
-                                            key={t}
-                                            onClick={() => handleSubTabChange(t)}
-                                            className={`flex-1 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] rounded-xl transition-all duration-300 ${
-                                                subTab === t 
-                                                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]' 
-                                                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
-                                            }`}
-                                        >
-                                            {t}
-                                        </button>
-                                    ))}
+                                {/* Logs Subtabs - Standardized Icon Style */}
+                                <div className="flex items-center gap-6 px-1 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 mb-2">
+                                    {SUB_TABS.map((sub) => {
+                                        const isActive = subTab === sub.id;
+                                        return (
+                                            <button
+                                                key={sub.id}
+                                                onClick={() => handleSubTabChange(sub.id)}
+                                                className={`flex items-center gap-2 py-3 relative transition-all duration-300 whitespace-nowrap ${
+                                                    isActive 
+                                                        ? 'text-indigo-600 dark:text-indigo-400' 
+                                                        : 'text-slate-400 dark:text-github-dark-muted'
+                                                }`}
+                                            >
+                                                <sub.icon size={16} className={isActive ? 'text-indigo-500' : 'text-slate-400'} />
+                                                <span className={`text-[11px] font-bold uppercase tracking-wider ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                                                    {sub.label}
+                                                </span>
+                                                {isActive && (
+                                                    <motion.div 
+                                                        layoutId="subTabUnderlineMyAttendance"
+                                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full"
+                                                    />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
 
                                 <AnimatePresence mode="wait" initial={false} custom={direction}>
@@ -916,7 +939,7 @@ const MobileAttendancePage = () => {
                                             if (info.offset.x < -80) handleSwipe('left');
                                             else if (info.offset.x > 80) handleSwipe('right');
                                         }}
-                                        className="space-y-4 pt-2"
+                                        className="space-y-4 pt-4"
                                     >
                                         {subTab === 'history' && (
                                             <div className="space-y-4">
@@ -986,17 +1009,12 @@ const MobileAttendancePage = () => {
                                 {subTab === 'analytics' && (
                                     <div className="space-y-6">
                                         {/* Month Selection */}
-                                        <div className="flex items-center justify-between px-1">
-                                            <h3 className="text-xs font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Select Month</h3>
-                                            <div className="relative">
-                                                <input 
-                                                    type="month" 
-                                                    value={reportMonth} 
-                                                    onChange={(e) => setReportMonth(e.target.value)}
-                                                    className="bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-github-dark-border rounded-2xl px-4 py-2.5 text-xs font-black focus:ring-2 focus:ring-indigo-500/20 outline-none dark:text-white appearance-none pr-10 shadow-sm"
-                                                />
-                                                <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
-                                            </div>
+                                        <div className="flex flex-col gap-1.5 w-full">
+                                            <MonthPicker
+                                                label="Select Month"
+                                                value={reportMonth}
+                                                onChange={(val) => setReportMonth(val)}
+                                            />
                                         </div>
 
                                         {/* Premium Stats Grid */}
@@ -1183,24 +1201,157 @@ const MobileAttendancePage = () => {
             {/* Correction Modal */}
             <AnimatePresence>
                 {isCorrectionOpen && (
-                    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsCorrectionOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-sm bg-white dark:bg-github-dark-subtle rounded-[2.5rem] p-8 shadow-2xl">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight">Apply Correction</h3>
-                                <button onClick={() => setIsCorrectionOpen(false)} className="text-slate-400"><X size={24} /></button>
-                            </div>
-                            <div className="space-y-4">
+                    <div className="fixed inset-0 z-[1000] flex items-end justify-center">
+                        <motion.div 
+                            initial={{ opacity: 0 }} 
+                            animate={{ opacity: 1 }} 
+                            exit={{ opacity: 0 }} 
+                            onClick={() => setIsCorrectionOpen(false)} 
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+                        />
+                        <motion.div 
+                            initial={{ y: '100%' }} 
+                            animate={{ y: 0 }} 
+                            exit={{ y: '100%' }} 
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="relative w-full bg-white dark:bg-[#121212] rounded-t-[3rem] p-8 pb-12 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto no-scrollbar border-t border-white/10"
+                        >
+                            {/* Handle Bar */}
+                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-white/10 rounded-full mx-auto mb-8 shrink-0" />
+
+                            <div className="flex justify-between items-start mb-8">
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Reason for correction</label>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Apply Correction</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mt-1">Adjust your attendance records</p>
+                                </div>
+                                <button onClick={() => setIsCorrectionOpen(false)} className="p-2 bg-slate-50 dark:bg-white/5 rounded-xl text-slate-400">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-8">
+                                {/* Date Selection */}
+                                <div className="space-y-3 relative z-30">
+                                    <MobileDatePicker
+                                        label="Adjustment Date"
+                                        value={correctionForm.date}
+                                        onChange={(val) => setCorrectionForm({...correctionForm, date: val})}
+                                    />
+                                </div>
+
+                                {/* Type Selection */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Correction Type</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {['Missed Punch', 'Overtime', 'Correction', 'Other'].map(type => (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setCorrectionForm({...correctionForm, type})}
+                                                className={`py-4 px-2 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border ${
+                                                    correctionForm.type === type 
+                                                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/20' 
+                                                        : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-github-dark-muted border-slate-100 dark:border-white/5'
+                                                }`}
+                                            >
+                                                {type}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Method Toggle */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Method</label>
+                                    <div className="flex p-1.5 bg-slate-100 dark:bg-white/5 rounded-2xl gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCorrectionForm({...correctionForm, method: 'manual'})}
+                                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${correctionForm.method === 'manual' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                                        >
+                                            Manual Entry
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCorrectionForm({...correctionForm, method: 'reset'})}
+                                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${correctionForm.method === 'reset' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                                        >
+                                            Reset Day
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Sessions Logic */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Sessions</label>
+                                        {correctionForm.method === 'manual' && (
+                                            <button 
+                                                onClick={addSession}
+                                                className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg"
+                                            >
+                                                + Add
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {correctionForm.method === 'manual' ? (
+                                        <div className="space-y-3">
+                                            {correctionForm.sessions.map((s, idx) => (
+                                                <div key={idx} className="flex items-center gap-3 bg-slate-50 dark:bg-white/5 p-4 rounded-[2rem] border border-slate-100 dark:border-white/5">
+                                                    <div className="flex-1 space-y-2">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">In</label>
+                                                        <input 
+                                                            type="time" 
+                                                            value={s.in} 
+                                                            onChange={(e) => updateSession(idx, 'in', e.target.value)}
+                                                            className="w-full bg-white dark:bg-slate-900 rounded-xl p-3 text-xs font-bold dark:text-white border border-slate-100 dark:border-white/10" 
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 space-y-2">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Out</label>
+                                                        <input 
+                                                            type="time" 
+                                                            value={s.out} 
+                                                            onChange={(e) => updateSession(idx, 'out', e.target.value)}
+                                                            className="w-full bg-white dark:bg-slate-900 rounded-xl p-3 text-xs font-bold dark:text-white border border-slate-100 dark:border-white/10" 
+                                                        />
+                                                    </div>
+                                                    {correctionForm.sessions.length > 1 && (
+                                                        <button onClick={() => removeSession(idx)} className="mt-4 p-2 text-rose-500">
+                                                            <XCircle size={18} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200/50 dark:border-amber-500/20 p-5 rounded-2xl">
+                                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 leading-relaxed italic">
+                                                * Resetting the day will remove all existing logs for this date and replace them with a single manual entry.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Reason for correction</label>
                                     <textarea
                                         value={correctionForm.reason}
                                         onChange={(e) => setCorrectionForm({...correctionForm, reason: e.target.value})}
-                                        className="w-full bg-slate-50 dark:bg-github-dark-border/30 border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 text-sm font-bold min-h-[100px] focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white"
-                                        placeholder="Enter details..."
+                                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-[1.5rem] p-5 text-sm font-bold min-h-[120px] focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white resize-none"
+                                        placeholder="Please explain the reason for this adjustment..."
                                     />
                                 </div>
-                                <button onClick={handleCorrectionSubmit} className="w-full py-4 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg">Submit Request</button>
+
+                                <button 
+                                    onClick={handleCorrectionSubmit} 
+                                    className="w-full py-5 bg-indigo-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-[1.5rem] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+                                >
+                                    <FileClock size={20} />
+                                    Submit Request
+                                </button>
+                                <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 tracking-widest opacity-60">Requires admin approval</p>
                             </div>
                         </motion.div>
                     </div>

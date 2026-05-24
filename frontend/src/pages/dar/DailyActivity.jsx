@@ -156,7 +156,7 @@ const DailyActivity = () => {
             setAttendanceData(attMap);
         } catch (error) {
             console.error(error);
-            // toast.error("Failed to load schedule.");
+            toast.error("Failed to load schedule.");
         } finally {
             setLoading(false);
         }

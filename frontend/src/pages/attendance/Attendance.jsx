@@ -23,9 +23,14 @@ import {
     Check,
     FileClock,
     CheckCircle,
-    XCircle
+    XCircle,
+    Eye,
+    User,
+    Plus,
+    ArrowUpRight
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import {
     Chart as ChartJS,
@@ -62,7 +67,134 @@ ChartJS.register(
     Filler
 );
 
+const ThemedSelect = ({ label, value, options, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (containerRef.current && !containerRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+    return (
+        <div className="space-y-3" ref={containerRef}>
+            {label && <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">{label}</label>}
+            <div className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-2xl flex items-center justify-between text-slate-700 dark:text-white font-bold transition-all hover:bg-white dark:hover:bg-white/10 active:scale-[0.99] shadow-sm"
+                >
+                    <span>{selectedOption.label}</span>
+                    <div className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : 'rotate-0'}`}>
+                        <ChevronRight size={18} className="text-slate-400 rotate-90" />
+                    </div>
+                </button>
+
+                <AnimatePresence>
+                    {isOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute top-full left-0 right-0 mt-2 z-[150] bg-white/90 dark:bg-github-dark-subtle/90 border border-slate-100 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                        >
+                            <div className="p-2 max-h-60 overflow-y-auto no-scrollbar">
+                                {options.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => {
+                                            onChange(opt.value);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all mb-1 last:mb-0 ${value === opt.value ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+};
+
 const Attendance = () => {
+    const { user } = useAuth();
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [location, setLocation] = useState({ lat: null, lng: null, address: 'Fetching location...', error: null });
+    const [isLoadingLoc, setIsLoadingLoc] = useState(false);
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        
+        const fetchLocation = async () => {
+            if (!navigator.geolocation) {
+                setLocation(prev => ({ ...prev, error: "Geolocation not supported", address: "Location Access Denied" }));
+                return;
+            }
+
+            setIsLoadingLoc(true);
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                        const data = await res.json();
+                        const addr = data.address;
+                        const simplifiedAddress = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.village || data.display_name?.split(',')[0];
+                        
+                        setLocation({
+                            lat: latitude,
+                            lng: longitude,
+                            address: simplifiedAddress || 'Unknown Location',
+                            error: null
+                        });
+                    } catch (err) {
+                        setLocation({ lat: latitude, lng: longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, error: null });
+                    } finally {
+                        setIsLoadingLoc(false);
+                    }
+                },
+                (err) => {
+                    setLocation(prev => ({ ...prev, error: err.message, address: 'Location Access Denied' }));
+                    setIsLoadingLoc(false);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        };
+
+        fetchLocation();
+        
+        let watchId;
+        if (navigator.geolocation) {
+            watchId = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    // Only update address if moved significantly (approx 100m)
+                    setLocation(prev => ({ ...prev, lat: latitude, lng: longitude }));
+                },
+                null,
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        return () => {
+            clearInterval(timer);
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+        };
+    }, []);
+
     // Current date for Mark Attendance
     const today = new Date();
     const formattedToday = today.toISOString().split('T')[0];
@@ -98,6 +230,9 @@ const Attendance = () => {
     // Navigation State
     const [activeTab, setActiveTab] = useState('mark_attendance'); // 'mark_attendance' | 'my_attendance'
     const [subTab, setSubTab] = useState('history'); // 'history' | 'analytics'
+    const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
+
+    const [viewerImage, setViewerImage] = useState(null);
 
     // Calendar State
     const [showCalendar, setShowCalendar] = useState(false);
@@ -156,6 +291,27 @@ const Attendance = () => {
     const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
+    const [scrollerDates, setScrollerDates] = useState([]);
+
+    useEffect(() => {
+        const d = [];
+        const today = new Date();
+        // Generate 30 days around today
+        for (let i = -15; i <= 15; i++) {
+            const date = new Date();
+            date.setDate(today.getDate() + i);
+            d.push(date);
+        }
+        setScrollerDates(d);
+    }, []);
+
+    useEffect(() => {
+        // Auto-scroll to selected date in the scroller
+        const element = document.getElementById("selected-date-btn");
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    }, [selectedDate, scrollerDates]);
 
     // --- DATA FETCHING ---
 
@@ -509,9 +665,11 @@ const Attendance = () => {
             };
 
             await attendanceService.submitCorrectionRequest(payload);
+            toast.success("Correction request submitted successfully!");
 
             setShowConfirmSubmit(false);
             setShowSuccessPopup(true);
+            setIsCorrectionDrawerOpen(false);
 
             // Reset Form after delay or on success popup close
             // (We'll do it here)
@@ -674,65 +832,144 @@ const Attendance = () => {
 
     return (
         <DashboardLayout title="Attendance">
-            <div className="space-y-6 w-full">
+            <div className="pb-10 overflow-x-hidden">
+                {/* Premium Header / Greeting */}
+                <div className="pt-6 pb-10 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl shadow-xl relative overflow-hidden">
+                    {/* Animated Background Blobs */}
+                    <motion.div 
+                        animate={{ 
+                            scale: [1, 1.2, 1],
+                            rotate: [0, 90, 0],
+                        }}
+                        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                        className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/20 blur-3xl rounded-full"
+                    />
+                    <motion.div 
+                        animate={{ 
+                            scale: [1, 1.5, 1],
+                            x: [0, 50, 0],
+                        }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                        className="absolute -bottom-24 -left-24 w-[30rem] h-[30rem] bg-sky-500/10 blur-3xl rounded-full"
+                    />
 
-                {/* --- TOP LEVEL TABS --- */}
-                <div className="flex p-1 bg-slate-100 dark:bg-github-dark-subtle rounded-xl w-full sm:w-fit">
-                    <button
-                        onClick={() => { setActiveTab('mark_attendance'); setSubTab('list'); }}
-                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'mark_attendance'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
-                            }`}
-                    >
-                        Mark Attendance
-                    </button>
-                    <button
-                        onClick={() => { setActiveTab('my_attendance'); setSubTab('history'); }}
-                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'my_attendance'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
-                            }`}
-                    >
-                        My Attendance
-                    </button>
-                    {/* Hidden Correction Request Tab Button */}
+                    <div className="relative z-10 w-full px-6 mx-auto">
+                        <div className="flex justify-between items-start mb-10">
+                            <div>
+                                <h1 className="text-2xl font-black text-white tracking-tight">
+                                    Good {currentTime.getHours() < 12 ? 'Morning' : currentTime.getHours() < 17 ? 'Afternoon' : 'Evening'}, {user?.user_name?.split(' ')[0] || 'User'}!
+                                </h1>
+                                <p className="text-indigo-100/70 text-lg font-medium mt-2">
+                                    {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Current Time Widget */}
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+                            <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 bg-white/20 backdrop-blur-lg rounded-xl flex items-center justify-center text-white shadow-inner">
+                                    <Clock size={40} strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-black text-indigo-200 uppercase tracking-[0.2em] mb-1 opacity-80">Current Time</span>
+                                    <span className="text-3xl font-black text-white font-mono tracking-tighter">
+                                        {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="w-full md:w-auto flex flex-col md:items-end gap-3">
+                                <span className="block text-xs font-black text-indigo-200 uppercase tracking-[0.2em] opacity-80">Your Location</span>
+                                <div className="flex items-center gap-3 text-white/90 font-bold text-sm bg-white/10 px-6 py-4 rounded-2xl border border-white/10 shadow-lg backdrop-blur-xl">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center">
+                                        <MapPin size={18} className="text-indigo-300" />
+                                    </div>
+                                    <span className="truncate max-w-[200px] md:max-w-[400px]" title={location.address}>
+                                        {isLoadingLoc ? 'Locating...' : location.address}
+                                    </span>
+                                    <button 
+                                        onClick={() => window.location.reload()} 
+                                        className="ml-2 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                                    >
+                                        <RefreshCw size={14} className={isLoadingLoc ? 'animate-spin' : ''} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* --- CONTENT AREA --- */}
+                {/* Tab Switcher - Floating Style */}
+                <div className="max-w-xl mx-auto -mt-8 relative z-20 px-6">
+                    <div className="bg-white/10 dark:bg-black/20 backdrop-blur-[40px] p-1.2 flex rounded-xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] ring-1 ring-white/30 relative overflow-hidden group">
+                        {/* Internal Liquid Highlights */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-white/5 blur-3xl rounded-full pointer-events-none" />
+                        
+                        <button
+                            onClick={() => setActiveTab('mark_attendance')}
+                            className={`flex-1 py-4 text-sm font-bold rounded-xl transition-all duration-500 flex items-center justify-center gap-3 z-10 ${
+                                activeTab === 'mark_attendance'
+                                    ? 'bg-white text-indigo-600 shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform scale-[1.01]'
+                                    : 'text-slate-200 dark:text-slate-400 hover:bg-white/5'
+                            }`}
+                        >
+                            <User size={18} strokeWidth={2.5} />
+                            Attendance
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('my_attendance')}
+                            className={`flex-1 py-4 text-sm font-bold rounded-xl transition-all duration-500 flex items-center justify-center gap-3 z-10 ${
+                                activeTab === 'my_attendance'
+                                    ? 'bg-white text-indigo-600 shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform scale-[1.01]'
+                                    : 'text-slate-200 dark:text-slate-400 hover:bg-white/5'
+                            }`}
+                        >
+                            <History size={18} strokeWidth={2.5} />
+                            My Attendance
+                        </button>
+                    </div>
+                </div>
 
-                {/* 1. MARK ATTENDANCE TAB */}
-                {activeTab === 'mark_attendance' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="w-full mx-auto mt-6">
+                    {/* 1. MARK ATTENDANCE TAB */}
+                    {activeTab === 'mark_attendance' && (
+                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
                         {/* Action Buttons & Correction Toggle */}
                         <div className="flex flex-col gap-6">
                             {/* Session Logic Calculation */}
                             {(() => {
                                 const hasActiveSession = globalActiveSession;
                                 return (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {/* Time In Card */}
                                         <button
                                             onClick={() => openCamera('IN')}
                                             disabled={hasActiveSession}
-                                            className={`group relative flex items-center justify-between p-6 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-300 text-left overflow-hidden active:scale-[0.98] ${hasActiveSession
-                                                ? 'opacity-50 cursor-not-allowed pointer-events-none grayscale-[0.3]'
-                                                : 'hover:shadow-md hover:border-emerald-500/50 dark:hover:border-emerald-500/30 cursor-pointer'
-                                                }`}
+                                            className={`group relative p-5 rounded-xl flex items-center justify-between transition-all duration-500 overflow-hidden border-2 ${
+                                                hasActiveSession
+                                                    ? 'bg-slate-50/50 dark:bg-slate-900/20 border-slate-100 dark:border-white/5 opacity-40 grayscale-[0.5]'
+                                                    : 'bg-white dark:bg-github-dark-subtle border-slate-100 dark:border-white/10 shadow-lg hover:shadow-xl hover:border-emerald-500/30 active:scale-[0.98]'
+                                            }`}
                                         >
-                                            <div className="flex items-center gap-5 relative z-10">
-                                                <div className="w-14 h-14 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-500 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                                                    <ArrowRight size={28} strokeWidth={2.5} />
+                                            <div className="flex items-center gap-4 relative z-10">
+                                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all duration-500 ${
+                                                    hasActiveSession 
+                                                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400' 
+                                                        : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:rotate-[15deg] group-hover:scale-110 shadow-lg shadow-emerald-500/10'
+                                                }`}>
+                                                    <ArrowRight size={24} strokeWidth={2.5} />
                                                 </div>
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text group-hover:text-emerald-600 dark:group-hover:text-emerald-500 transition-colors">Time In</h3>
-                                                    <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">
-                                                        {hasActiveSession ? 'Shift in progress' : 'Start shift for today'}
+                                                <div className="text-left">
+                                                    <h3 className={`text-xl font-black tracking-tight ${hasActiveSession ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'}`}>Time In</h3>
+                                                    <p className="text-slate-500 dark:text-slate-400 text-[11px] font-bold mt-1 uppercase tracking-wider opacity-60">
+                                                        {hasActiveSession ? 'Session Active' : 'Start shift for today'}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/20 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/10 transition-all duration-300 relative z-10">
-                                                <ChevronRight size={20} />
+                                            <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald-500/10 group-hover:text-emerald-500">
+                                                <ChevronRight size={20} className={hasActiveSession ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 dark:text-slate-500'} />
                                             </div>
                                         </button>
 
@@ -740,24 +977,29 @@ const Attendance = () => {
                                         <button
                                             onClick={() => openCamera('OUT')}
                                             disabled={!hasActiveSession}
-                                            className={`group relative flex items-center justify-between p-6 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-300 text-left overflow-hidden active:scale-[0.98] ${!hasActiveSession
-                                                ? 'opacity-50 cursor-not-allowed pointer-events-none grayscale-[0.3]'
-                                                : 'hover:shadow-md hover:border-rose-500/50 dark:hover:border-rose-500/30 cursor-pointer'
-                                                }`}
+                                            className={`group relative p-5 rounded-xl flex items-center justify-between transition-all duration-500 overflow-hidden border-2 ${
+                                                !hasActiveSession
+                                                    ? 'bg-slate-50/50 dark:bg-slate-900/20 border-slate-100 dark:border-white/5 opacity-40 grayscale-[0.5]'
+                                                    : 'bg-white dark:bg-github-dark-subtle border-slate-100 dark:border-white/10 shadow-lg hover:shadow-xl hover:border-rose-500/30 active:scale-[0.98]'
+                                            }`}
                                         >
-                                            <div className="flex items-center gap-5 relative z-10">
-                                                <div className="w-14 h-14 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-500 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
-                                                    <LogOut size={28} strokeWidth={2.5} />
+                                            <div className="flex items-center gap-4 relative z-10">
+                                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all duration-500 ${
+                                                    !hasActiveSession 
+                                                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400' 
+                                                        : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:rotate-[-15deg] group-hover:scale-110 shadow-lg shadow-rose-500/10'
+                                                }`}>
+                                                    <LogOut size={24} strokeWidth={2.5} />
                                                 </div>
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text group-hover:text-rose-600 dark:group-hover:text-rose-500 transition-colors">Time Out</h3>
-                                                    <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">
-                                                        {!hasActiveSession ? 'No active session' : 'End shift for today'}
+                                                <div className="text-left">
+                                                    <h3 className={`text-xl font-black tracking-tight ${!hasActiveSession ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'}`}>Time Out</h3>
+                                                    <p className="text-slate-500 dark:text-slate-400 text-[11px] font-bold mt-1 uppercase tracking-wider opacity-60">
+                                                        {!hasActiveSession ? 'No Active Session' : 'End your day'}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/20 text-slate-300 dark:text-slate-600 group-hover:text-rose-500 group-hover:bg-rose-50 dark:group-hover:bg-rose-500/10 transition-all duration-300 relative z-10">
-                                                <ChevronRight size={20} />
+                                            <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center transition-all duration-300 group-hover:bg-rose-500/10 group-hover:text-rose-500">
+                                                <ChevronRight size={20} className={!hasActiveSession ? 'text-slate-200 dark:text-slate-700' : 'text-slate-400 dark:text-slate-500'} />
                                             </div>
                                         </button>
                                     </div>
@@ -823,23 +1065,69 @@ const Attendance = () => {
                                     <span>{formatDateDisplay(selectedDate)}</span>
                                 </div>
 
-                                {showCalendar && (
-                                    <CustomCalendar
-                                        selectedDate={selectedDate}
-                                        onChange={(date) => {
-                                            setSelectedDate(date);
-                                            setShowCalendar(false);
-                                        }}
-                                        onClose={() => setShowCalendar(false)}
-                                        events={calendarEvents}
-                                    />
-                                )}
+                                    {showCalendar && (
+                                        <div className="absolute top-full right-0 mt-4 z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                                            <CustomCalendar
+                                                selectedDate={selectedDate}
+                                                onChange={(date) => {
+                                                    setSelectedDate(date);
+                                                    setShowCalendar(false);
+                                                }}
+                                                onClose={() => setShowCalendar(false)}
+                                                events={calendarEvents}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
 
-                                <button
-                                    onClick={handleNextDay}
-                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+                            {/* Horizontal Date Scroller */}
+                            <div className="flex gap-4 overflow-x-auto py-6 px-2 no-scrollbar scroll-smooth">
+                                {scrollerDates.map((date) => {
+                                    const dateStr = date.toISOString().split('T')[0];
+                                    const isSelected = dateStr === selectedDate;
+                                    const isToday = dateStr === new Date().toISOString().split('T')[0];
+                                    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                                    
+                                    return (
+                                        <button
+                                            key={dateStr}
+                                            id={isSelected ? "selected-date-btn" : undefined}
+                                            onClick={() => setSelectedDate(dateStr)}
+                                            className={`flex flex-col items-center justify-center min-w-[70px] h-24 rounded-xl transition-all duration-500 relative group ${
+                                                isSelected 
+                                                    ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/40 transform scale-105 z-10' 
+                                                    : 'bg-white dark:bg-github-dark-subtle text-slate-400 dark:text-github-dark-muted border border-slate-100 dark:border-white/5 hover:border-indigo-600/30'
+                                            }`}
+                                        >
+                                            <span className={`text-[9px] font-black uppercase tracking-widest mb-1.5 ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                {dayName}
+                                            </span>
+                                            <span className="text-xl font-black">{date.getDate()}</span>
+                                            {isToday && !isSelected && <div className="absolute bottom-3 w-1 h-1 bg-indigo-500 rounded-full animate-pulse"></div>}
+                                            {isSelected && <motion.div layoutId="activeDate" className="absolute -inset-0.5 rounded-xl border-2 border-indigo-600/50" />}
+                                        </button>
+                                    );
+                                })}
+                        </div>
+
+                        {/* Logs Section Header */}
+                        <div className="pt-8">
+                            <div className="flex items-center justify-between mb-8 px-2">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-1.5 h-8 bg-indigo-600 rounded-full" />
+                                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight uppercase">
+                                        {selectedDate === new Date().toISOString().split('T')[0] ? "Today's Logs" : `Logs for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                                    </h3>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setCorrDate(selectedDate);
+                                        setIsCorrectionDrawerOpen(true);
+                                    }} 
+                                    className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-xl hover:shadow-lg transition-all active:scale-95 border border-indigo-100/50 dark:border-indigo-500/20"
                                 >
-                                    <ChevronRight size={20} />
+                                    <Plus size={14} strokeWidth={3} /> Request Correction
                                 </button>
                             </div>
 
@@ -850,35 +1138,134 @@ const Attendance = () => {
                                 ) : dailySessions.length === 0 ? (
                                     <p className="text-center text-slate-400 py-10">No attendance records for this date.</p>
                                 ) : (
-                                    dailySessions.map((session) => (
-                                        <div key={session.attendance_id} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col sm:flex-row justify-between gap-4">
-                                            <div className="flex gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
-                                                    {new Date(session.time_in).getDate()}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-800 dark:text-github-dark-text">
-                                                        {formatTime(session.time_in)} - {session.time_out ? formatTime(session.time_out) : 'ACTIVE'}
-                                                    </p>
-                                                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                                                        <MapPin size={12} /> {session.time_in_address || 'Unknown'}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                                    {session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}
-                                                </p>
+                                    dailySessions.map((session, idx) => (
+                                        <div key={session.attendance_id || session.id} className="bg-white dark:bg-github-dark-subtle p-5 rounded-xl border border-slate-100 dark:border-white/5 shadow-md space-y-6 transition-all hover:shadow-xl">
+                                            {/* Session Header */}
+                                            <div className="flex justify-between items-center pb-4 border-b border-slate-50 dark:border-white/5">
+                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] flex items-center gap-2">
+                                                    <div className="p-1.5 bg-slate-50 dark:bg-white/5 rounded-lg">
+                                                        <Clock size={14} />
+                                                    </div>
+                                                    Session #{dailySessions.length - idx}
+                                                </span>
                                                 {(() => {
-                                                    const st = (session.status || (session.late_minutes > 0 ? 'LATE' : '')).toUpperCase();
+                                                    const st = (session.status || (session.late_minutes > 0 ? 'LATE' : 'PRESENT')).toUpperCase();
                                                     const style = getStatusStyle(st);
                                                     return (
-                                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit ${style.bg} ${style.text}`}>
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                                                        <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full shadow-sm flex items-center gap-2 ${style.bg} ${style.text}`}>
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${style.dot} animate-pulse`} />
                                                             {style.label}
                                                         </span>
                                                     );
                                                 })()}
+                                            </div>
+
+                                            {/* IN/OUT Sections Grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                {/* Time In Section */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
+                                                            <ArrowUpRight size={24} strokeWidth={3} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-1 opacity-70">Time In</span>
+                                                            <span className="text-2xl font-black text-slate-800 dark:text-white truncate block tracking-tight">
+                                                                {formatTime(session.time_in)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* In Address */}
+                                                    <div className="flex items-start gap-3 bg-slate-50/50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100/50 dark:border-white/5">
+                                                        <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                            {session.time_in_address || 'Address not captured'}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* In Image */}
+                                                    <div className="space-y-3 max-w-[280px]">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest opacity-60">Verification Image</p>
+                                                            {session.time_in_image && <span className="text-[9px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase">Captured</span>}
+                                                        </div>
+                                                        <div 
+                                                            onClick={() => session.time_in_image && setViewerImage(session.time_in_image)}
+                                                            className="aspect-video rounded-xl overflow-hidden border-2 border-slate-100 dark:border-white/5 group relative shadow-inner cursor-pointer"
+                                                        >
+                                                            {session.time_in_image ? (
+                                                                <>
+                                                                    <img src={session.time_in_image} alt="In" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                                                                        <Eye size={32} className="text-white transform scale-75 group-hover:scale-100 transition-transform duration-300" />
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <div className="w-full h-full bg-slate-50 dark:bg-white/5 flex flex-col items-center justify-center gap-3">
+                                                                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300">
+                                                                        <Camera size={24} />
+                                                                    </div>
+                                                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">No Image</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Time Out Section */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
+                                                            <LogOut size={24} strokeWidth={3} className="rotate-180" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-1 opacity-70">Time Out</span>
+                                                            <span className={`text-2xl font-black truncate block tracking-tight ${session.time_out ? 'text-slate-800 dark:text-white' : 'text-emerald-500 animate-pulse'}`}>
+                                                                {session.time_out ? formatTime(session.time_out) : 'ACTIVE SESSION'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Duration Chip */}
+                                                    <div className="flex items-center gap-3 bg-indigo-50/50 dark:bg-indigo-500/5 p-4 rounded-2xl border border-indigo-100/30 dark:border-indigo-500/10">
+                                                        <Clock size={16} className="text-indigo-400 shrink-0" />
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest opacity-70">Duration:</span>
+                                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                                                                {session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Out Image */}
+                                                    <div className="space-y-3 max-w-[280px]">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest opacity-60">Verification Image</p>
+                                                            {session.time_out_image && <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-md uppercase">Captured</span>}
+                                                        </div>
+                                                        <div 
+                                                            onClick={() => session.time_out_image && setViewerImage(session.time_out_image)}
+                                                            className="aspect-video rounded-xl overflow-hidden border-2 border-slate-100 dark:border-white/5 group relative shadow-inner cursor-pointer"
+                                                        >
+                                                            {session.time_out_image ? (
+                                                                <>
+                                                                    <img src={session.time_out_image} alt="Out" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                                                                        <Eye size={32} className="text-white transform scale-75 group-hover:scale-100 transition-transform duration-300" />
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <div className="w-full h-full bg-slate-50 dark:bg-white/5 flex flex-col items-center justify-center gap-3">
+                                                                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300">
+                                                                        <Camera size={24} />
+                                                                    </div>
+                                                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">No Image</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     ))
@@ -1514,7 +1901,7 @@ const Attendance = () => {
                                 <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-8">
                                     {/* Status Section */}
                                     <div className="flex flex-col items-center gap-4 text-center">
-                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border-2 ${selectedRequest.status === 'approved'
+                                        <div className={`w-16 h-16 rounded-xl flex items-center justify-center border-2 ${selectedRequest.status === 'approved'
                                             ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400'
                                             : selectedRequest.status === 'rejected'
                                                 ? 'bg-red-50 border-red-100 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
@@ -1534,23 +1921,23 @@ const Attendance = () => {
 
                                     {/* Action Details Grid */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Request Date</span>
                                             <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
                                                 {selectedRequest.request_date ? formatDateDisplay(selectedRequest.request_date) : 'Invalid Date'}
                                             </span>
                                         </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Correction Type</span>
                                             <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">{selectedRequest.correction_type}</span>
                                         </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Method</span>
                                             <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text capitalize">
                                                 {selectedRequest.correction_method === 'add_session' ? 'Manual Correction' : selectedRequest.correction_method || 'Fix'}
                                             </span>
                                         </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Submitted At</span>
                                             <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
                                                 {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
@@ -1559,7 +1946,7 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Reason Section */}
-                                    <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                         <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 opacity-60">Reason for Request</span>
                                         <div className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
                                             "{selectedRequest.reason}"
@@ -1568,14 +1955,14 @@ const Attendance = () => {
 
                                     {/* Proposed Data Section */}
                                     {selectedRequest.correction_data && (
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 opacity-60">Proposed Attendance</span>
                                             <div className="space-y-3">
                                                 {(typeof selectedRequest.correction_data === 'string'
                                                     ? JSON.parse(selectedRequest.correction_data).sessions
                                                     : selectedRequest.correction_data.sessions || []
                                                 ).sort((a, b) => (a.time_in || "").localeCompare(b.time_in || "")).map((s, i) => (
-                                                    <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                    <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-lg shadow-sm">
                                                         <div className="flex items-center gap-2">
                                                             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                                                             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
@@ -1590,7 +1977,7 @@ const Attendance = () => {
                                                 ))}
                                                 {/* Single Session Check */}
                                                 {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in && (
-                                                    <div className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                    <div className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-lg shadow-sm">
                                                         <div className="flex items-center gap-2">
                                                             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                                                             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
@@ -1613,7 +2000,7 @@ const Attendance = () => {
 
                                     {/* Admin Feedback Section */}
                                     {selectedRequest.status !== 'pending' && (
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50 border-t-4 border-t-indigo-500/20">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50 border-t-4 border-t-indigo-500/20">
                                             <span className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Reviewer Decision</span>
                                             <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
                                                 {selectedRequest.review_comments || "No reviewer comments provided."}
@@ -1629,7 +2016,7 @@ const Attendance = () => {
                                 <div className="p-5 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20">
                                     <button
                                         onClick={() => setSelectedRequest(null)}
-                                        className="w-full px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                        className="w-full px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-all"
                                     >
                                         Close Details
                                     </button>
@@ -1644,7 +2031,7 @@ const Attendance = () => {
                     <div className="fixed inset-0 z-[9000] overflow-y-auto">
                         <div className="flex min-h-full items-center justify-center p-4 text-center animate-in fade-in duration-200">
                             <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => !submitLoading && setShowConfirmSubmit(false)} />
-                            <div className="relative bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="relative bg-white dark:bg-dark-card w-full max-w-md rounded-xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden animate-in zoom-in-95 duration-200">
                                 <div className="p-6 text-center">
                                     <div className="w-16 h-16 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <AlertCircle size={32} />
@@ -1656,14 +2043,14 @@ const Attendance = () => {
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => setShowConfirmSubmit(false)}
-                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={handleConfirmSubmit}
                                             disabled={submitLoading}
-                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
                                         >
                                             {submitLoading ? <RefreshCw className="animate-spin" size={16} /> : "Confirm & Send"}
                                         </button>
@@ -1676,31 +2063,80 @@ const Attendance = () => {
                 )}
 
                 {/* --- SUCCESS POPUP --- */}
-                {showSuccessPopup && createPortal(
-                    <div className="fixed inset-0 z-[9001] overflow-y-auto">
-                        <div className="flex min-h-full items-center justify-center p-4 text-center animate-in fade-in duration-200">
-                            <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setShowSuccessPopup(false)} />
-                            <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-3xl shadow-3xl border border-emerald-100 dark:border-emerald-500/20 overflow-hidden animate-in zoom-in-95 duration-200 text-left mx-auto">
-                                <div className="p-8 text-center">
-                                    <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm ring-8 ring-emerald-50 dark:ring-emerald-500/5">
-                                        <CheckCircle size={40} />
-                                    </div>
-                                    <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Request Sent!</h3>
-                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 leading-relaxed">
-                                        Your attendance correction request has been successfully submitted and is now pending review by the administrator.
-                                    </p>
+                <AnimatePresence>
+                    {showSuccessPopup && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                                className="bg-white dark:bg-github-dark-subtle rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl text-center relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500" />
+                                <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-500 shadow-inner">
+                                    <CheckCircle size={48} strokeWidth={3} />
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Success!</h3>
+                                <p className="text-slate-500 dark:text-github-dark-muted font-medium mb-8">Your correction request has been submitted successfully.</p>
                                 <button
                                     onClick={() => setShowSuccessPopup(false)}
-                                    className="w-full px-6 py-4 text-sm font-black uppercase tracking-[0.2em] text-white bg-emerald-500 hover:bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
+                                    className="w-full py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg"
                                 >
-                                    Got it
+                                    Awesome
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                    </div>,
-                    document.body
-                )}
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* --- IMAGE VIEWER MODAL --- */}
+                <AnimatePresence>
+                    {viewerImage && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setViewerImage(null)}
+                            className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/30 backdrop-blur-md p-4 md:p-10 cursor-zoom-out"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                                className="relative max-w-5xl w-full h-full flex items-center justify-center"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="absolute -top-14 right-0 flex items-center gap-3">
+                                    <button 
+                                        onClick={() => window.open(viewerImage, '_blank')}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur-xl transition-all border border-white/20 shadow-lg group"
+                                        title="Open in new tab"
+                                    >
+                                        <Download size={18} className="group-hover:scale-110 transition-transform" />
+                                        <span className="text-xs font-bold uppercase tracking-widest">Open Original</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setViewerImage(null)}
+                                        className="p-2.5 bg-white/10 hover:bg-rose-500 text-white rounded-xl backdrop-blur-xl transition-all border border-white/20 shadow-lg"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <img 
+                                    src={viewerImage} 
+                                    alt="Verification" 
+                                    className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl border border-white/10"
+                                />
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
@@ -1720,7 +2156,7 @@ const Attendance = () => {
                                 </button>
                             </div>
 
-                            <div className="relative bg-black rounded-[2rem] overflow-hidden shadow-2xl ring-1 ring-white/10 flex items-center justify-center aspect-video">
+                            <div className="relative bg-black rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex items-center justify-center aspect-video">
                                 {imgSrc ? (
                                     <img src={imgSrc} alt="Captured" className="w-full h-full object-cover" />
                                 ) : (
@@ -1781,10 +2217,221 @@ const Attendance = () => {
                     </div>,
                     document.body
                 )}
+                {/* --- CORRECTION DRAWER (RIGHT SIDEBAR) --- */}
+                <AnimatePresence>
+                    {isCorrectionDrawerOpen && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsCorrectionDrawerOpen(false)}
+                                className="fixed inset-0 z-[110] bg-slate-950/20 backdrop-blur-sm cursor-pointer"
+                            />
+                            <motion.div
+                                initial={{ x: '100%', opacity: 0.5 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: '100%', opacity: 0.5 }}
+                                transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                                className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-github-dark-subtle z-[120] shadow-2xl border-l border-slate-100 dark:border-white/5 flex flex-col"
+                            >
+                                <div className="p-8 border-b border-slate-50 dark:border-white/5 flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-indigo-500/5">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                                            <FileClock size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Request Correction</h3>
+                                            <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mt-1">Submit your attendance adjustments</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsCorrectionDrawerOpen(false)}
+                                        className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all active:scale-90"
+                                    >
+                                        <X size={24} />
+                                    </button>
+                                </div>
 
+                                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                                    <form id="correction-form" onSubmit={handleSubmitCorrection} className="space-y-8">
+                                        {/* Date Section */}
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Adjustment Date</label>
+                                            <div className="relative z-[130]">
+                                                <DatePicker
+                                                    value={corrDate}
+                                                    onChange={(val) => setCorrDate(val)}
+                                                    maxDate={new Date().toISOString().split('T')[0]}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Type & Method Grid */}
+                                        <div className="grid grid-cols-1 gap-6">
+                                            <ThemedSelect 
+                                                label="Correction Type"
+                                                value={corrType}
+                                                onChange={(val) => setCorrType(val)}
+                                                options={[
+                                                    { label: 'Normal Correction', value: 'Correction' },
+                                                    { label: 'Missed Punch', value: 'Missed Punch' },
+                                                    { label: 'Overtime Request', value: 'Overtime' },
+                                                    { label: 'Other Adjustment', value: 'Other' }
+                                                ]}
+                                            />
+                                            {corrType === 'Other' && (
+                                                <motion.input
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    type="text"
+                                                    placeholder="Specify Adjustment Type"
+                                                    value={corrOtherType}
+                                                    onChange={(e) => setCorrOtherType(e.target.value)}
+                                                    className="w-full mt-3 px-5 py-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-bold shadow-sm"
+                                                    required
+                                                />
+                                            )}
+
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Correction Method</label>
+                                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCorrMethod('add_session')}
+                                                        className={`py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-white/10' : 'text-slate-400'}`}
+                                                    >
+                                                        Manual Entry
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCorrMethod('reset')}
+                                                        className={`py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-white/10' : 'text-slate-400'}`}
+                                                    >
+                                                        Full Day Reset
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Dynamic Session Inputs */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between px-1">
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Session Details</label>
+                                                {corrMethod === 'add_session' && (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setCorrSessions(prev => [...prev, { id: Date.now(), time_in: '', time_out: '' }])}
+                                                        className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:shadow-md transition-all active:scale-95"
+                                                    >
+                                                        + Add Session
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {corrMethod === 'reset' ? (
+                                                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-white/5 p-5 rounded-2xl border border-slate-100 dark:border-white/10">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">New In</label>
+                                                        <input
+                                                            type="time"
+                                                            value={corrIn}
+                                                            onChange={(e) => setCorrIn(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-mono font-bold"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">New Out</label>
+                                                        <input
+                                                            type="time"
+                                                            value={corrOut}
+                                                            onChange={(e) => setCorrOut(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-mono font-bold"
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {[...corrSessions].sort((a, b) => {
+                                                        if (!a.time_in) return 1;
+                                                        if (!b.time_in) return -1;
+                                                        return a.time_in.localeCompare(b.time_in);
+                                                    }).map((session, index, arr) => (
+                                                        <motion.div 
+                                                            layout
+                                                            key={session.id} 
+                                                            className={`flex items-end gap-3 p-4 rounded-2xl border transition-all ${session.isExisting ? 'bg-slate-50/50 dark:bg-white/5 border-slate-100 dark:border-white/5' : 'bg-white dark:bg-slate-900/50 border-indigo-100 dark:border-indigo-500/20 shadow-sm'}`}
+                                                        >
+                                                            <div className="flex-1 space-y-2">
+                                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">In</label>
+                                                                <input
+                                                                    type="time"
+                                                                    value={session.time_in}
+                                                                    readOnly={session.isExisting}
+                                                                    onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s))}
+                                                                    className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm ${session.isExisting ? 'bg-transparent text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-white border border-slate-100 dark:border-white/10'}`}
+                                                                />
+                                                            </div>
+                                                            <div className="flex-1 space-y-2">
+                                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Out</label>
+                                                                <input
+                                                                    type="time"
+                                                                    value={session.time_out}
+                                                                    readOnly={session.isExisting}
+                                                                    onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s))}
+                                                                    className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm ${session.isExisting ? 'bg-transparent text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-white border border-slate-100 dark:border-white/10'}`}
+                                                                />
+                                                            </div>
+                                                            {arr.length > 1 && !session.isExisting && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setCorrSessions(prev => prev.filter(s => s.id !== session.id))}
+                                                                    className="p-3 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+                                                                >
+                                                                    <X size={18} />
+                                                                </button>
+                                                            )}
+                                                        </motion.div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Reason Section */}
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Reason for adjustment</label>
+                                            <textarea
+                                                value={corrReason}
+                                                onChange={(e) => setCorrReason(e.target.value)}
+                                                placeholder="Please provide context for this correction..."
+                                                className="w-full px-5 py-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-medium h-32 resize-none"
+                                                required
+                                            />
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div className="p-8 border-t border-slate-50 dark:border-white/5 bg-slate-50/50 dark:bg-black/20">
+                                    <button 
+                                        type="submit" 
+                                        form="correction-form"
+                                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.15em] rounded-[1.25rem] shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all active:scale-[0.98] flex items-center justify-center gap-3 group"
+                                    >
+                                        <FileClock size={20} className="group-hover:scale-110 transition-transform" />
+                                        Submit Request
+                                    </button>
+                                    <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 tracking-widest opacity-60">Requires admin approval</p>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
             </div>
-        </DashboardLayout >
-    );
+        </div>
+    </DashboardLayout>
+);
 };
 
 export default Attendance;
