@@ -9,8 +9,15 @@ export const getDashboardStats = async () => {
     ] = await Promise.all([
         attendanceDB('organizations').count('* as count').first(),
         attendanceDB('users').count('* as count').where('is_deleted', 0).first(),
-        attendanceDB('feedback').count('* as count').where('status', 'pending').first(),
-        attendanceDB('security_alerts').count('* as count').where('status', 'open').first()
+        attendanceDB('feedback')
+            .count('* as count')
+            .whereIn('status', ['pending', 'open', 'OPEN', 'PENDING', ''])
+            .orWhereNull('status')
+            .first(),
+        attendanceDB('security_alerts')
+            .count('* as count')
+            .whereIn('status', ['open', 'unseen', 'OPEN', 'UNSEEN'])
+            .first()
     ]);
 
     return {
