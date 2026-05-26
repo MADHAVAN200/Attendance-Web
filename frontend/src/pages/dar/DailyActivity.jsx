@@ -15,9 +15,28 @@ import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 
 
+const getTodayLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const getLocalDateString = (dateInput) => {
+    if (!dateInput) return '';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+
 const DailyActivity = () => {
     const [activeMainTab, setActiveMainTab] = useState('daily_activity'); // 'daily_activity' | 'admin'
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(getTodayLocalDateString());
     const [daysToShow, setDaysToShow] = useState(1);
     const [tasks, setTasks] = useState([]);
     const [attendanceData, setAttendanceData] = useState({});
@@ -32,7 +51,7 @@ const DailyActivity = () => {
 
     // Selection for Edit
     const [selectedTaskId, setSelectedTaskId] = useState(null);
-    const [panelDate, setPanelDate] = useState(new Date().toISOString().split('T')[0]); // Track date for panel
+    const [panelDate, setPanelDate] = useState(getTodayLocalDateString()); // Track date for panel
 
     // Mode State
     const [sidebarMode, setSidebarMode] = useState('default'); // 'default' | 'create-task'
@@ -131,7 +150,7 @@ const DailyActivity = () => {
             attendanceRecs.sort((a, b) => new Date(a.time_in) - new Date(b.time_in));
 
             attendanceRecs.forEach(a => {
-                const dateKey = new Date(a.time_in).toISOString().split('T')[0];
+                const dateKey = getLocalDateString(a.time_in);
                 const timeIn = new Date(a.time_in).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 const timeOut = a.time_out ? new Date(a.time_out).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : null;
 
@@ -175,7 +194,7 @@ const DailyActivity = () => {
     };
 
     const handleToday = () => {
-        setSelectedDate(new Date().toISOString().split('T')[0]);
+        setSelectedDate(getTodayLocalDateString());
         setDaysToShow(1);
     };
 
@@ -185,7 +204,7 @@ const DailyActivity = () => {
 
         if (sidebarMode !== 'create-task') {
             setSidebarMode('create-task');
-            setPanelDate(new Date().toISOString().split('T')[0]);
+            setPanelDate(selectedDate);
         }
     };
 
@@ -409,7 +428,7 @@ const DailyActivity = () => {
                                                 setTaskDrafts(prev => ({ ...prev, [panelDate]: drafts }));
                                             }}
                                             isAbsent={
-                                                panelDate < new Date().toISOString().split('T')[0] &&
+                                                panelDate < getTodayLocalDateString() &&
                                                 !holidays[panelDate] &&
                                                 (!attendanceData[panelDate] || !attendanceData[panelDate].hasTimedIn)
                                             }
@@ -429,9 +448,9 @@ const DailyActivity = () => {
                                                 endDate={(() => {
                                                     const d = new Date(selectedDate + 'T12:00:00');
                                                     d.setDate(d.getDate() + daysToShow - 1);
-                                                    return d.toISOString().split('T')[0];
+                                                    return getLocalDateString(d);
                                                 })()}
-                                                maxDate={new Date().toISOString().split('T')[0]} // Can't select future
+                                                maxDate={getTodayLocalDateString()} // Can't select future
                                                 onDateSelect={handleDateRangeSelect}
                                             />
 

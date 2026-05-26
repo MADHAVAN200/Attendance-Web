@@ -28,9 +28,29 @@ import { toast } from 'react-toastify';
 import TaskCreationPanel from '../../components/dar/TaskCreationPanel';
 import EventMeetingModal from '../../components/dar/EventMeetingModal';
 
+
+const getTodayLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const getLocalDateString = (dateInput) => {
+    if (!dateInput) return '';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+
 const DailyActivityMobile = () => {
     const { user } = useAuth();
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(getTodayLocalDateString());
     const [showFullCalendar, setShowFullCalendar] = useState(false);
     const calendarButtonRef = useRef(null);
     const [tasks, setTasks] = useState([]);
@@ -103,7 +123,7 @@ const DailyActivityMobile = () => {
             const attMap = {};
             const attendanceRecs = attendanceRes.data.data || [];
             attendanceRecs.forEach(a => {
-                const dateKey = new Date(a.time_in).toISOString().split('T')[0];
+                const dateKey = getLocalDateString(a.time_in);
                 const timeIn = new Date(a.time_in).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 const timeOut = a.time_out ? new Date(a.time_out).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : null;
 
@@ -138,7 +158,7 @@ const DailyActivityMobile = () => {
         for (let i = -3; i <= 3; i++) {
             const d = new Date(current);
             d.setDate(current.getDate() + i);
-            dates.push(d.toISOString().split('T')[0]);
+            dates.push(getLocalDateString(d));
         }
         return dates;
     }, [selectedDate]);
@@ -161,7 +181,7 @@ const DailyActivityMobile = () => {
         }
     };
 
-    const isToday = selectedDate === new Date().toISOString().split('T')[0];
+    const isToday = selectedDate === getTodayLocalDateString();
     const holidayName = holidays[selectedDate];
 
     return (
@@ -208,7 +228,7 @@ const DailyActivityMobile = () => {
                             document.body
                         )}
                         <button 
-                            onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                            onClick={() => setSelectedDate(getTodayLocalDateString())}
                             className={`px-3 py-1.5 rounded-full text-[9px] font-semibold uppercase tracking-widest transition-all ${isToday ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-slate-100 text-slate-500 dark:bg-white/5'}`}
                         >
                             Today
@@ -219,7 +239,7 @@ const DailyActivityMobile = () => {
                         {weekDates.map((dateStr) => {
                             const d = new Date(dateStr);
                             const active = dateStr === selectedDate;
-                            const isCurrentDay = dateStr === new Date().toISOString().split('T')[0];
+                            const isCurrentDay = dateStr === getTodayLocalDateString();
                             
                             return (
                                 <button
@@ -451,7 +471,7 @@ const DailyActivityMobile = () => {
                                 lastCreateRequest={lastCreateRequest}
                                 onDateChange={(d) => setSelectedDate(d)}
                                 isAbsent={
-                                    selectedDate < new Date().toISOString().split('T')[0] &&
+                                    selectedDate < getTodayLocalDateString() &&
                                     !holidays[selectedDate] &&
                                     (!attendanceData[selectedDate] || !attendanceData[selectedDate].hasTimedIn)
                                 }
