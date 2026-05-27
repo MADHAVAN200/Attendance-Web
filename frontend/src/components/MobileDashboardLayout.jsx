@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import MobileSidebar from './MobileSidebar';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
+import InternalChatbotWidget from './InternalChatbotWidget';
 
 const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = false, headerAction, showBackButton = false }) => {
     const navigate = useNavigate();
@@ -105,6 +106,7 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
             <main className={`${hideHeader ? '' : 'pt-24 px-4 space-y-6'}`}>
                 {children}
             </main>
+            <InternalChatbotWidget />
         </div>
     );
 };
