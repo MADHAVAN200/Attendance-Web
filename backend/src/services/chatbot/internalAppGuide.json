@@ -1,0 +1,332 @@
+[
+  {
+    "route": "/dashboard",
+    "roles": ["employee", "admin", "hr", "super_admin"],
+    "moduleName": "Dashboard",
+    "description": "The dashboard provides a real-time overview of attendance statistics, trends, and recent logs.",
+    "roleDetails": {
+      "employee": "Displays your check-in/out status, today's work session timer, check-in location summary, and an active feed of system notifications.",
+      "admin": "Displays organizational summary cards (Present Today, Absent, Late Check-ins, and On Leave), Quick Actions shortcuts (Add Employee, Generate Report, Manage Shifts), and overall performance charts. It also hosts the Live Active Feed showing user login and clock-in actions as they happen.",
+      "hr": "Displays organizational summary cards (Present Today, Absent, Late Check-ins, and On Leave), Quick Actions shortcuts (Add Employee, Generate Report, Manage Shifts), and overall performance charts. It also hosts the Live Active Feed showing user login and clock-in actions as they happen.",
+      "super_admin": "Displays platform performance logs, security warnings, subscriber billing statistics, and active client organizations count."
+    },
+    "faqs": [
+      {
+        "question": "What is the Active Feed on the dashboard?",
+        "answer": "A real-time ticker displaying employee check-in, check-out, and login actions. Green dots represent active, clocked-in employees."
+      },
+      {
+        "question": "How do I perform Quick Actions?",
+        "answer": "Click on any of the action cards in the dashboard header to jump straight to Employee Creation, Report Exports, or Shift Scheduling."
+      }
+    ],
+    "suggestions": [
+      "What stats are visible on my dashboard?",
+      "What is the Active Feed?",
+      "How do I use Quick Actions?"
+    ]
+  },
+  {
+    "route": "/attendance",
+    "roles": ["employee", "admin", "hr"],
+    "moduleName": "Attendance & Corrections",
+    "description": "Clock in/out in real-time or submit historical attendance corrections to adjust past data.",
+    "roleDetails": {
+      "employee": "Allows you to perform Check-In and Check-Out. Captures GPS coordinate position, IP address, and facial webcam capture. If you missed a punch, you must request an Attendance Correction.",
+      "admin": "Allows you to audit all employee punch logs with GPS coordinates and process (approve or reject) pending correction requests.",
+      "hr": "Allows you to audit all employee punch logs with GPS coordinates and process (approve or reject) pending correction requests."
+    },
+    "faqs": [
+      {
+        "question": "What is the difference between Attendance and Corrections?",
+        "answer": "Attendance is real-time clock-in/out using webcam and GPS validation. Corrections are requests submitted retroactively when a punch is missed or incorrect, requiring Admin approval."
+      },
+      {
+        "question": "What is the difference between Manual Session Entry and Full Day Reset?",
+        "answer": "Manual Session Entry (Add Session) allows you to log multiple specific work session blocks (e.g. Time In: 09:00 AM, Time Out: 01:00 PM; and Time In: 02:00 PM, Time Out: 06:00 PM) for the day. Full Day Reset wipes all existing logs for that day and replaces them with a single new Check-In and Check-Out time."
+      },
+      {
+        "question": "What are the Correction Types?",
+        "answer": "You can select from four types:\n1. Correction: To fix a minor timestamp error.\n2. Missed Punch: If you forgot to clock in or clock out.\n3. Overtime: To request approval for extra hours worked.\n4. Other: For custom cases where you must type an explanation."
+      },
+      {
+        "question": "Is there a deadline to submit corrections?",
+        "answer": "Yes, corrections can only be submitted within the deadline specified by your shift rules (normally 2 days after the attendance date)."
+      },
+      {
+        "question": "How do I request a Correction?",
+        "answer": "Go to the Attendance page, click 'Apply Correction', choose the date, select correction method (Add Session or Reset), input times, add a reason, and submit."
+      }
+    ],
+    "suggestions": [
+      "What is the difference between Manual Entry and Full Day Reset?",
+      "What are the Correction Types?",
+      "How do I request an Attendance Correction?",
+      "Is there a deadline to submit corrections?"
+    ]
+  },
+  {
+    "route": "/holidays",
+    "roles": ["employee", "admin", "hr"],
+    "moduleName": "Holidays and Leaves",
+    "description": "This module handles public holidays and personal leave applications.",
+    "roleDetails": {
+      "employee": "View the list of company-wide public holidays (e.g. festivals, national holidays). You can also apply for leaves (Casual, Sick, Earned Leave) which deducts from your leave balance and goes to HR for approval.",
+      "admin": "Manage company holidays (add/edit holidays, import bulk holidays). View and approve/reject leave requests from employees. Manage employee leave balances.",
+      "hr": "Manage company holidays (add/edit holidays, import bulk holidays). View and approve/reject leave requests from employees. Manage employee leave balances."
+    },
+    "faqs": [
+      {
+        "question": "What is the difference between Holidays and Leaves?",
+        "answer": "Holidays are pre-configured, company-wide days off (e.g., Christmas, New Year). No action is required and they don't deduct from your leave balance. Leaves are personal requests (e.g., sick leave, casual leave) that you must apply for, which deduct from your balance and require manager approval."
+      },
+      {
+        "question": "How do I check my leave balance?",
+        "answer": "Go to Holidays and Leave page. Your dashboard or leave section shows card summaries indicating Sick Leave, Casual Leave, and Earned Leave balances."
+      },
+      {
+        "question": "How do I apply for leave?",
+        "answer": "Click 'Apply Leave', select the leave type (Sick, Casual, etc.), set the start and end dates, provide a description/reason, and submit it."
+      }
+    ],
+    "suggestions": [
+      "What is the difference between Holidays and Leaves?",
+      "How do I apply for a leave?",
+      "How do I check my leave balances?"
+    ]
+  },
+  {
+    "route": "/apply-leave",
+    "roles": ["employee", "admin", "hr"],
+    "moduleName": "Apply Leave",
+    "description": "This module is used to submit a new leave request.",
+    "roleDetails": {
+      "employee": "Allows you to select a leave type, date range, and reason to submit a request to your HR.",
+      "admin": "Allows you to submit leave requests on behalf of yourself or review pending approvals.",
+      "hr": "Allows you to submit leave requests on behalf of yourself or review pending approvals."
+    },
+    "faqs": [
+      {
+        "question": "How do I apply for leave?",
+        "answer": "Select the leave type (Sick Leave, Casual Leave, or Earned Leave), choose the start and end dates, add a reason, and submit the request."
+      }
+    ],
+    "suggestions": [
+      "How do I apply for a leave?",
+      "What types of leaves are available?"
+    ]
+  },
+  {
+    "route": "/daily-activity",
+    "roles": ["employee", "admin", "hr"],
+    "moduleName": "Daily Activity Report (DAR)",
+    "description": "This module is used to track and report daily tasks, meetings, and hours spent on various activities.",
+    "roleDetails": {
+      "employee": "Record the tasks and meetings you completed today, specifying project name, description, duration, and whether it was a task or a meeting. Your logs are submitted to your manager daily.",
+      "admin": "Review employee daily activity logs, run AI-synthesized weekly productivity summaries, and check for vague logs.",
+      "hr": "Review employee daily activity logs, run AI-synthesized weekly productivity summaries, and check for vague logs."
+    },
+    "faqs": [
+      {
+        "question": "How do I add a daily task or meeting?",
+        "answer": "On the Daily Activity page, click 'Add Task' or 'Add Meeting', fill in the project details, description, hours, and click save. The entry will be logged under your selected calendar date."
+      },
+      {
+        "question": "What are AI DAR insights?",
+        "answer": "If you are an Admin, you can run AI-driven summaries that synthesize all daily logs into weekly themes, detect vague entries, and calculate productivity scores automatically."
+      }
+    ],
+    "suggestions": [
+      "How do I add a daily activity?",
+      "How do I view my daily logs?",
+      "What are AI DAR insights?"
+    ]
+  },
+  {
+    "route": "/attendance-monitoring",
+    "roles": ["admin", "hr"],
+    "moduleName": "Live Attendance Monitoring",
+    "description": "A live interface tracking employee check-ins as they happen.",
+    "roleDetails": {
+      "admin": "Real-time command center showing currently clocked-in employees, mapped coordinates, active status pulses, and geofence compliance indicators.",
+      "hr": "Real-time command center showing currently clocked-in employees, mapped coordinates, active status pulses, and geofence compliance indicators."
+    },
+    "faqs": [
+      {
+        "question": "What is the Live Command Center?",
+        "answer": "It is a real-time monitor that lets you see which employees are clocked in right now, their GPS location on a map, and whether they are checking in from allowed work zones."
+      }
+    ],
+    "suggestions": [
+      "What does Live Attendance show?",
+      "How do I track employee locations?"
+    ]
+  },
+  {
+    "route": "/geofencing",
+    "roles": ["admin", "hr"],
+    "moduleName": "Geofencing Management",
+    "description": "Configure geographic boundaries for employee check-ins.",
+    "roleDetails": {
+      "admin": "Allows you to create work locations on a map, define allowed boundaries (radius in meters), and assign location compliance rules.",
+      "hr": "Allows you to view work locations and check compliance requirements."
+    },
+    "faqs": [
+      {
+        "question": "How do I create a geofence zone?",
+        "answer": "Go to the Geo Fencing page, click 'Add Location', search for the address or click directly on the Google Map, define the boundary radius (e.g., 100 meters), and save it."
+      },
+      {
+        "question": "What is Strict Location Locking?",
+        "answer": "If strict locking is enabled, employees can ONLY clock in or out when their device GPS coordinates are within the defined radius of their assigned geofence zone. Clock-ins outside the geofence will be blocked."
+      }
+    ],
+    "suggestions": [
+      "How do I create a geofence zone?",
+      "What is Strict Location Locking?",
+      "What happens if an employee clocks in outside?"
+    ]
+  },
+  {
+    "route": "/shift-management",
+    "roles": ["admin", "hr"],
+    "moduleName": "Shift Management",
+    "description": "Set up shifts, schedules, and grace periods for the workforce.",
+    "roleDetails": {
+      "admin": "Configure work shifts (start/end times, check-in grace period, late mark thresholds) and assign shifts to employees.",
+      "hr": "Configure work shifts and view shift rosters."
+    },
+    "faqs": [
+      {
+        "question": "How do I create a new shift?",
+        "answer": "Go to Shift Management, click 'Create Shift', set the name, start time, end time, grace period, and save it."
+      },
+      {
+        "question": "What is the Grace Period?",
+        "answer": "The grace period is the number of minutes (e.g. 10 minutes) after the shift start time during which an employee can clock in without being marked as late."
+      },
+      {
+        "question": "What is the Late Mark Threshold?",
+        "answer": "The time limit beyond which check-ins are flagged as late or cause automated shift deductions (like half-day penalties)."
+      }
+    ],
+    "suggestions": [
+      "How do I create a new shift?",
+      "What is the Grace Period?",
+      "How do I assign shifts to employees?"
+    ]
+  },
+  {
+    "route": "/reports",
+    "roles": ["admin", "hr"],
+    "moduleName": "Reports & Analytics",
+    "description": "Export and analyze workforce attendance logs.",
+    "roleDetails": {
+      "admin": "Generate monthly attendance matrices, lateness summaries, overtime sheets, and DAR logs. Export directly to Excel or PDF for payroll processing.",
+      "hr": "Generate monthly attendance matrices, lateness summaries, overtime sheets, and DAR logs. Export directly to Excel or PDF for payroll processing."
+    },
+    "faqs": [
+      {
+        "question": "What formats can I export reports in?",
+        "answer": "You can export all reports (lateness, overtime, monthly matrix) as Microsoft Excel (.xlsx) files or PDF summaries."
+      }
+    ],
+    "suggestions": [
+      "How do I generate a monthly matrix?",
+      "How do I export reports?"
+    ]
+  },
+  {
+    "route": "/profile",
+    "roles": ["employee", "admin", "hr", "super_admin"],
+    "moduleName": "User Profile",
+    "description": "Manage individual user profiles, contact details, and account security.",
+    "roleDetails": {
+      "employee": "Update your profile picture, change password, check your department/designation, and verify email details.",
+      "admin": "Update your profile details, avatar, credentials, and access API keys or organization tokens.",
+      "hr": "Update your profile details and access configurations.",
+      "super_admin": "Update your personal login profile and password credentials."
+    },
+    "faqs": [
+      {
+        "question": "How do I change my profile picture?",
+        "answer": "Go to Profile, hover over your avatar, click upload, choose a new picture, and save."
+      }
+    ],
+    "suggestions": [
+      "How do I edit my profile?",
+      "How do I change my password?"
+    ]
+  },
+  {
+    "route": "/employees",
+    "roles": ["admin", "hr"],
+    "moduleName": "Employees Directory",
+    "description": "Manage the list of registered employees and upload rosters.",
+    "roleDetails": {
+      "admin": "Create, edit, and delete employee records. Set passwords, assign roles (Admin, HR, Employee), and perform bulk imports via Excel.",
+      "hr": "Create and edit employee records, set passwords, and view the staff directory."
+    },
+    "faqs": [
+      {
+        "question": "How do I add a single employee?",
+        "answer": "Navigate to Employees, click 'Add Employee' button, fill in their username, email, select role, and assign their department."
+      },
+      {
+        "question": "How do I bulk import employees?",
+        "answer": "Go to Employees, click 'Bulk Upload', download the sample Excel template, fill it with employee rows, and upload the completed file."
+      }
+    ],
+    "suggestions": [
+      "How do I add a single employee?",
+      "How do I bulk import employees?"
+    ]
+  },
+  {
+    "route": "/organizations",
+    "roles": ["super_admin"],
+    "moduleName": "Organizations Directory",
+    "description": "Super admin dashboard to manage registered clients and tenants.",
+    "roleDetails": {
+      "super_admin": "Create new client organizations, activate or suspend licenses, view subscription parameters, and configure client databases."
+    },
+    "faqs": [
+      {
+        "question": "How do I suspend an organization?",
+        "answer": "Go to Organizations, find the target company, click 'Edit' or the status toggle, and set status to 'suspended'."
+      }
+    ],
+    "suggestions": [
+      "How do I add a new organization?",
+      "How do I toggle license status?"
+    ]
+  },
+  {
+    "route": "/super-admin/alerts",
+    "roles": ["super_admin"],
+    "moduleName": "Security Alerts",
+    "description": "Track system events, failed login notifications, and potential threats.",
+    "roleDetails": {
+      "super_admin": "Audit log of all security violations, suspicious login attempts, password locks, and geofence spoofing events."
+    },
+    "faqs": [],
+    "suggestions": [
+      "What triggers a security alert?",
+      "How do I clear logs?"
+    ]
+  },
+  {
+    "route": "/super-admin/logs",
+    "roles": ["super_admin"],
+    "moduleName": "System Logs",
+    "description": "Trace API requests and system events across the server.",
+    "roleDetails": {
+      "super_admin": "Review detailed API execution speeds, response codes, and user trace paths to debug application failures."
+    },
+    "faqs": [],
+    "suggestions": [
+      "How do I filter logs by date?",
+      "How do I search for a specific error?"
+    ]
+  }
+]
