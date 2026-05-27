@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import NotificationSidebar from './NotificationSidebar';
 import Sidebar from './Sidebar';
+import InternalChatbotWidget from './InternalChatbotWidget';
 
 const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) => {
     const { unreadCount } = useNotification();
@@ -163,6 +164,7 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
                     {children}
                 </main>
             </div>
+            <InternalChatbotWidget />
         </div>
     );
 };

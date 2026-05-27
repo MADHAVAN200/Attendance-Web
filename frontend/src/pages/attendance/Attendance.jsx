@@ -233,6 +233,12 @@ const Attendance = () => {
     const [subTab, setSubTab] = useState('history'); // 'history' | 'analytics'
     const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab, subTab }
+        }));
+    }, [activeTab, subTab]);
+
     const [viewerImage, setViewerImage] = useState(null);
 
     // Calendar State

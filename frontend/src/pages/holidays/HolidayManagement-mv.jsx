@@ -85,6 +85,12 @@ const HolidayManagement = () => {
     // --- TABS STATE ---
     const [activeTab, setActiveTab] = useState('holidays'); // 'holidays', 'my_leaves', 'requests'
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab }
+        }));
+    }, [activeTab]);
+
     // --- DATA STATE ---
     const [holidays, setHolidays] = useState([]);
     const [leaves, setLeaves] = useState([]); // My Leaves

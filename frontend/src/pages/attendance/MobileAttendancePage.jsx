@@ -74,6 +74,15 @@ const MobileAttendancePage = () => {
     const [correctionFilter, setCorrectionFilter] = useState('pending'); // 'pending', 'history'
     const [direction, setDirection] = useState(0);
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: {
+                tab: mainTab === 'attendance' ? 'mark_attendance' : 'my_attendance',
+                subTab: subTab === 'corrections' ? 'correction' : subTab
+            }
+        }));
+    }, [mainTab, subTab]);
+
     const mainTabs = ['attendance', 'my_attendance'];
     const currentMainIndex = mainTabs.indexOf(mainTab);
 

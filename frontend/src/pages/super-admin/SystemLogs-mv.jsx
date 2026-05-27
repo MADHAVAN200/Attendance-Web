@@ -13,6 +13,12 @@ const SystemLogsMobile = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent('mano-active-tab', {
+      detail: { tab: activeTab }
+    }));
+  }, [activeTab]);
+
+  useEffect(() => {
     fetchLogs(activeTab);
   }, [activeTab]);
 

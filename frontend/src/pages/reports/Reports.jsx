@@ -30,6 +30,12 @@ const Reports = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'history'
 
+    React.useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab }
+        }));
+    }, [activeTab]);
+
     // Export History with Persistence
     const [exportHistory, setExportHistory] = useState(() => {
         const savedHistory = localStorage.getItem('attendance_export_history');

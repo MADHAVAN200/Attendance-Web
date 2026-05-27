@@ -34,6 +34,12 @@ const HolidayManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('holidays'); // 'holidays' | 'leave_application'
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab }
+        }));
+    }, [activeTab]);
+
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isAddTypeOpen, setIsAddTypeOpen] = useState(false);
     const [newHoliday, setNewHoliday] = useState({

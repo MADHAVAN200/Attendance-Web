@@ -13,6 +13,12 @@ const SystemLogs = () => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab }
+        }));
+    }, [activeTab]);
+
     // Filter states
     const [logModule, setLogModule] = useState('');
     const [logPlatform, setLogPlatform] = useState('');

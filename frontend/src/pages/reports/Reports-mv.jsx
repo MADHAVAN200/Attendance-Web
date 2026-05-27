@@ -34,6 +34,12 @@ const MobileReports = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'history'
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('mano-active-tab', {
+            detail: { tab: activeTab }
+        }));
+    }, [activeTab]);
+
     const reportTypes = [
         { id: 'matrix_daily', label: 'Daily Matrix' },
         { id: 'matrix_weekly', label: 'Weekly Matrix' },
