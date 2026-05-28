@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
 
@@ -181,16 +181,38 @@ function ShowcaseScrollToTop() {
 
 const ShowcaseShell = ({ children }) => {
   const { device } = useDeviceType();
+  const [theme, setTheme] = useState(() => localStorage.getItem("showcase-theme") || "dark");
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem("showcase-theme", next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (theme === "light") {
+      document.documentElement.classList.add("light-mode");
+      document.documentElement.classList.remove("dark-mode");
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark-mode");
+      document.documentElement.classList.remove("light-mode");
+      document.documentElement.classList.add("dark");
+    }
+  }, [theme]);
+
   const NavComp = device === "mobile" ? ShowcaseMobileNavbar : device === "tablet" ? ShowcaseTabletNavbar : ShowcaseNavbar;
   const FootComp = device === "mobile" ? ShowcaseMobileFooter : device === "tablet" ? ShowcaseTabletFooter : ShowcaseFooter;
 
   return (
-    <div className="showcase-root site-bg">
+    <div className={`showcase-root site-bg ${theme}-mode`}>
       <ShowcaseScrollToTop />
-      <NavComp />
+      <NavComp theme={theme} toggleTheme={toggleTheme} />
       <main>{children}</main>
-      <WebsiteChatbotWidget />
-      <FootComp />
+      <WebsiteChatbotWidget theme={theme} />
+      <FootComp theme={theme} />
     </div>
   );
 };

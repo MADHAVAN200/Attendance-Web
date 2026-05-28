@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Sun, Moon } from "lucide-react";
 import useDeviceType from "../hooks/useDeviceType";
 
 const navLinks = [
@@ -10,7 +10,7 @@ const navLinks = [
     { label: "Contact", to: "/", hash: "#contact" },
 ];
 
-export default function TabletNavbar() {
+export default function TabletNavbar({ theme = "dark", toggleTheme }) {
     const { isPortrait } = useDeviceType();
     const [menuOpen, setMenuOpen] = useState(false);
     const location = useLocation();
@@ -39,12 +39,21 @@ export default function TabletNavbar() {
 
                 {isPortrait ? (
                     /* Portrait: hamburger toggle */
-                    <button onClick={() => setMenuOpen(v => !v)} className="text-white p-2 -mr-2" aria-label="Toggle menu">
-                        {menuOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={toggleTheme}
+                            className="text-white p-2"
+                            aria-label="Toggle theme"
+                        >
+                            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                        </button>
+                        <button onClick={() => setMenuOpen(v => !v)} className="text-white p-2 -mr-2" aria-label="Toggle menu">
+                            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+                        </button>
+                    </div>
                 ) : (
                     /* Landscape: inline links */
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-6">
                         {navLinks.map((link) => (
                             <button
                                 key={link.label}
@@ -54,6 +63,13 @@ export default function TabletNavbar() {
                                 {link.label}
                             </button>
                         ))}
+                        <button 
+                            onClick={toggleTheme}
+                            className="text-gray-300 hover:text-white transition-colors p-2"
+                            aria-label="Toggle theme"
+                        >
+                            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                        </button>
                         <Link to="/login" className="bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-bold px-6 py-2 rounded-xl hover:shadow-blue-500/25 active:scale-95 transition-all">
                             Login
                         </Link>
@@ -75,9 +91,21 @@ export default function TabletNavbar() {
                                 {link.label}
                             </button>
                         ))}
-                        <Link to="/login" onClick={() => setMenuOpen(false)} className="mt-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-center font-bold py-2.5 rounded-xl active:scale-95 transition-all">
-                            Login
-                        </Link>
+                        <div className="flex gap-2 mt-2">
+                            <button 
+                                onClick={() => {
+                                    toggleTheme();
+                                    setMenuOpen(false);
+                                }}
+                                className="flex-1 border border-white/10 text-white font-medium py-2.5 rounded-xl hover:bg-white/5 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
+                            >
+                                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                                <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+                            </button>
+                            <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-center font-bold py-2.5 rounded-xl active:scale-95 transition-all text-sm">
+                                Login
+                            </Link>
+                        </div>
                     </div>
                 </>
             )}

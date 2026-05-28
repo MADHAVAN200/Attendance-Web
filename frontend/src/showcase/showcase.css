@@ -13,6 +13,10 @@ html {
     --card: rgba(255, 255, 255, 0.05);
     --blue: #3b82f6;
     --blue-soft: #60a5fa;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #60a5fa;
+    --text-primary: #eaf1ff;
+    --text-secondary: #a3b1c8;
 }
 
 .showcase-root * {
@@ -24,7 +28,13 @@ html {
     font-family: "Plus Jakarta Sans", sans-serif;
     color: var(--text);
     background: var(--bg);
-    zoom: 1;
+    zoom: 0.85;
+}
+
+@media (max-width: 1024px) {
+    .showcase-root {
+        zoom: 1;
+    }
 }
 
 .site-bg {
@@ -309,13 +319,16 @@ html {
 .showcase-root h1 {
     margin: 0;
     font-size: clamp(2rem, 4.6vw, 4rem);
-    line-height: 1.08;
+    line-height: 1.25 !important;
+    padding-bottom: 0.15em !important;
     letter-spacing: -0.03em;
 }
 
 .showcase-root h2 {
     margin: 0;
     font-size: clamp(1.55rem, 2.6vw, 2.65rem);
+    line-height: 1.25 !important;
+    padding-bottom: 0.15em !important;
     letter-spacing: -0.02em;
 }
 
@@ -509,14 +522,48 @@ html {
     height: 0.45rem;
 }
 
-.website-chatbot-sources {
-    margin: 0.45rem 0 0;
-    padding-left: 1rem;
+.website-chatbot-suggested-questions {
+    margin-top: 0.85rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.website-chatbot-sources a {
-    color: #93c5fd;
-    font-size: 0.78rem;
+.website-chatbot-suggested-title {
+    font-size: 0.74rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.45rem !important;
+    font-weight: 700;
+}
+
+.website-chatbot-suggested-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.website-chatbot-suggested-chip {
+    display: flex;
+    align-items: center;
+    text-align: left;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cfe0f7;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.website-chatbot-suggested-chip:hover {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(96, 165, 250, 0.35);
+    color: white;
+    transform: translateX(2px);
 }
 
 .website-chatbot-input-wrap {
@@ -803,6 +850,8 @@ html {
     font-size: clamp(1.2rem, 1.6vw, 1.6rem);
     font-weight: 700;
     color: #d8e8ff;
+    line-height: 1.25 !important;
+    padding-bottom: 0.25rem !important;
 }
 
 .home-flow {
@@ -1487,3 +1536,625 @@ html {
         padding: 1rem;
     }
 }
+
+/* ============================================================
+   [ SECTION: Premium Slate-White Light Mode Overrides ]
+   ============================================================ */
+
+.showcase-root.light-mode {
+    --bg: #f8fafc;
+    --bg-soft: #f1f5f9;
+    --text: #0f172a;
+    --muted: #475569;
+    --line: rgba(15, 23, 42, 0.08);
+    --card: rgba(255, 255, 255, 0.75);
+    --blue: #2563eb;
+    --blue-soft: #3b82f6;
+    --accent-primary: #2563eb;
+    --accent-secondary: #3b82f6;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+}
+
+/* Light mode specific background gradients for .site-bg */
+.showcase-root.light-mode.site-bg,
+.showcase-root.light-mode .site-bg {
+    background:
+        radial-gradient(circle at 18% 14%, rgba(37, 99, 235, 0.08), transparent 28%),
+        radial-gradient(circle at 86% 6%, rgba(14, 165, 233, 0.1), transparent 30%),
+        radial-gradient(circle at 80% 75%, rgba(59, 130, 246, 0.06), transparent 35%),
+        linear-gradient(160deg, #f8fafc 0%, #f1f5f9 45%, #e2e8f0 100%);
+    background-attachment: fixed;
+    background-size: cover;
+}
+
+/* Eyebrow badge in light mode */
+.showcase-root.light-mode .eyebrow {
+    border-color: rgba(15, 23, 42, 0.15);
+    color: #1e40af;
+    background: rgba(37, 99, 235, 0.05);
+}
+
+/* Frosted glass cards */
+.showcase-root.light-mode .glass-card {
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 
+        0 10px 30px -10px rgba(15, 23, 42, 0.06),
+        0 1px 3px rgba(15, 23, 42, 0.02),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Glass card hover states */
+.showcase-root.light-mode .bento-item:hover,
+.showcase-root.light-mode .info-card-horizontal:hover {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(37, 99, 235, 0.25);
+    box-shadow: 0 20px 40px -10px rgba(37, 99, 235, 0.08);
+}
+
+/* Nav bar background */
+.showcase-root.light-mode .nav-glass {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(15, 23, 42, 0.08);
+    box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.05);
+}
+
+/* Active links and hover effects */
+.showcase-root.light-mode .top-link:hover,
+.showcase-root.light-mode .menu-trigger:hover {
+    color: #0f172a;
+    background: rgba(15, 23, 42, 0.04);
+}
+
+.showcase-root.light-mode .top-link.active {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.showcase-root.light-mode .btn-ghost {
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.12);
+    background: rgba(15, 23, 42, 0.02);
+}
+
+.showcase-root.light-mode .btn-ghost:hover {
+    background: rgba(15, 23, 42, 0.05);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.showcase-root.light-mode .brand-mark {
+    color: #0f172a;
+}
+
+/* Headers and text gradients */
+.showcase-root.light-mode h1,
+.showcase-root.light-mode h2,
+.showcase-root.light-mode .hero-grid h1,
+.showcase-root.light-mode .split-content h2,
+.showcase-root.light-mode h3 {
+    color: #0f172a;
+    background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.showcase-root.light-mode .lead-copy {
+    color: #475569;
+}
+
+.showcase-root.light-mode .soft-copy {
+    color: #334155;
+}
+
+.showcase-root.light-mode .check-list li {
+    color: #334155;
+}
+
+.showcase-root.light-mode .check-list svg {
+    color: #2563eb;
+}
+
+/* Metric / Stat Card colors */
+.showcase-root.light-mode .metric-card {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.95));
+}
+
+.showcase-root.light-mode .metric-value {
+    color: #1e3a8a;
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Timeline light mode styling */
+.showcase-root.light-mode .timeline-content {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.showcase-root.light-mode .timeline-node article {
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.showcase-root.light-mode .timeline-node div[style*="background: var(--bg-card)"] {
+    background: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.2) !important;
+}
+
+.showcase-root.light-mode .timeline-node div[style*="color: var(--accent-secondary)"] svg {
+    color: #2563eb !important;
+}
+
+.showcase-root.light-mode .timeline-content h3 {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode .timeline-content div[style*="color: rgba(255,255,255,0.02)"] {
+    color: rgba(15, 23, 42, 0.02) !important;
+}
+
+/* Pricing Card Light Mode Overrides */
+.showcase-root.light-mode .pricing-card {
+    border-color: rgba(37, 99, 235, 0.15);
+    background: linear-gradient(155deg, rgba(219, 234, 254, 0.4) 0%, rgba(255, 255, 255, 0.85) 100%);
+    box-shadow: 
+        0 10px 30px rgba(15, 23, 42, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.showcase-root.light-mode .pricing-note {
+    color: #334155;
+}
+
+.showcase-root.light-mode .pricing-card h3 {
+    color: #0f172a;
+}
+
+/* Contact Bento Overrides */
+.showcase-root.light-mode .hero-visual-card {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, rgba(29, 78, 216, 0.04) 100%);
+    border: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.showcase-root.light-mode .hero-visual-card h3 {
+    color: #0f172a;
+}
+
+.showcase-root.light-mode .hero-visual-card p {
+    color: #475569;
+}
+
+.showcase-root.light-mode .info-card-horizontal h3 {
+    color: #0f172a;
+}
+
+/* Mobile & Tablet Navbars responsive overrides */
+.showcase-root.light-mode header nav {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05) !important;
+}
+
+.showcase-root.light-mode header nav .text-white {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode header nav .text-white\/70 {
+    color: rgba(15, 23, 42, 0.7) !important;
+}
+
+.showcase-root.light-mode header nav button {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode header nav .bg-black\/90,
+.showcase-root.light-mode header nav .bg-black\/80 {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode header nav .text-white\/80 {
+    color: rgba(15, 23, 42, 0.8) !important;
+}
+
+.showcase-root.light-mode header nav .active\:bg-white\/5:active {
+    background-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Tablet Navbar Overrides */
+.showcase-root.light-mode nav.fixed {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.02) !important;
+}
+
+.showcase-root.light-mode nav.fixed .text-white {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode nav.fixed .text-gray-300 {
+    color: #475569 !important;
+}
+
+.showcase-root.light-mode nav.fixed .text-gray-300:hover {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode nav.fixed .bg-\[\#0a0a0f\]\/95 {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode nav.fixed .border-white\/5 {
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode nav.fixed .border-t.border-white\/5 {
+    border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Mobile dropdown panel overlay items */
+.showcase-root.light-mode .mobile-panel .mobile-inner {
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode .mobile-link:hover {
+    color: #0f172a;
+    background: rgba(15, 23, 42, 0.04);
+}
+
+.showcase-root.light-mode .mobile-link.active {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+    border-left-color: #2563eb;
+}
+
+/* Chatbot Widget Styles in light mode */
+.showcase-root.light-mode .website-chatbot-toggle {
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.4), transparent 60%),
+        linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(59, 130, 246, 0.95)) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 
+        0 16px 32px rgba(15, 23, 42, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+}
+
+.showcase-root.light-mode .website-chatbot-toggle:hover {
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.5), transparent 60%),
+        linear-gradient(135deg, rgba(29, 78, 216, 0.95), rgba(37, 99, 235, 0.98)) !important;
+}
+
+.showcase-root.light-mode .website-chatbot-panel {
+    background:
+        radial-gradient(circle at 82% 18%, rgba(59, 130, 246, 0.08), transparent 48%),
+        radial-gradient(circle at 14% 9%, rgba(15, 23, 42, 0.02), transparent 36%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.98) 100%) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow:
+        0 42px 96px rgba(15, 23, 42, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.5) inset !important;
+}
+
+.showcase-root.light-mode .website-chatbot-bubble {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03) !important;
+}
+
+.showcase-root.light-mode .website-chatbot-bubble.is-user {
+    background: linear-gradient(145deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.06)) !important;
+    border-color: rgba(37, 99, 235, 0.25) !important;
+    color: #1e40af !important;
+}
+
+.showcase-root.light-mode .website-chatbot-rich-text strong {
+    color: #1e3a8a !important;
+}
+
+.showcase-root.light-mode .website-chatbot-input-wrap textarea {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(15, 23, 42, 0.12) !important;
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode .website-chatbot-input-wrap button {
+    background:
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.3), transparent 60%),
+        linear-gradient(140deg, rgba(37, 99, 235, 0.9), rgba(29, 78, 216, 0.8)) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.showcase-root.light-mode .website-chatbot-header h4 {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode .website-chatbot-header p {
+    color: #1e40af !important;
+}
+
+.showcase-root.light-mode .website-chatbot-close {
+    border-color: rgba(15, 23, 42, 0.15) !important;
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: #0f172a !important;
+}
+
+/* --- Metric snapshot text gradient contrast fix --- */
+.showcase-root.light-mode .metric-value {
+    background-image: linear-gradient(90deg, #0f172a, var(--accent-primary)) !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    line-height: 1.25 !important;
+    padding-bottom: 0.25rem !important;
+}
+
+/* --- Premium Footer Light Mode Overrides --- */
+.showcase-root.light-mode footer {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode footer .text-white,
+.showcase-root.light-mode footer h2,
+.showcase-root.light-mode footer h3,
+.showcase-root.light-mode footer span.text-white {
+    color: #0f172a !important;
+    background: none !important;
+    -webkit-text-fill-color: initial !important;
+}
+
+.showcase-root.light-mode footer a {
+    color: #475569 !important;
+}
+
+.showcase-root.light-mode footer a:hover {
+    color: #2563eb !important;
+}
+
+.showcase-root.light-mode footer p {
+    color: #475569 !important;
+}
+
+.showcase-root.light-mode footer .text-gray-400 {
+    color: #475569 !important;
+}
+
+.showcase-root.light-mode footer .text-gray-500 {
+    color: #64748b !important;
+}
+
+.showcase-root.light-mode footer .border-t {
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Specific Card elements in Mobile / Tablet footers in light mode */
+.showcase-root.light-mode footer .bg-white\/5 {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode footer .bg-white\/5 p.text-white {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode footer .bg-white\/5 p.text-gray-400 {
+    color: #475569 !important;
+}
+
+/* General Tailwind Contrast Utility Class Overrides for Light Mode */
+.showcase-root.light-mode .text-white {
+    color: #0f172a !important;
+}
+
+.showcase-root.light-mode .text-gray-400 {
+    color: #475569 !important;
+}
+
+.showcase-root.light-mode .text-gray-300 {
+    color: #334155 !important;
+}
+
+.showcase-root.light-mode .text-gray-500 {
+    color: #64748b !important;
+}
+
+.showcase-root.light-mode .bg-white\/5 {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.showcase-root.light-mode .border-white\/10 {
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode .border-white\/5 {
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.showcase-root.light-mode .bg-white\/10 {
+    background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.showcase-root.light-mode .border-white\/20 {
+    border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+.showcase-root.light-mode .hover\:bg-white\/10:hover {
+    background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.showcase-root.light-mode .active\:bg-white\/10:active {
+    background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.showcase-root.light-mode .text-blue-400 {
+    color: #2563eb !important;
+}
+
+.showcase-root.light-mode .bg-blue-500\/10 {
+    background-color: rgba(37, 99, 235, 0.06) !important;
+}
+
+.showcase-root.light-mode .text-blue-400\/70 {
+    color: rgba(37, 99, 235, 0.7) !important;
+}
+
+.showcase-root.light-mode .bg-blue-600\/10 {
+    background-color: rgba(37, 99, 235, 0.06) !important;
+}
+
+.showcase-root.light-mode .border-blue-500\/20 {
+    border-color: rgba(37, 99, 235, 0.12) !important;
+}
+
+.showcase-root.light-mode .bg-black\/80,
+.showcase-root.light-mode .bg-black\/90 {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Theme Toggle Button clean borderless styling */
+.theme-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: white;
+}
+
+.showcase-root.light-mode .theme-toggle-btn {
+    color: var(--text-secondary);
+}
+
+.showcase-root.light-mode .theme-toggle-btn:hover {
+    background-color: rgba(15, 23, 42, 0.05);
+    color: #0f172a;
+}
+
+/* ==========================================================================
+   Light Mode Chatbot Overrides for Perfect Visibility & Premium Aesthetics
+   ========================================================================== */
+.light-mode .website-chatbot-panel {
+    background: 
+        radial-gradient(circle at 82% 18%, rgba(59, 130, 246, 0.06), transparent 48%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 248, 255, 0.98) 100%) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 
+        0 24px 64px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.8) inset !important;
+}
+
+.light-mode .website-chatbot-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.01), transparent) !important;
+}
+
+.light-mode .website-chatbot-header h4 {
+    color: #0f172a !important;
+}
+
+.light-mode .website-chatbot-close {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    background: rgba(0, 0, 0, 0.03) !important;
+    color: #334155 !important;
+}
+
+.light-mode .website-chatbot-close:hover {
+    background: rgba(0, 0, 0, 0.06) !important;
+    color: #0f172a !important;
+}
+
+.light-mode .website-chatbot-bubble {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+    color: #334155 !important;
+}
+
+.light-mode .website-chatbot-bubble.is-assistant {
+    background: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-mode .website-chatbot-bubble.is-user {
+    background: rgba(37, 99, 235, 0.08) !important;
+    border-color: rgba(37, 99, 235, 0.18) !important;
+    color: #1d4ed8 !important;
+}
+
+.light-mode .website-chatbot-bubble.is-user p {
+    color: #1e40af !important;
+}
+
+.light-mode .website-chatbot-rich-text strong {
+    color: #0f172a !important;
+}
+
+/* Suggested questions overrides in Light Mode */
+.light-mode .website-chatbot-suggested-questions {
+    border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.light-mode .website-chatbot-suggested-title {
+    color: #64748b !important;
+}
+
+.light-mode .website-chatbot-suggested-chip {
+    background: rgba(37, 99, 235, 0.04) !important;
+    border: 1px solid rgba(37, 99, 235, 0.12) !important;
+    color: #2563eb !important;
+}
+
+.light-mode .website-chatbot-suggested-chip:hover {
+    background: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+/* Input overrides in Light Mode */
+.light-mode .website-chatbot-input-wrap {
+    border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.01), transparent) !important;
+}
+
+.light-mode .website-chatbot-input-wrap textarea {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    color: #0f172a !important;
+}
+
+.light-mode .website-chatbot-input-wrap textarea::placeholder {
+    color: #94a3b8 !important;
+}
+
+.light-mode .website-chatbot-input-wrap button {
+    border: 1px solid rgba(37, 99, 235, 0.15) !important;
+    background: linear-gradient(140deg, #2563eb, #1d4ed8) !important;
+    color: #ffffff !important;
+}
+
+.light-mode .website-chatbot-input-wrap button:hover {
+    background: linear-gradient(140deg, #1d4ed8, #1e40af) !important;
+}
+
+

@@ -69,11 +69,20 @@ function renderMessageText(message) {
     return <div className="website-chatbot-rich-text">{lines.map((line, idx) => renderAssistantLine(line, idx))}</div>;
 }
 
+const SUGGESTED_QUESTIONS = [
+    "What is MANO-Attendance and how does it work?",
+    "What are the subscription plans and pricing?",
+    "Do we need special fingerprint/biometric devices?",
+    "How does the app prevent proxy attendance?",
+    "Is our employee data secure and GDPR compliant?"
+];
+
 export default function WebsiteChatbotWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const panelRef = useRef(null);
+    const messagesEndRef = useRef(null);
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
@@ -81,6 +90,51 @@ export default function WebsiteChatbotWidget() {
             sources: [],
         },
     ]);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            scrollToBottom();
+        }
+    }, [messages, isOpen]);
+
+    const sendSuggestedQuestion = async (q) => {
+        if (loading) return;
+
+        setInput('');
+        setLoading(true);
+
+        const history = messages
+            .filter((m) => !m.pending && m.text !== 'Thinking...')
+            .slice(-6)
+            .map((m) => ({
+                role: m.role,
+                text: m.text,
+            }));
+
+        setMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: 'Thinking...', pending: true }]);
+
+        try {
+            const response = await websiteChatbotService.ask(q, history);
+            const rawAnswer = response?.data?.answer || 'I do not have that information on the website right now.';
+            const answer = cleanAssistantText(rawAnswer) || 'I do not have that information on the website right now.';
+
+            setMessages((prev) => {
+                const withoutPending = prev.filter((m) => !m.pending);
+                return [...withoutPending, { role: 'assistant', text: answer }];
+            });
+        } catch (error) {
+            setMessages((prev) => {
+                const withoutPending = prev.filter((m) => !m.pending);
+                return [...withoutPending, { role: 'assistant', text: error.message || 'Something went wrong while asking the assistant.' }];
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
 
@@ -108,10 +162,20 @@ export default function WebsiteChatbotWidget() {
 
         setInput('');
         setLoading(true);
+        
+        // Compile prior history for contextual query awareness
+        const history = messages
+            .filter((m) => !m.pending && m.text !== 'Thinking...')
+            .slice(-6) // Send up to last 6 messages
+            .map((m) => ({
+                role: m.role,
+                text: m.text,
+            }));
+
         setMessages((prev) => [...prev, { role: 'user', text: question }, { role: 'assistant', text: 'Thinking...', pending: true }]);
 
         try {
-            const response = await websiteChatbotService.ask(question);
+            const response = await websiteChatbotService.ask(question, history);
             const rawAnswer = response?.data?.answer || 'I do not have that information on the website right now.';
             const answer = cleanAssistantText(rawAnswer) || 'I do not have that information on the website right now.';
             const sources = dedupeSources(response?.data?.sources || []);
@@ -144,7 +208,6 @@ export default function WebsiteChatbotWidget() {
                     <div className="website-chatbot-header">
                         <div>
                             <h4>Ask Assistant</h4>
-                            <p>Website knowledge only</p>
                         </div>
                         <button type="button" className="website-chatbot-close" onClick={() => setIsOpen(false)} aria-label="Close chatbot">
                             <X size={16} />
@@ -155,8 +218,28 @@ export default function WebsiteChatbotWidget() {
                         {messages.map((message, idx) => (
                             <div key={`${message.role}-${idx}`} className={`website-chatbot-bubble ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}>
                                 {renderMessageText(message)}
+                                
+                                {idx === 0 && messages.length === 1 && (
+                                    <div className="website-chatbot-suggested-questions">
+                                        <p className="website-chatbot-suggested-title">Suggested Questions</p>
+                                        <div className="website-chatbot-suggested-grid">
+                                            {SUGGESTED_QUESTIONS.map((q, qIdx) => (
+                                                <button
+                                                    key={`suggest-${qIdx}`}
+                                                    type="button"
+                                                    className="website-chatbot-suggested-chip"
+                                                    onClick={() => sendSuggestedQuestion(q)}
+                                                    disabled={loading}
+                                                >
+                                                    {q}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ))}
+                        <div ref={messagesEndRef} />
                     </div>
 
                     <div className="website-chatbot-input-wrap">

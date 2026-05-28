@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Sun, Moon } from "lucide-react";
 
-export default function MobileNavbar() {
+export default function MobileNavbar({ theme = "dark", toggleTheme }) {
     const [mobileOpen, setMobileOpen] = useState(false);
 
     return (
@@ -13,7 +13,14 @@ export default function MobileNavbar() {
                     <span className="text-white font-bold text-base tracking-tight">MANO</span>
                 </Link>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={toggleTheme}
+                        className="text-white/70 hover:text-white transition p-2"
+                        aria-label="Toggle theme"
+                    >
+                        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
                     <NavLink to="/login" className="text-xs font-semibold text-white/70 hover:text-white transition px-2">Login</NavLink>
                     <button
                         className="bg-white/10 border border-white/20 text-white p-2 rounded-xl active:scale-95 transition-transform"
@@ -41,6 +48,16 @@ export default function MobileNavbar() {
                                 {link.label}
                             </a>
                         ))}
+                        <button 
+                            onClick={() => {
+                                toggleTheme();
+                                setMobileOpen(false);
+                            }}
+                            className="text-white/80 py-2.5 px-3 rounded-xl active:bg-white/5 active:text-white transition-all text-sm font-medium text-left flex items-center gap-2"
+                        >
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                            <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                        </button>
                     </div>
                 </div>
             </nav>
