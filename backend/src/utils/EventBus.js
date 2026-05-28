@@ -72,8 +72,7 @@ class AppEventBus extends EventEmitter {
                     related_entity_type: payload.related_entity_type || null,
                     related_entity_id: payload.related_entity_id || null,
                     is_read: 0,
-                    created_at: attendanceDB.fn.now(),
-                    updated_at: attendanceDB.fn.now()
+                    created_at: attendanceDB.fn.now()
                 };
                 const [insertedId] = await attendanceDB('notifications').insert(notificationData);
                 
