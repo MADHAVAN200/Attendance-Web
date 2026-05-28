@@ -40,7 +40,8 @@ const reportWorker = new Worker('ReportQueue', async (job) => {
         const { url: preSignedUrl } = await S3Service.getFileUrl({
             key: s3Key,
             directory: s3Directory,
-            expiresIn: 86400
+            expiresIn: 86400,
+            filename: job.data.filename
         });
 
         // 6. Update Database tracking row as completed

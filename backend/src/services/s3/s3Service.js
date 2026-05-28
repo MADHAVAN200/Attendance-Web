@@ -51,13 +51,14 @@ export async function uploadFile({ fileBuffer, filePath, key, directory = "", co
 }
 
 // 2. Get Signed URL to Fetch File
-export async function getFileUrl({ key, directory = "", expiresIn = 3600 }) {
+export async function getFileUrl({ key, directory = "", expiresIn = 3600, filename = "" }) {
   try {
     const finalKey = directory ? `${directory}/${key}` : key;
 
     const cmd = new GetObjectCommand({
       Bucket: BUCKET,
       Key: finalKey,
+      ResponseContentDisposition: filename ? `attachment; filename="${filename}"` : undefined,
     });
 
     const url = await getSignedUrl(s3, cmd, { expiresIn });
