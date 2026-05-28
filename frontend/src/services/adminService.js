@@ -254,6 +254,25 @@ export const adminService = {
         }
     },
 
+    async queueReport(month, type, format = "xlsx", userId = "", date = "") {
+        try {
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const response = await api.get(url);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to queue report");
+        }
+    },
+
+    async getReportStatus(reportId) {
+        try {
+            const response = await api.get(`${ADMIN_API_URL}/reports/status/${reportId}`);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch report status");
+        }
+    },
+
     async getDashboardStats(range = 'weekly', month = null, year = null) {
         try {
             let url = `${ADMIN_API_URL}/dashboard-stats?range=${range}`;

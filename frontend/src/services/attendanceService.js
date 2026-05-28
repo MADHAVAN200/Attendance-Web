@@ -95,11 +95,20 @@ export const attendanceService = {
     // Download My Monthly Report
     async downloadMyReport(month, format = "xlsx") {
         try {
-            const url = `${API_BASE_URL}/records/export?month=${month}&format=${format}`;
-            const response = await api.get(url, { responseType: 'blob' });
+            const url = `/attendance/reports/download?month=${month}&format=${format}&type=attendance_detailed`;
+            const response = await api.get(url);
             return response.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to download your report");
+        }
+    },
+
+    async getMyReportStatus(reportId) {
+        try {
+            const response = await api.get(`/attendance/reports/status/${reportId}`);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch report status");
         }
     },
 
