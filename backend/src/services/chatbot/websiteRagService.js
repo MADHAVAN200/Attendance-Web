@@ -22,11 +22,17 @@ const FEATURE_KEYWORDS = [
     { name: 'Detailed Attendance & Matrix Reports', keywords: ['attendance report', 'matrix report', 'payroll report', 'export report', 'attendance logs', 'lateness summary', 'overtime sheets', 'excel export', 'pdf summary'] },
     { name: 'Holiday & Leave Management', keywords: ['leave', 'holiday', 'leave request', 'leave approval', 'leave balance', 'sick leave', 'casual leave', 'earned leave', 'time-off', 'time off', 'festival', 'calendar'] },
     { name: 'Ask HR AI Assistant', keywords: ['ask hr', 'ai assistant', 'chatbot', 'policy question', 'copilot', 'virtual assistant', 'faq helper'] },
-    { name: 'Generative Policy Builder', keywords: ['policy builder', 'policy generation', 'shift policy', 'prompt policy', 'legal check', 'terms document'] },
     { name: 'Smart DAR Insights', keywords: ['dar', 'daily activity report', 'smart dar', 'productivity insights', 'vague logs', 'theme synthesizing', 'morale analysis'] },
     { name: 'Advanced Geofencing', keywords: ['geofencing', 'geo fencing', 'location tracking', 'gps', 'geofence', 'google maps', 'radius lock', 'strict location'] },
     { name: 'Facial Camera Verification', keywords: ['face verification', 'facial verification', 'webcam verification', 'biometric', 'camera validation', 'buddy punching'] },
+    { name: 'Onboarding & System Setup', keywords: ['onboard', 'onboarding', 'configure', 'setup', 'timeline', 'import', 'bulk import', 'excel upload', 'csv upload', 'hardware requirements', 'browser support', 'webcam support', 'camera requirements', 'setup cost'] },
+    { name: 'Plans & Subscription Suitability', keywords: ['starter plan', 'growth plan', 'enterprise plan', 'plans', 'pricing', 'suitable plan', 'which plan', 'recommend plan', 'choose plan', 'subscription', 'package', 'cost', 'price', 'pricing model', 'how much'] },
+    { name: 'How to Purchase & Billing Cycles', keywords: ['how to purchase', 'how to buy', 'sales channels', 'payment options', 'razorpay', 'upi', 'credit card', 'trial', 'free trial', 'monthly billing', 'annual billing', 'discount', 'refund', 'cancellation'] },
+    { name: 'Enterprise Security & Compliance', keywords: ['security', 'data privacy', 'gdpr', 'aws hosting', 'backup', 'backups', 'encryption', 'tls', 'https', 'isolation', 'uptime', 'hosted', 'server', 'servers', 'secure', 'safe', 'safety'] },
+    { name: 'Customer SLA & Technical Support', keywords: ['support channels', 'office hours', 'technical support', 'customer success', 'sla', 'priority support', 'escalation', 'critical bug', 'contact', 'email', 'phone', 'sales', 'support desk', 'support team'] },
+    { name: 'Business ROI & Value', keywords: ['roi', 'time savings', 'admin hours', 'buddy punching', 'proxy attendance', 'leakage', 'benefits', 'advantage'] },
 ];
+
 
 let embeddingPipelinePromise;
 let chromaClient;
@@ -291,7 +297,7 @@ function detectRequestedFeatures(question) {
     return [...new Set(matches)];
 }
 
-function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralOverview = false) {
+function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralOverview = false, history = []) {
     const contextText = contextBlocks
         .map((item, idx) => {
             const header = [
@@ -305,6 +311,25 @@ function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralO
         })
         .join('\n\n--------------------\n\n');
 
+    let historyText = '';
+    if (Array.isArray(history) && history.length > 0) {
+        historyText = history
+            .map(msg => `${String(msg.role).toUpperCase()}: ${msg.text || msg.content}`)
+            .join('\n');
+    }
+
+    const businessTopics = [
+        'Onboarding & System Setup',
+        'Plans & Subscription Suitability',
+        'How to Purchase & Billing Cycles',
+        'Enterprise Security & Compliance',
+        'Customer SLA & Technical Support',
+        'Business ROI & Value'
+    ];
+
+    const hasBusinessTopic = requestedFeatures.some(f => businessTopics.includes(f));
+    const productFeatures = requestedFeatures.filter(f => !businessTopics.includes(f));
+
     let specificFeatureInstructions = [];
     if (isGeneralOverview) {
         specificFeatureInstructions = [
@@ -313,15 +338,15 @@ function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralO
             'Overview:',
             'Brief high-level summary of what MANO-Attendance is.',
             'Core Product Highlights:',
-            'Present the major highlights in an elegant, structured format (e.g. Time In & Time Out, Live Command Center, Detailed Reports, Holidays & Leaves, AI Ask HR, Generative Policy Builder, Smart DAR Insights, Advanced Geofencing). Make them sound premium and explain how they work.',
+            'Present the major highlights in an elegant, structured format (e.g. Time In & Time Out, Live Command Center, Detailed Reports, Holidays & Leaves, AI Ask HR, Smart DAR Insights, Advanced Geofencing). Make them sound premium and explain how they work.',
             'Subscription Plans:',
             'List and describe the Starter, Growth, and Enterprise plans so the client understands the options.',
             'How It Works:',
             'Walk them through the 6 simple steps from onboarding to payroll.',
         ];
-    } else if (requestedFeatures.length > 0) {
+    } else if (productFeatures.length > 0) {
         specificFeatureInstructions = [
-            `User requested specific feature explanation for: ${requestedFeatures.join(', ')}.`,
+            `User requested specific feature explanation for: ${productFeatures.join(', ')}.`,
             'Explain ONLY the requested feature(s), unless the user explicitly asks for all features.',
             'For each feature, use this structure with plain text labels (no markdown symbols):',
             '<Feature Name>:',
@@ -329,16 +354,29 @@ function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralO
             'Why it matters: ...',
             'Keep each explanation practical and end-user friendly.',
         ];
+        if (hasBusinessTopic) {
+            specificFeatureInstructions.push(
+                `Additionally, answer the business query regarding ${requestedFeatures.filter(f => businessTopics.includes(f)).join(', ')} directly, professionally, and clearly, citing details from the context without using the rigid '<Feature Name>:\nHow it works:' structure.`
+            );
+        }
+    } else if (hasBusinessTopic) {
+        specificFeatureInstructions = [
+            `User asked a business query related to: ${requestedFeatures.join(', ')}.`,
+            'Provide a clear, detailed, and highly professional corporate response specifically answering their query.',
+            'Explain only the specific business topic (e.g. pricing, setup, security, SLA, or plan suitability) that the user is inquiring about, citing precise facts from the context.',
+            'Do not dump unrelated business topics. If they ask about security, do not explain pricing or SLAs unless also asked.',
+            'Use clean spacing and CAPITALIZED plain text headings to structure the answer beautifully.',
+            'Keep the explanation customer-friendly, authoritative, and extremely professional.'
+        ];
     } else {
         specificFeatureInstructions = [
-            'When the user asks about features, modules, capabilities, or highlights, respond in a numbered point format.',
-            'For each point, include the feature name and a clear 1-2 sentence description.',
-            'Do not return a single comma-separated list for feature explanations.',
-            'Keep numbered feature lists concise (typically 5-8 points unless user asks for more).',
+            'Answer the user\'s question directly, clearly, and professionally using the provided context.',
+            'If the user is asking about features, modules, capabilities, or highlights in general, respond in a clean, numbered point format with the feature name and a 1-2 sentence description.',
+            'Otherwise, answer their specific question directly in a professional, natural, and user-friendly tone, citing relevant facts from the context.',
         ];
     }
 
-    return [
+    const promptLines = [
         'You are the official pre-login website assistant for MANO-Attendance, a state-of-the-art AI-driven workforce platform.',
         'Answer ONLY from the provided context. Do not make up any facts or hallucinate features.',
         'Start directly with the answer content.',
@@ -350,11 +388,20 @@ function buildPrompt(question, contextBlocks, requestedFeatures = [], isGeneralO
         'Keep answers concise, factual, highly professional, and user-friendly.',
         'Never mention internal implementation details or vector databases.',
         '',
+    ];
+
+    if (historyText) {
+        promptLines.push('Prior Conversation History:', historyText, '');
+    }
+
+    promptLines.push(
         `User question: ${question}`,
         '',
         'Context:',
-        contextText,
-    ].join('\n');
+        contextText
+    );
+
+    return promptLines.join('\n');
 }
 
 function sanitizeModelAnswer(rawAnswer) {
@@ -371,22 +418,130 @@ function sanitizeModelAnswer(rawAnswer) {
     return text;
 }
 
-export async function answerWebsiteQuestion(question) {
+async function rewriteQueryWithHistory(question, history, groq) {
+    if (!Array.isArray(history) || history.length === 0) {
+        return question;
+    }
+
+    const formattedHistory = history
+        .map((msg) => `${String(msg.role).toUpperCase()}: ${msg.text || msg.content}`)
+        .join('\n');
+
+    const prompt = [
+        'You are an expert search query rewriter.',
+        'Given a conversation history between a USER and an ASSISTANT, and the USER\'s latest follow-up question, your task is to rewrite the latest question into a fully standalone search query.',
+        'The rewritten search query MUST be self-contained, descriptive, and clearly specify any pronouns (like "it", "they", "that", "this") or referenced plans/features using details from the prior chat history.',
+        'Do not add any preamble, explanation, or notes. Output ONLY the rewritten standalone query text itself.',
+        '',
+        'CHAT HISTORY:',
+        formattedHistory,
+        '',
+        `USER'S LATEST FOLLOW-UP QUESTION: ${question}`,
+        '',
+        'STANDALONE SEARCH QUERY:'
+    ].join('\n');
+
+    try {
+        const completion = await groq.chat.completions.create({
+            model: GROQ_MODEL,
+            temperature: 0.1,
+            max_tokens: 100,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are a search query rewriter that outputs only the final query text.',
+                },
+                {
+                    role: 'user',
+                    content: prompt,
+                },
+            ],
+        });
+
+        const rewritten = completion?.choices?.[0]?.message?.content?.trim();
+        if (rewritten && rewritten.length > 5) {
+            return rewritten;
+        }
+    } catch (error) {
+        console.error('[website-chatbot] Query rewriting failed, falling back to original question:', error?.message || error);
+    }
+
+    return question;
+}
+
+function detectGreetingOrGratitude(query) {
+    const clean = String(query || '').toLowerCase().replace(/[.!?,]/g, ' ').trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return null;
+
+    const greetings = ['hi', 'hello', 'hey', 'greetings', 'yo', 'morning', 'afternoon', 'evening', 'welcome', 'there'];
+    const gratitude = ['thanks', 'thank', 'bye', 'goodbye', 'appreciate', 'appreciated', 'awesome', 'perfect', 'great', 'ok', 'okay', 'signoff'];
+    
+    // Words that indicate a real query and should bypass greetings router to run RAG
+    const querySignals = [
+        'cost', 'price', 'pricing', 'buy', 'purchase', 'pay', 'payment', 'payments', 'subscribe', 'subscription', 'subscriptions',
+        'plan', 'plans', 'starter', 'growth', 'enterprise', 'onboard', 'onboarding', 'configure', 'setup', 'timeline', 'import',
+        'excel', 'csv', 'hardware', 'device', 'devices', 'fingerprint', 'biometric', 'camera', 'webcam', 'face', 'facial',
+        'geofence', 'geofencing', 'location', 'gps', 'report', 'reports', 'matrix', 'dar', 'activity', 'leave', 'leaves',
+        'holiday', 'holidays', 'calendar', 'security', 'secure', 'privacy', 'gdpr', 'aws', 'cloud', 'hosting', 'backup',
+        'backups', 'sla', 'support', 'help', 'ticket', 'hours', 'office', 'contact', 'email', 'phone', 'roi', 'savings',
+        'leakage', 'buddy', 'proxy', 'workforce', 'attendance', 'software', 'app', 'system', 'features', 'modules',
+        'explain', 'what', 'how', 'why', 'where', 'who', 'when', 'which', 'does', 'do', 'can', 'is', 'are'
+    ];
+
+    const hasQuerySignal = words.some(w => querySignals.includes(w));
+    if (hasQuerySignal) {
+        return null; // Bypass intent router and run RAG
+    }
+
+    const greetingCount = words.filter(w => greetings.includes(w)).length;
+    const gratitudeCount = words.filter(w => gratitude.includes(w)).length;
+
+    if (greetingCount > 0 && greetingCount >= gratitudeCount) {
+        return 'greeting';
+    }
+    if (gratitudeCount > 0) {
+        return 'gratitude';
+    }
+    return null;
+}
+
+export async function answerWebsiteQuestion(question, history = []) {
     const trimmed = String(question || '').trim();
     if (!trimmed) {
         throw new Error('Question is required');
     }
 
-    const isGeneralOverview = detectEntireSoftwareQuery(trimmed);
+    // 1. Intent Router: Greetings & Gratitude
+    const intent = detectGreetingOrGratitude(trimmed);
+    if (intent === 'greeting') {
+        return {
+            answer: "Hello! I am your MANO-Attendance virtual assistant. How can I assist you today? You can ask me about our features, dynamic shift policies, onboarding setup, subscription plans, pricing, security compliance, or SLA tech support!",
+            sources: []
+        };
+    } else if (intent === 'gratitude') {
+        return {
+            answer: "You are very welcome! I'm always here to help you build a smarter workforce. Let me know if you need anything else, or have a wonderful day ahead!",
+            sources: []
+        };
+    }
+
+    const groq = getGroqClient();
+
+    // 3. Conversational Memory: Contextual Query Rewriting
+    const rewrittenQuery = await rewriteQueryWithHistory(trimmed, history, groq);
+    const searchTarget = rewrittenQuery || trimmed;
+
+    const isGeneralOverview = detectEntireSoftwareQuery(searchTarget);
     let contextBlocks = [];
 
     if (isGeneralOverview) {
         contextBlocks = await getFullSoftwareOverviewContext();
     } else {
-        const requestedFeatures = detectRequestedFeatures(trimmed);
+        const requestedFeatures = detectRequestedFeatures(searchTarget);
         const retrievalQuery = requestedFeatures.length > 0
-            ? `${trimmed}\nFocus features: ${requestedFeatures.join(', ')}`
-            : trimmed;
+            ? `${searchTarget}\nFocus features: ${requestedFeatures.join(', ')}`
+            : searchTarget;
 
         const queryEmbedding = await embedText(retrievalQuery);
         let queryResult;
@@ -422,23 +577,49 @@ export async function answerWebsiteQuestion(question) {
         };
     }
 
-    const groq = getGroqClient();
-    const prompt = buildPrompt(trimmed, contextBlocks, detectRequestedFeatures(trimmed), isGeneralOverview);
+    const prompt = buildPrompt(trimmed, contextBlocks, detectRequestedFeatures(searchTarget), isGeneralOverview, history);
 
-    const completion = await groq.chat.completions.create({
-        model: GROQ_MODEL,
-        temperature: 0.2,
-        messages: [
-            {
-                role: 'system',
-                content: 'You are a strict website assistant that answers only from provided context.',
-            },
-            {
-                role: 'user',
-                content: prompt,
-            },
-        ],
-    });
+    let completion;
+    try {
+        completion = await groq.chat.completions.create({
+            model: GROQ_MODEL,
+            temperature: 0.2,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are a strict website assistant that answers only from provided context.',
+                },
+                {
+                    role: 'user',
+                    content: prompt,
+                },
+            ],
+        });
+    } catch (error) {
+        const isRateLimit = String(error?.message || '').toLowerCase().includes('rate limit')
+            || String(error?.message || '').includes('429')
+            || error?.status === 429;
+
+        if (isRateLimit && GROQ_MODEL !== 'llama-3.1-8b-instant') {
+            console.warn(`[website-chatbot] Rate limit hit for ${GROQ_MODEL}, automatically falling back to llama-3.1-8b-instant`);
+            completion = await groq.chat.completions.create({
+                model: 'llama-3.1-8b-instant',
+                temperature: 0.2,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a strict website assistant that answers only from provided context.',
+                    },
+                    {
+                        role: 'user',
+                        content: prompt,
+                    },
+                ],
+            });
+        } else {
+            throw error;
+        }
+    }
 
     const rawAnswer = completion?.choices?.[0]?.message?.content?.trim();
     let answer = sanitizeModelAnswer(rawAnswer);
@@ -649,20 +830,47 @@ ${(g.faqs || []).map((faq, fIdx) => `Q${fIdx+1}: ${faq.question}\nA${fIdx+1}: ${
         `User question: ${trimmed}`,
     ].join('\n');
 
-    const completion = await groq.chat.completions.create({
-        model: GROQ_MODEL,
-        temperature: 0.2,
-        messages: [
-            {
-                role: 'system',
-                content: `You are the in-app Mano AI Copilot. Assist the logged-in ${role} with their query.`,
-            },
-            {
-                role: 'user',
-                content: prompt,
-            },
-        ],
-    });
+    let completion;
+    try {
+        completion = await groq.chat.completions.create({
+            model: GROQ_MODEL,
+            temperature: 0.2,
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are the in-app Mano AI Copilot. Assist the logged-in ${role} with their query.`,
+                },
+                {
+                    role: 'user',
+                    content: prompt,
+                },
+            ],
+        });
+    } catch (error) {
+        const isRateLimit = String(error?.message || '').toLowerCase().includes('rate limit')
+            || String(error?.message || '').includes('429')
+            || error?.status === 429;
+
+        if (isRateLimit && GROQ_MODEL !== 'llama-3.1-8b-instant') {
+            console.warn(`[Mano Copilot] Rate limit hit for ${GROQ_MODEL}, automatically falling back to llama-3.1-8b-instant`);
+            completion = await groq.chat.completions.create({
+                model: 'llama-3.1-8b-instant',
+                temperature: 0.2,
+                messages: [
+                    {
+                        role: 'system',
+                        content: `You are the in-app Mano AI Copilot. Assist the logged-in ${role} with their query.`,
+                    },
+                    {
+                        role: 'user',
+                        content: prompt,
+                    },
+                ],
+            });
+        } else {
+            throw error;
+        }
+    }
 
     const rawAnswer = completion?.choices?.[0]?.message?.content?.trim();
     const answer = sanitizeModelAnswer(rawAnswer) || 'I am sorry, I am unable to answer your query right now.';

@@ -3,7 +3,7 @@ import catchAsync from '../../utils/catchAsync.js';
 import { answerWebsiteQuestion, answerInternalQuestion } from '../../services/chatbot/websiteRagService.js';
 
 export const askWebsiteChatbot = catchAsync(async (req, res, next) => {
-    const { question, message } = req.body || {};
+    const { question, message, history } = req.body || {};
     const input = question || message;
 
     if (!input || !String(input).trim()) {
@@ -12,7 +12,7 @@ export const askWebsiteChatbot = catchAsync(async (req, res, next) => {
 
     let result;
     try {
-        result = await answerWebsiteQuestion(String(input));
+        result = await answerWebsiteQuestion(String(input), history);
     } catch (error) {
         const rawMessage = String(error?.message || '').toLowerCase();
         const infraFailure = rawMessage.includes('chromadb')
