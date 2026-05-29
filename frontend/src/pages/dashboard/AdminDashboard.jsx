@@ -379,7 +379,7 @@ const AdminDashboard = () => {
                                         Live
                                     </div>
                                 </div>
-                                <div className="space-y-5 px-1 transition-all duration-300 overflow-y-auto custom-scrollbar flex-1">
+                                <div className="space-y-5 px-1 transition-all duration-300 overflow-y-auto no-scrollbar flex-1">
                                     {isLoading ? (
                                         [1, 2, 3, 4].map(i => (
                                             <div key={i} className="flex items-start gap-4 pb-4 border-b border-slate-50 dark:border-github-dark-border/50 last:border-0 last:pb-0 animate-pulse">

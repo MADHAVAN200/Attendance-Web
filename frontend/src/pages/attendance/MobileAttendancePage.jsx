@@ -69,10 +69,32 @@ const MobileAttendancePage = () => {
     ];
 
     // --- STATE ---
-    const [mainTab, setMainTab] = useState('attendance'); // 'attendance', 'my_attendance'
-    const [subTab, setSubTab] = useState('history'); // 'history', 'analytics', 'corrections'
+    const [mainTab, setMainTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab === 'mark_attendance') return 'attendance';
+        return tab || 'attendance';
+    });
+    const [subTab, setSubTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const sTab = params.get('subTab');
+        if (sTab === 'correction') return 'corrections';
+        return sTab || 'history';
+    });
     const [correctionFilter, setCorrectionFilter] = useState('pending'); // 'pending', 'history'
     const [direction, setDirection] = useState(0);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        const sTab = params.get('subTab');
+        if (tab) {
+            setMainTab(tab === 'mark_attendance' ? 'attendance' : tab);
+        }
+        if (sTab) {
+            setSubTab(sTab === 'correction' ? 'corrections' : sTab);
+        }
+    }, [window.location.search]);
 
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('mano-active-tab', {
@@ -93,7 +115,6 @@ const MobileAttendancePage = () => {
     const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
-    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [isFetchingDetails, setIsFetchingDetails] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -393,7 +414,6 @@ const MobileAttendancePage = () => {
             await attendanceService.submitCorrectionRequest(payload);
             toast.success("Correction request submitted successfully!");
             setShowConfirmSubmit(false);
-            setShowSuccessPopup(true);
             setIsCorrectionOpen(false);
             setCorrectionForm({ ...correctionForm, sessions: [{ in: '', out: '' }], reason: '' });
             fetchCorrectionHistory();
@@ -555,7 +575,7 @@ const MobileAttendancePage = () => {
 
     return (
         <MobileDashboardLayout title="Attendance">
-            <div className="pb-24">
+            <div className="pb-24" style={{ zoom: 0.8 }}>
                 {/* Premium Header / Greeting */}
                 <div className="px-5 pt-8 pb-12 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-b-[2.5rem] shadow-xl relative overflow-hidden">
                     {/* Animated Background Blobs */}
@@ -1413,22 +1433,6 @@ const MobileAttendancePage = () => {
                 )}
             </AnimatePresence>
 
-            {/* Success Popup */}
-            <AnimatePresence>
-                {showSuccessPopup && (
-                    <div className="fixed inset-0 z-[2001] flex items-center justify-center p-6">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSuccessPopup(false)} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="relative w-full max-w-sm bg-white dark:bg-github-dark-subtle rounded-[3rem] p-10 text-center shadow-3xl">
-                            <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <CheckCircle size={40} />
-                            </div>
-                            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter">Success!</h3>
-                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 font-medium">Your request has been submitted for approval.</p>
-                            <button onClick={() => setShowSuccessPopup(false)} className="w-full py-5 bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-xl">Dismiss</button>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
 
             {/* Image Preview Modal */}
             <AnimatePresence>

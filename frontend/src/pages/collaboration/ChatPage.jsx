@@ -5,17 +5,66 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { 
     Send, Plus, Search, MessageSquare, Users, Hash, 
-    Video, Phone, MoreVertical, Smile, CheckCheck, 
+    Smile, CheckCheck, 
     ArrowLeft, UserPlus, X, Volume2, Info, Lock,
-    Paperclip, FileText, Download, File, Clock
+    Paperclip, FileText, Download, File, Clock, Calendar, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
+
+const formatLastMessagePreview = (messageText) => {
+    if (!messageText) return "";
+    if (messageText.startsWith("[SYSTEM_CARD:")) {
+        const endHeaderIndex = messageText.indexOf("]");
+        if (endHeaderIndex !== -1) {
+            const header = messageText.substring(13, endHeaderIndex); // omit "[SYSTEM_CARD:"
+            const parts = header.split(":");
+            const cardType = parts[0] || "";
+            const cardStatus = parts[2] || "";
+            
+            const body = messageText.substring(endHeaderIndex + 1).trim();
+            let payload = null;
+            try {
+                payload = JSON.parse(body);
+            } catch (e) {
+                // Ignore parsing errors for fallback
+            }
+
+            if (cardType === 'leave_request') {
+                if (payload) {
+                    const name = payload.employee_name || payload.reviewer_name || "Employee";
+                    return `Leave: ${payload.leave_type} (${cardStatus}) - ${name}`;
+                }
+                return `Leave Request (${cardStatus})`;
+            } else if (cardType === 'correction_request') {
+                if (payload) {
+                    const name = payload.employee_name || payload.reviewer_name || "Employee";
+                    return `Correction: ${payload.correction_type} (${cardStatus}) - ${name}`;
+                }
+                return `Correction Request (${cardStatus})`;
+            } else if (cardType === 'shift_assign') {
+                if (payload) {
+                    return `Shift Assigned: ${payload.shift_name} (${payload.start_time} - ${payload.end_time})`;
+                }
+                return `Shift Assigned`;
+            } else if (cardType === 'geofence_assign') {
+                if (payload) {
+                    return `Location Assigned: ${payload.location_name}`;
+                }
+                return `Location Assigned`;
+            }
+        }
+    }
+    return messageText;
+};
 
 const ChatPage = () => {
     const { user } = useAuth();
     const socket = useSocket();
+    const navigate = useNavigate();
     const currentUserId = user?.user_id ?? user?.id;
+
 
     // Active states
     const [rooms, setRooms] = useState([]);
@@ -109,6 +158,21 @@ const ChatPage = () => {
         fetchRooms();
         fetchCoworkers();
     }, []);
+
+    // Auto-select last active room on mount once rooms are loaded
+    const [hasAttemptedAutoSelect, setHasAttemptedAutoSelect] = useState(false);
+    useEffect(() => {
+        if (!loadingRooms && rooms.length > 0 && !selectedRoom && !hasAttemptedAutoSelect) {
+            setHasAttemptedAutoSelect(true);
+            const lastActiveId = localStorage.getItem('lastActiveChatRoomId');
+            if (lastActiveId) {
+                const targetRoom = rooms.find(r => Number(r.room_id) === Number(lastActiveId));
+                if (targetRoom) {
+                    handleRoomSelect(targetRoom);
+                }
+            }
+        }
+    }, [rooms, loadingRooms, selectedRoom, hasAttemptedAutoSelect]);
 
     // Set up Socket listeners
     useEffect(() => {
@@ -265,6 +329,9 @@ const ChatPage = () => {
             socket.emit('leave_room', selectedRoom.room_id);
         }
         setSelectedRoom(room);
+        if (room && room.room_id) {
+            localStorage.setItem('lastActiveChatRoomId', room.room_id);
+        }
         fetchMessages(room.room_id);
         markRoomAsRead(room.room_id);
         setShowMobileChatWindow(true);
@@ -501,6 +568,37 @@ const ChatPage = () => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     };
 
+    const formatDatePretty = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            return date.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
+    const formatTimePretty = (timeStr) => {
+        if (!timeStr) return '';
+        try {
+            const date = new Date(timeStr);
+            if (isNaN(date.getTime())) return timeStr;
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        } catch (e) {
+            return timeStr;
+        }
+    };
+
     return (
         <DashboardLayout title="Chat & Collaboration">
             <div className="flex bg-white dark:bg-[#0d1117] border border-[#d0d7de] dark:border-[#30363d] rounded-xl overflow-hidden h-[calc(100vh-85px)] relative">
@@ -630,7 +728,7 @@ const ChatPage = () => {
                                             ) : room.last_message ? (
                                                 <p className={`text-[10px] truncate block ${isSelected ? 'text-[#24292f] dark:text-[#c9d1d9]' : 'text-[#57606a] dark:text-[#8b949e]'}`}>
                                                     {room.last_message.sender_id === currentUserId ? 'You: ' : ''}
-                                                    {room.last_message.text}
+                                                    {formatLastMessagePreview(room.last_message.text)}
                                                 </p>
                                             ) : (
                                                 <p className={`text-[10px] italic truncate block ${isSelected ? 'text-[#8c959f] dark:text-[#8b949e]' : 'text-[#8c959f] dark:text-[#484f58]'}`}>No messages yet</p>
@@ -701,11 +799,7 @@ const ChatPage = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1">
-                                    <button className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer"><Phone size={16} /></button>
-                                    <button className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer"><Video size={16} /></button>
-                                    <button className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer"><MoreVertical size={16} /></button>
-                                </div>
+                                {/* Call, video and menu actions removed as they are not part of chat features */}
                             </div>
 
                             {/* Message Panel Area */}
@@ -743,6 +837,39 @@ const ChatPage = () => {
                                             
                                             // Detect if this message mentions current user
                                             const matchesMention = msg.message_text.includes(`@${user?.user_name}`);
+
+                                            // System Card Alert Parser
+                                            const isSystemCard = msg.message_text && msg.message_text.startsWith("[SYSTEM_CARD:");
+                                            let cardType = "";
+                                            let cardEntityId = "";
+                                            let cardStatus = "";
+                                            let cardPayload = null;
+                                            let cardTextTitle = "";
+                                            let cardTextDesc = "";
+
+                                            if (isSystemCard) {
+                                                const endHeaderIndex = msg.message_text.indexOf("]");
+                                                if (endHeaderIndex !== -1) {
+                                                    const header = msg.message_text.substring(13, endHeaderIndex); // omit "[SYSTEM_CARD:"
+                                                    const parts = header.split(":");
+                                                    cardType = parts[0] || "";
+                                                    cardEntityId = parts[1] || "";
+                                                    cardStatus = parts[2] || "";
+                                                    
+                                                    const body = msg.message_text.substring(endHeaderIndex + 1).trim();
+                                                    try {
+                                                        cardPayload = JSON.parse(body);
+                                                    } catch (e) {
+                                                        // Fallback for legacy plain text messages
+                                                        const bodyLines = body.split("\n");
+                                                        cardTextTitle = bodyLines[0] || "";
+                                                        if (bodyLines.length > 1) {
+                                                            cardTextDesc = bodyLines.slice(1).join("\n").replace(/^"|"$/g, "").trim();
+                                                        }
+                                                    }
+                                                }
+                                            }
+
 
                                             return (
                                                 <motion.div 
@@ -796,7 +923,15 @@ const ChatPage = () => {
 
                                                             return (
                                                                 <div className={`py-2 px-3.5 rounded-lg text-xs leading-normal relative transition-all duration-300 ${
-                                                                    isMentionPreview
+                                                                    isSystemCard
+                                                                    ? cardType === 'leave_request'
+                                                                        ? 'bg-gradient-to-br from-[#e0f2fe] to-[#c7d2fe] text-[#0550ae] dark:from-[#1e1b4b]/30 dark:to-[#312e81]/30 dark:text-[#8c959f] border border-[#a5b4fc]/40 dark:border-[#4338ca]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                        : cardType === 'correction_request'
+                                                                            ? 'bg-gradient-to-br from-[#fef3c7] to-[#fde68a] text-[#b45309] dark:from-[#451a03]/30 dark:to-[#78350f]/30 dark:text-[#ffedd5] border border-[#fcd34d]/40 dark:border-[#92400e]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                            : cardType === 'shift_assign'
+                                                                                ? 'bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] text-[#047857] dark:from-[#064e3b]/30 dark:to-[#065f46]/30 dark:text-[#d1fae5] border border-[#6ee7b7]/40 dark:border-[#047857]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                                : 'bg-gradient-to-br from-[#f3e8ff] to-[#e9d5ff] text-[#6b21a8] dark:from-[#4a044e]/30 dark:to-[#581c87]/30 dark:text-[#f3e8ff] border border-[#d8b4fe]/40 dark:border-[#7e22ce]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                    : isMentionPreview
                                                                     ? isSelf
                                                                         ? 'bg-gradient-to-br from-[#bae6fd] to-[#7dd3fc] dark:from-[#388bfd]/20 dark:to-[#1f6feb]/20 text-[#0550ae] dark:text-[#58a6ff] border border-[#7dd3fc]/30 dark:border-[#388bfd]/30 rounded-br-none hover:shadow-md'
                                                                         : 'bg-white dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] text-[#24292f] dark:text-[#c9d1d9] rounded-bl-none hover:shadow-md'
@@ -808,7 +943,186 @@ const ChatPage = () => {
                                                                 }`}>
                                                                     
                                                                     {/* Text formatting with mentions styling */}
-                                                                    {isMentionPreview ? (
+                                                                    {isSystemCard ? (
+                                                                        <div className="flex flex-col gap-2.5 min-w-[250px] max-w-sm">
+                                                                            {/* Header Badge */}
+                                                                            <div className="flex items-center justify-between border-b border-slate-100/10 dark:border-white/10 pb-1.5">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    {cardType === 'leave_request' && <Calendar size={12} className="shrink-0" />}
+                                                                                    {cardType === 'correction_request' && <Clock size={12} className="shrink-0" />}
+                                                                                    {cardType === 'shift_assign' && <Clock size={12} className="shrink-0" />}
+                                                                                    {cardType === 'geofence_assign' && <MapPin size={12} className="shrink-0" />}
+                                                                                    <span className={`text-[9px] font-black uppercase tracking-wider ${
+                                                                                        cardType === 'leave_request'
+                                                                                            ? 'text-[#0369a1] dark:text-[#388bfd]'
+                                                                                            : cardType === 'correction_request'
+                                                                                                ? 'text-[#b45309] dark:text-[#f59e0b]'
+                                                                                                : cardType === 'shift_assign'
+                                                                                                    ? 'text-[#047857] dark:text-[#34d399]'
+                                                                                                    : 'text-[#6b21a8] dark:text-[#a78bfa]'
+                                                                                    }`}>
+                                                                                        {cardType === 'leave_request' && `Leave: ${cardStatus}`}
+                                                                                        {cardType === 'correction_request' && `Correction: ${cardStatus}`}
+                                                                                        {cardType === 'shift_assign' && `Shift Assigned`}
+                                                                                        {cardType === 'geofence_assign' && `Work Location`}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {cardPayload?.local_time && (
+                                                                                    <span className="text-[8px] font-bold opacity-60">
+                                                                                        {formatTimePretty(cardPayload.local_time)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Content Block */}
+                                                                            <div className="flex flex-col gap-1.5 text-left">
+                                                                                {cardPayload ? (
+                                                                                    <>
+                                                                                        {/* LEAVE DETAILS */}
+                                                                                        {cardType === 'leave_request' && (
+                                                                                            <>
+                                                                                                <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
+                                                                                                    {cardPayload.employee_name || cardPayload.reviewer_name} : {cardPayload.leave_type}
+                                                                                                </h5>
+                                                                                                <div className="text-[10px] space-y-0.5">
+                                                                                                    <div><span className="font-bold">Period:</span> {formatDatePretty(cardPayload.start_date)} to {formatDatePretty(cardPayload.end_date)}</div>
+                                                                                                    <div><span className="font-bold">Reason:</span> "{cardPayload.reason}"</div>
+                                                                                                    {cardPayload.admin_comment && cardPayload.admin_comment !== 'None' && (
+                                                                                                        <div className="mt-1 border-t border-sky-950/10 dark:border-sky-50/10 pt-1 text-slate-800 dark:text-slate-200">
+                                                                                                            <span className="font-bold">Comment:</span> "{cardPayload.admin_comment}"
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </>
+                                                                                        )}
+
+                                                                                        {/* CORRECTION DETAILS */}
+                                                                                        {cardType === 'correction_request' && (
+                                                                                            <>
+                                                                                                <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
+                                                                                                    {cardPayload.employee_name || cardPayload.reviewer_name} : {cardPayload.correction_type}
+                                                                                                </h5>
+                                                                                                <div className="text-[10px] space-y-0.5">
+                                                                                                    <div><span className="font-bold">Target Date:</span> {formatDatePretty(cardPayload.request_date)}</div>
+                                                                                                    <div><span className="font-bold">Reason:</span> "{cardPayload.reason}"</div>
+                                                                                                    {cardPayload.review_comments && cardPayload.review_comments !== 'None' && (
+                                                                                                        <div className="mt-1 border-t border-amber-950/10 dark:border-orange-50/10 pt-1 text-slate-800 dark:text-slate-200">
+                                                                                                            <span className="font-bold">Comment:</span> "{cardPayload.review_comments}"
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {cardPayload.proposed_data && cardPayload.proposed_data.length > 0 && (
+                                                                                                        <div className="mt-1 space-y-1">
+                                                                                                            <div className="font-bold text-[9px] uppercase tracking-wider opacity-85">Proposed Sessions:</div>
+                                                                                                            {cardPayload.proposed_data.map((sess, sIdx) => (
+                                                                                                                <div key={sIdx} className="bg-black/5 dark:bg-black/20 p-1 rounded text-[9px] border border-black/5">
+                                                                                                                    Session {sIdx + 1}: {sess.time_in ? formatTimePretty(sess.time_in) : '-'} to {sess.time_out ? formatTimePretty(sess.time_out) : '-'}
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </>
+                                                                                        )}
+
+                                                                                        {/* SHIFT DETAILS */}
+                                                                                        {cardType === 'shift_assign' && (
+                                                                                            <>
+                                                                                                <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
+                                                                                                    Shift Assigned
+                                                                                                </h5>
+                                                                                                <div className="text-[10px] space-y-0.5">
+                                                                                                    <div><span className="font-bold">Assigner:</span> {cardPayload.admin_name}</div>
+                                                                                                    <div><span className="font-bold">Shift name:</span> {cardPayload.shift_name}</div>
+                                                                                                    <div><span className="font-bold">Timings:</span> {cardPayload.start_time} to {cardPayload.end_time}</div>
+                                                                                                    <div><span className="font-bold">Grace Allowed:</span> {cardPayload.grace_period_mins} mins</div>
+                                                                                                </div>
+                                                                                            </>
+                                                                                        )}
+
+                                                                                        {/* GEOFENCE DETAILS */}
+                                                                                        {cardType === 'geofence_assign' && (
+                                                                                            <>
+                                                                                                <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
+                                                                                                    Work Location Assigned
+                                                                                                </h5>
+                                                                                                <div className="text-[10px] space-y-0.5">
+                                                                                                    <div><span className="font-bold">Assigner:</span> {cardPayload.admin_name}</div>
+                                                                                                    <div><span className="font-bold">Site:</span> {cardPayload.location_name}</div>
+                                                                                                    <div><span className="font-bold">Address:</span> {cardPayload.address}</div>
+                                                                                                    <div><span className="font-bold">Radius boundary:</span> {cardPayload.radius} meters</div>
+                                                                                                </div>
+                                                                                            </>
+                                                                                        )}
+
+                                                                                        {/* ATTACHMENTS (DOCUMENTS) */}
+                                                                                        {cardPayload.attachments && cardPayload.attachments.length > 0 && (
+                                                                                            <div className="mt-2 pt-1.5 border-t border-slate-400/20">
+                                                                                                <div className="font-bold text-[9px] uppercase tracking-wider mb-1 opacity-80">Documents:</div>
+                                                                                                <div className="space-y-1">
+                                                                                                    {cardPayload.attachments.map((att, attIdx) => (
+                                                                                                        <a 
+                                                                                                            key={attIdx} 
+                                                                                                            href={att.url} 
+                                                                                                            target="_blank" 
+                                                                                                            rel="noopener noreferrer" 
+                                                                                                            className="flex items-center gap-1.5 text-[10px] text-blue-600 dark:text-blue-400 hover:underline bg-white/40 dark:bg-black/10 py-1 px-2 rounded border border-slate-400/10 cursor-pointer"
+                                                                                                        >
+                                                                                                            <Paperclip size={10} className="shrink-0" />
+                                                                                                            <span className="truncate flex-1 font-semibold">{att.name}</span>
+                                                                                                            <Download size={10} className="shrink-0" />
+                                                                                                        </a>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </>
+                                                                                ) : (
+                                                                                    /* LEGACY PLAIN TEXT FALLBACK */
+                                                                                    <>
+                                                                                        <h5 className="font-extrabold text-xs tracking-wide uppercase leading-tight">
+                                                                                            {cardTextTitle}
+                                                                                        </h5>
+                                                                                        {cardTextDesc && (
+                                                                                            <p className="text-[11px] leading-relaxed border-l-2 border-slate-400/20 pl-2 mt-1 whitespace-pre-wrap font-medium">
+                                                                                                {cardTextDesc}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Deep Link Redirection Button */}
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const isAdminOrHr = ['admin', 'hr'].includes(user?.user_type);
+                                                                                    if (cardType === 'leave_request') {
+                                                                                        navigate(isAdminOrHr ? '/holidays?tab=requests' : '/holidays?tab=leave_application');
+                                                                                    } else if (cardType === 'correction_request') {
+                                                                                        navigate(isAdminOrHr ? '/attendance-monitoring?tab=requests' : '/attendance?tab=my_attendance&subTab=correction');
+                                                                                    } else if (cardType === 'shift_assign') {
+                                                                                        navigate(isAdminOrHr ? '/shift-management' : '/attendance');
+                                                                                    } else if (cardType === 'geofence_assign') {
+                                                                                        navigate(isAdminOrHr ? '/geofencing' : '/attendance');
+                                                                                    }
+                                                                                }}
+                                                                                className={`mt-1.5 py-1 px-3 rounded text-[10px] font-bold text-center border active:scale-95 transition-all cursor-pointer ${
+                                                                                    cardType === 'leave_request'
+                                                                                        ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white border-transparent'
+                                                                                        : cardType === 'correction_request'
+                                                                                            ? 'bg-[#d97706] hover:bg-[#b45309] text-white border-transparent'
+                                                                                            : cardType === 'shift_assign'
+                                                                                                ? 'bg-[#059669] hover:bg-[#047857] text-white border-transparent'
+                                                                                                : 'bg-[#7c3aed] hover:bg-[#6d28d9] text-white border-transparent'
+                                                                                }`}
+                                                                            >
+                                                                                {cardType === 'leave_request' && 'View Leave Panel'}
+                                                                                {cardType === 'correction_request' && 'View Corrections'}
+                                                                                {cardType === 'shift_assign' && 'View Shift Details'}
+                                                                                {cardType === 'geofence_assign' && 'View Location Map'}
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : isMentionPreview ? (
                                                                         <div className="flex flex-col gap-2 min-w-[200px] max-w-sm">
                                                                             {/* Label/Header */}
                                                                             <div className="flex items-center gap-1.5 border-b border-slate-100/10 dark:border-white/10 pb-1">

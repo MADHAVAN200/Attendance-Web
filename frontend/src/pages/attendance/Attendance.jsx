@@ -229,9 +229,27 @@ const Attendance = () => {
     }, []);
 
     // Navigation State
-    const [activeTab, setActiveTab] = useState('mark_attendance'); // 'mark_attendance' | 'my_attendance'
-    const [subTab, setSubTab] = useState('history'); // 'history' | 'analytics'
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('tab') || 'mark_attendance';
+    });
+    const [subTab, setSubTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('subTab') || 'history';
+    });
     const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        const sTab = params.get('subTab');
+        if (tab) {
+            setActiveTab(tab);
+        }
+        if (sTab) {
+            setSubTab(sTab);
+        }
+    }, [window.location.search]);
 
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('mano-active-tab', {
@@ -296,7 +314,6 @@ const Attendance = () => {
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null); // For details sidebar
     const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
-    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [scrollerDates, setScrollerDates] = useState([]);
 
@@ -704,7 +721,6 @@ const Attendance = () => {
             toast.success("Correction request submitted successfully!");
 
             setShowConfirmSubmit(false);
-            setShowSuccessPopup(true);
             setIsCorrectionDrawerOpen(false);
 
             // Reset Form after delay or on success popup close
@@ -868,7 +884,7 @@ const Attendance = () => {
 
     return (
         <DashboardLayout title="Attendance">
-            <div className="pb-10 overflow-x-hidden">
+            <div className="pb-10 overflow-x-hidden" style={{ zoom: 0.8 }}>
                 {/* Premium Header / Greeting */}
                 <div className="pt-6 pb-10 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl shadow-xl relative overflow-hidden">
                     {/* Animated Background Blobs */}
@@ -2107,37 +2123,6 @@ const Attendance = () => {
                     document.body
                 )}
 
-                {/* --- SUCCESS POPUP --- */}
-                <AnimatePresence>
-                    {showSuccessPopup && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-                        >
-                            <motion.div
-                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                                animate={{ scale: 1, opacity: 1, y: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                className="bg-white dark:bg-github-dark-subtle rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl text-center relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500" />
-                                <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-500 shadow-inner">
-                                    <CheckCircle size={48} strokeWidth={3} />
-                                </div>
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Success!</h3>
-                                <p className="text-slate-500 dark:text-github-dark-muted font-medium mb-8">Your correction request has been submitted successfully.</p>
-                                <button
-                                    onClick={() => setShowSuccessPopup(false)}
-                                    className="w-full py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg"
-                                >
-                                    Awesome
-                                </button>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
 
                 {/* --- IMAGE VIEWER MODAL --- */}
                 <AnimatePresence>

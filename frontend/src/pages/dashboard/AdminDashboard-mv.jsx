@@ -264,7 +264,7 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
-                    <div className="divide-y divide-slate-50 dark:divide-white/5 max-h-[320px] overflow-y-auto">
+                    <div className="divide-y divide-slate-50 dark:divide-white/5 max-h-[320px] overflow-y-auto no-scrollbar">
                         {isLoading ? (
                             <div className="p-4 space-y-4">
                                 {[1, 2, 3].map(i => (

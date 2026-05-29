@@ -83,7 +83,22 @@ const HolidayManagement = () => {
     const { user } = useAuth();
 
     // --- TABS STATE ---
-    const [activeTab, setActiveTab] = useState('holidays'); // 'holidays', 'my_leaves', 'requests'
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab === 'leave_application') {
+            return 'my_leaves';
+        }
+        return tab || 'holidays';
+    });
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            setActiveTab(tab === 'leave_application' ? 'my_leaves' : tab);
+        }
+    }, [window.location.search]);
 
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('mano-active-tab', {
