@@ -14,6 +14,8 @@ import routes from './routes/index.js';
 
 const app = express();
 
+app.set('trust proxy', 1); // Trust reverse proxy (Nginx) for secure cookies
+
 const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
