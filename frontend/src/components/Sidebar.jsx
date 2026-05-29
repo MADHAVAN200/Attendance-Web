@@ -38,7 +38,7 @@ const SidebarItem = ({ icon, text, to }) => {
         </>
     );
 
-    const className = `flex items-center px-3.5 py-1.5 text-[13px] font-medium rounded-lg transition-all duration-200 group ${isActive
+    const className = `flex items-center px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 group ${isActive
         ? 'bg-[#f6f8fa] dark:bg-github-dark-border text-[#0969da] dark:text-github-dark-accent shadow-sm border border-transparent dark:border-github-dark-border/50'
         : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-border/50 hover:text-slate-900 dark:hover:text-github-dark-text'
         }`;
@@ -113,7 +113,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                     </button>
                 </div>
 
-                <nav className="flex-1 pt-1.5 pb-4 px-3 space-y-3 overflow-y-auto">
+                <nav className="flex-1 pt-1.5 pb-4 px-3 space-y-1.5 overflow-y-auto">
                     {getNavItems(userType).map((item) => (
                         <SidebarItem key={item.to} icon={item.icon} text={item.text} to={item.to} />
                     ))}
@@ -122,7 +122,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                 <div className="p-4 border-t border-slate-100 dark:border-github-dark-border space-y-2">
                     <button
                         onClick={() => setIsFeedbackOpen(true)}
-                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-border/30 hover:bg-slate-100 dark:hover:bg-github-dark-border hover:text-indigo-600 dark:hover:text-github-dark-accent rounded-lg transition-all"
+                        className="flex items-center gap-3 w-full px-4 py-2 text-xs font-medium text-slate-600 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-border/30 hover:bg-slate-100 dark:hover:bg-github-dark-border hover:text-indigo-600 dark:hover:text-github-dark-accent rounded-lg transition-all"
                     >
                         <Bug size={18} />
                         Bugs & Feedback

@@ -24,10 +24,12 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const { logout, user, avatarTimestamp } = useAuth();
 
-    // Initialize theme from localStorage or default to 'light'
+    // Initialize theme from localStorage or system preference
     const [theme, setTheme] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('theme') || 'light';
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) return savedTheme;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         return 'light';
     });

@@ -4,22 +4,34 @@ import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import { Mail, Lock, Loader2, Eye, EyeOff, Shield, Activity, Sun, Moon, ArrowRight } from "lucide-react";
+import ReCAPTCHA from "react-google-recaptcha";
 
 const MobileLoginPage = () => {
+    const isCaptchaEnabled = String(import.meta.env.VITE_ENABLE_CAPTCHA).toLowerCase().trim() !== 'false';
     const { login } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ identifier: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
-    const [isDark, setIsDark] = useState(true);
+    const [captchaToken, setCaptchaToken] = useState(null);
+    const [isDark, setIsDark] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) return savedTheme === 'dark';
+            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return true;
+    });
 
     useEffect(() => {
-        // Sync theme with HTML element
+        // Sync theme with HTML element & save preference
         if (isDark) {
             document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
         } else {
             document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
         }
     }, [isDark]);
 
@@ -29,9 +41,16 @@ const MobileLoginPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Skip captcha check if not set in env (for dev convenience) OR if captcha is disabled via env
+        if (isCaptchaEnabled && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+            toast.error("Please complete the security check.");
+            return;
+        }
+
         setLoading(true);
         try {
-            await login(formData.identifier, formData.password, undefined, rememberMe);
+            await login(formData.identifier, formData.password, isCaptchaEnabled ? captchaToken : undefined, rememberMe);
             toast.success("Identity Verified. Access Granted.");
             navigate("/dashboard");
         } catch (err) {
@@ -203,6 +222,16 @@ const MobileLoginPage = () => {
                                 </span>
                             </label>
                         </div>
+
+                        {isCaptchaEnabled && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+                            <div className="flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90">
+                                <ReCAPTCHA
+                                    sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                                    onChange={setCaptchaToken}
+                                    theme={isDark ? "dark" : "light"}
+                                />
+                            </div>
+                        )}
 
                         <button
                             type="submit"
