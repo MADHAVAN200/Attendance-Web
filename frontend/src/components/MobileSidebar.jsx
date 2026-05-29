@@ -45,20 +45,20 @@ const MobileSidebar = ({ isOpen, onClose }) => {
     }, [isOpen, onClose]);
 
     const allMenuItems = [
-        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/dashboard", roles: ['admin', 'hr', 'employee', 'super_admin'] },
-        { icon: <Building size={20} />, text: "Organizations", to: "/organizations", roles: ['super_admin'] },
-        { icon: <ShieldAlert size={20} />, text: "Security Alerts", to: "/super-admin/alerts", roles: ['super_admin'] },
-        { icon: <MessageSquare size={20} />, text: "User Feedback", to: "/super-admin/feedback", roles: ['super_admin'] },
-        { icon: <Code size={20} />, text: "System Logs", to: "/super-admin/logs", roles: ['super_admin'] },
-        { icon: <Users size={20} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={20} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
-        { icon: <Clock size={20} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
-        { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
-        { icon: <ClipboardList size={20} />, text: "Daily Activity", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
-        { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
-        { icon: <Settings size={20} />, text: "Shift Management", to: "/shift-management", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
-        { icon: <Bug size={20} />, text: "Bugs & Feedback", to: "/feedback", roles: ['admin', 'hr', 'employee', 'super_admin'] },
+        { icon: <LayoutDashboard size={18} />, text: "Dashboard", to: "/dashboard", roles: ['admin', 'hr', 'employee', 'super_admin'] },
+        { icon: <Building size={18} />, text: "Organizations", to: "/organizations", roles: ['super_admin'] },
+        { icon: <ShieldAlert size={18} />, text: "Security Alerts", to: "/super-admin/alerts", roles: ['super_admin'] },
+        { icon: <MessageSquare size={18} />, text: "User Feedback", to: "/super-admin/feedback", roles: ['super_admin'] },
+        { icon: <Code size={18} />, text: "System Logs", to: "/super-admin/logs", roles: ['super_admin'] },
+        { icon: <Users size={18} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={18} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
+        { icon: <Clock size={18} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
+        { icon: <TrendingUp size={18} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
+        { icon: <ClipboardList size={18} />, text: "Daily Activity", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
+        { icon: <MapPin size={18} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
+        { icon: <Settings size={18} />, text: "Shift Management", to: "/shift-management", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={18} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
+        { icon: <Bug size={18} />, text: "Bugs & Feedback", to: "/feedback", roles: ['admin', 'hr', 'employee', 'super_admin'] },
     ];
 
     const menuItems = allMenuItems.filter(item => item.roles.includes(userType));
@@ -67,14 +67,14 @@ const MobileSidebar = ({ isOpen, onClose }) => {
         location.pathname === to || (to !== '/' && location.pathname.startsWith(to + '/'));
 
     const linkClass = (to) =>
-        `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group ${isActive(to)
-            ? 'bg-indigo-50 dark:bg-github-dark-border text-indigo-600 dark:text-github-dark-accent shadow-sm border border-transparent dark:border-github-dark-border/50'
+        `flex items-center px-3.5 py-1.5 text-[13px] font-medium rounded-lg transition-all duration-200 group ${isActive(to)
+            ? 'bg-[#f6f8fa] dark:bg-github-dark-border text-[#0969da] dark:text-github-dark-accent shadow-sm border border-transparent dark:border-github-dark-border/50'
             : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-border/50 hover:text-slate-900 dark:hover:text-github-dark-text'
         }`;
 
     const iconClass = (to) =>
-        `mr-3 transition-colors ${isActive(to)
-            ? 'text-indigo-600 dark:text-indigo-400'
+        `mr-2.5 transition-colors ${isActive(to)
+            ? 'text-[#0969da] dark:text-github-dark-accent'
             : 'text-slate-400 dark:text-github-dark-muted group-hover:text-slate-600 dark:group-hover:text-slate-300'
         }`;
 
@@ -94,15 +94,15 @@ const MobileSidebar = ({ isOpen, onClose }) => {
                     }`}
             >
                 {/* Header — matches desktop exactly */}
-                <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 dark:border-github-dark-border shrink-0">
-                    <div className="flex items-center gap-3 font-bold text-xl text-indigo-600 dark:text-github-dark-accent">
-                        <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8" />
-                        <span>MANO</span>
+                <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-github-dark-border shrink-0">
+                    <div className="flex items-center gap-3 font-black text-xl text-[#0969da] dark:text-github-dark-accent tracking-tighter">
+                        <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8 object-contain" />
+                        <span className="leading-none">MANO</span>
                     </div>
                 </div>
 
                 {/* Nav — matches desktop exactly */}
-                <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto" style={{paddingBottom: 'env(safe-area-inset-bottom, 16px)'}}>
+                <nav className="flex-1 pt-1.5 pb-4 px-3 space-y-3 overflow-y-auto" style={{paddingBottom: 'env(safe-area-inset-bottom, 16px)'}}>
                     {menuItems.map((item) => (
                         <Link
                             key={item.to}

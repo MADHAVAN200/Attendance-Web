@@ -34,6 +34,53 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
     const [guests, setGuests] = useState('');
     const [reminder, setReminder] = useState(30);
 
+    // Mentions system state
+    const [orgUsers, setOrgUsers] = useState([]);
+    const [activeMention, setActiveMention] = useState(false);
+    const [mentionSearch, setMentionSearch] = useState('');
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await api.get('/collaboration/users');
+                if (res.data.success) {
+                    setOrgUsers(res.data.data);
+                }
+            } catch (err) {
+                console.warn("Failed to load organization directory for mentions", err);
+            }
+        };
+        fetchUsers();
+    }, []);
+
+    const handleDescriptionChange = (value) => {
+        setDescription(value);
+        
+        const lastAtIndex = value.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || value[lastAtIndex - 1] === ' ')) {
+            const search = value.substring(lastAtIndex + 1);
+            if (search.length < 20 && !search.includes(' ') && !search.includes('\n')) {
+                setActiveMention(true);
+                setMentionSearch(search);
+            } else {
+                setActiveMention(false);
+                setMentionSearch('');
+            }
+        } else {
+            setActiveMention(false);
+            setMentionSearch('');
+        }
+    };
+
+    const insertMention = (user) => {
+        const lastAtIndex = description.lastIndexOf('@');
+        const prefix = description.substring(0, lastAtIndex);
+        const newVal = `${prefix}@${user.user_name} `;
+        setDescription(newVal);
+        setActiveMention(false);
+        setMentionSearch('');
+    };
+
     // Initialize from initialData if editing
     useEffect(() => {
         if (initialData) {
@@ -338,14 +385,47 @@ const EventMeetingModal = ({ onClose, onSave, type = 'Meeting', initialDate = ne
                     {/* Description (Common) */}
                     <div className="flex items-start gap-4">
                         <AlignLeft className="w-5 h-5 text-gray-400 mt-2 shrink-0" />
-                        <div className="flex-1">
+                        <div className="flex-1 relative">
                             <textarea
                                 placeholder="Add description"
                                 value={description}
-                                onChange={(e) => setDescription(e.target.value)}
+                                onChange={(e) => handleDescriptionChange(e.target.value)}
                                 rows={3}
                                 className="w-full py-2 bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-github-dark-border rounded-lg px-3 text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:border-indigo-500 outline-none resize-none transition-colors"
                             />
+
+                            {/* Mention Suggestions Dropdown */}
+                            {activeMention && (
+                                <div className="absolute left-0 right-0 bottom-full mb-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden py-1 max-h-40 overflow-y-auto">
+                                    <div className="px-3 py-1 text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-white/5 tracking-wider">
+                                        Mention Team Member
+                                    </div>
+                                    {orgUsers
+                                        .filter(u =>
+                                            u.user_name.toLowerCase().includes(mentionSearch.toLowerCase())
+                                        )
+                                        .slice(0, 5)
+                                        .map(u => (
+                                            <button
+                                                key={u.user_id}
+                                                type="button"
+                                                onClick={() => insertMention(u)}
+                                                className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors border-none bg-transparent cursor-pointer"
+                                            >
+                                                {u.profile_image_url ? (
+                                                    <img src={u.profile_image_url} alt={u.user_name} className="w-5 h-5 rounded-md object-cover" />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-[9px]">
+                                                        {u.user_name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <div className="truncate">
+                                                    <span className="font-bold text-gray-700 dark:text-github-dark-text text-[11px] block truncate">{u.user_name}</span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 

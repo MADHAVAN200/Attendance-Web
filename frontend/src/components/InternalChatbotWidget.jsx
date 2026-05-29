@@ -350,12 +350,18 @@ const getSuggestionsForRoute = (pathname, tabInfo, userRole) => {
 };
 
 export default function InternalChatbotWidget() {
+    const location = useLocation();
+    
+    // Completely remove the AI Assistant chatbot from the Chat page
+    if (location.pathname.includes('/collaboration')) {
+        return null;
+    }
+
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
-    const location = useLocation();
 
     const currentRole = user?.user_type || 'employee';
 

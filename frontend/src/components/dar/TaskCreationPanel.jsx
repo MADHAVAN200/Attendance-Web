@@ -60,6 +60,56 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
     const [openCategoryIdx, setOpenCategoryIdx] = useState(null);
     const dropdownRef = useRef(null);
 
+    // --- MENTIONS SYSTEM STATE & LOGIC ---
+    const [orgUsers, setOrgUsers] = useState([]);
+    const [activeMentionIdx, setActiveMentionIdx] = useState(null);
+    const [mentionSearch, setMentionSearch] = useState('');
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await api.get('/collaboration/users');
+                if (res.data.success) {
+                    setOrgUsers(res.data.data);
+                }
+            } catch (err) {
+                console.warn("Failed to load organization directory for mentions", err);
+            }
+        };
+        fetchUsers();
+    }, []);
+
+    const handleDescriptionChange = (index, value) => {
+        handleInputChange(index, 'description', value);
+        
+        const lastAtIndex = value.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || value[lastAtIndex - 1] === ' ')) {
+            const search = value.substring(lastAtIndex + 1);
+            if (search.length < 20 && !search.includes('\n')) {
+                setActiveMentionIdx(index);
+                setMentionSearch(search);
+            } else {
+                setActiveMentionIdx(null);
+                setMentionSearch('');
+            }
+        } else {
+            setActiveMentionIdx(null);
+            setMentionSearch('');
+        }
+    };
+
+    const insertMention = (index, user) => {
+        const task = inputs[index];
+        if (!task) return;
+        const val = task.description || '';
+        const lastAtIndex = val.lastIndexOf('@');
+        const prefix = val.substring(0, lastAtIndex);
+        const newVal = `${prefix}@${user.user_name} `;
+        handleInputChange(index, 'description', newVal);
+        setActiveMentionIdx(null);
+        setMentionSearch('');
+    };
+
     // --- CONFIRM MODAL STATE ---
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
@@ -741,15 +791,50 @@ const TaskCreationPanel = ({ onClose, onUpdate, initialTimeIn = "09:30", attenda
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-3 relative">
                                 {/* DESCRIPTION INPUT */}
                                 <input
                                     type="text"
                                     placeholder="Add description..."
                                     value={task.description}
-                                    onChange={(e) => handleInputChange(i, 'description', e.target.value)}
+                                    onChange={(e) => handleDescriptionChange(i, e.target.value)}
                                     className="w-full text-sm font-medium text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-slate-500 placeholder:font-normal bg-transparent border-none p-0 focus:ring-0"
                                 />
+
+                                {activeMentionIdx === i && (
+                                    (() => {
+                                        const filtered = orgUsers.filter(u => 
+                                            u.user_name.toLowerCase().includes(mentionSearch.toLowerCase())
+                                        ).slice(0, 5);
+                                        
+                                        if (filtered.length === 0) return null;
+
+                                        return (
+                                            <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-50 py-1 max-h-40 overflow-y-auto">
+                                                {filtered.map(u => (
+                                                    <button
+                                                        key={u.user_id}
+                                                        type="button"
+                                                        onClick={() => insertMention(i, u)}
+                                                        className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2 transition-colors border-none bg-transparent cursor-pointer"
+                                                    >
+                                                        {u.profile_image_url ? (
+                                                            <img src={u.profile_image_url} alt={u.user_name} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-[9px] shrink-0">
+                                                                {u.user_name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <div className="truncate">
+                                                            <div className="font-bold text-gray-700 dark:text-github-dark-text truncate">{u.user_name}</div>
+                                                            <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate">{u.dept_name || 'Staff'} • {u.desg_name || 'Member'}</div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()
+                                )}
 
                                 <AnimatePresence>
                                     {task.type !== 'TASK' && (
