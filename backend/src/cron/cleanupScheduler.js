@@ -139,16 +139,41 @@ async function cleanupDeletedOrganizations() {
             // Delete all data associated with this organization inside a transaction.
             // Add more tables here as your schema grows.
             await attendanceDB.transaction(async (trx) => {
-                await trx('attendance_records')
-                    .whereIn('user_id', trx('users').select('user_id').where('org_id', org.org_id))
-                    .del();
-
+                // Delete from child tables referencing users/organizations
                 await trx('refresh_tokens')
                     .whereIn('user_id', trx('users').select('user_id').where('org_id', org.org_id))
                     .del();
 
-                await trx('users').where('org_id', org.org_id).del();
+                await trx('notifications').where('org_id', org.org_id).del();
+                await trx('user_activity_logs').where('org_id', org.org_id).del();
+                await trx('application_error_logs').where('org_id', org.org_id).del();
+                await trx('attendance_correction_requests').where('org_id', org.org_id).del();
 
+                await trx('user_work_locations')
+                    .whereIn('user_id', trx('users').select('user_id').where('org_id', org.org_id))
+                    .del();
+
+                await trx('daily_activities').where('org_id', org.org_id).del();
+                await trx('daily_attendance').where('org_id', org.org_id).del();
+                await trx('dar_requests').where('org_id', org.org_id).del();
+                await trx('events_meetings').where('org_id', org.org_id).del();
+                await trx('security_alerts').where('org_id', org.org_id).del();
+
+                await trx('feedback_attachments')
+                    .whereIn('feedback_id', trx('feedback').select('feedback_id').where('org_id', org.org_id))
+                    .del();
+                await trx('feedback').where('org_id', org.org_id).del();
+
+                await trx('leave_attachments')
+                    .whereIn('leave_id', trx('leave_requests').select('lr_id').where('org_id', org.org_id))
+                    .del();
+                await trx('leave_requests').where('org_id', org.org_id).del();
+
+                await trx('attendance_records').where('org_id', org.org_id).del();
+                await trx('chat_rooms').where('org_id', org.org_id).del();
+
+                // Now delete users and finally the organization
+                await trx('users').where('org_id', org.org_id).del();
                 await trx('organizations').where('org_id', org.org_id).del();
             });
 

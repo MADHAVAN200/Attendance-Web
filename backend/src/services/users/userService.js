@@ -423,8 +423,59 @@ export const permanentlyDeleteUser = async (userId) => {
         await trx('notifications').where('user_id', userId).del();
         await trx('user_activity_logs').where('user_id', userId).del();
         await trx('application_error_logs').where('user_id', userId).del();
+        
+        // Nullify reviewer/altered references where this user is referenced
+        await trx('attendance_correction_requests').where('reviewed_by', userId).update({ reviewed_by: null });
+        await trx('attendance_records').where('altered_by', userId).update({ altered_by: null });
+        await trx('daily_attendance').where('adjusted_by', userId).update({ adjusted_by: null });
+        await trx('leave_requests').where('reviewed_by', userId).update({ reviewed_by: null });
+
         await trx('attendance_correction_requests').where('user_id', userId).del();
         await trx('user_work_locations').where('user_id', userId).del();
+        await trx('daily_activities').where('user_id', userId).del();
+        await trx('daily_attendance').where('user_id', userId).del();
+        await trx('dar_requests').where('user_id', userId).del();
+        await trx('events_meetings').where('user_id', userId).del();
+        await trx('security_alerts').where('user_id', userId).del();
+
+        // Clean up chat room memberships and DM rooms
+        const userRooms = await trx('chat_rooms').where('org_id', user.org_id);
+        for (const room of userRooms) {
+            let memberIds = [];
+            try {
+                memberIds = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
+            } catch (e) {
+                memberIds = [];
+            }
+
+            if (Array.isArray(memberIds) && memberIds.map(Number).includes(Number(userId))) {
+                if (room.room_type === 'direct') {
+                    // Delete direct DM room completely since one of the two members is gone
+                    await trx('chat_rooms').where({ room_id: room.room_id }).del();
+                } else {
+                    // Group room: remove the member and their read timestamps
+                    const updatedMemberIds = memberIds.filter(id => Number(id) !== Number(userId));
+                    if (updatedMemberIds.length === 0) {
+                        await trx('chat_rooms').where({ room_id: room.room_id }).del();
+                    } else {
+                        let readTimes = {};
+                        try {
+                            readTimes = typeof room.last_read_times === 'string' ? JSON.parse(room.last_read_times || '{}') : (room.last_read_times || {});
+                        } catch (e) {
+                            readTimes = {};
+                        }
+                        delete readTimes[userId];
+
+                        await trx('chat_rooms')
+                            .where({ room_id: room.room_id })
+                            .update({
+                                member_ids: JSON.stringify(updatedMemberIds),
+                                last_read_times: JSON.stringify(readTimes)
+                            });
+                    }
+                }
+            }
+        }
 
         const leaveRequests = await trx('leave_requests').where('user_id', userId).select('lr_id');
         const leaveIds = leaveRequests.map(lr => lr.lr_id);
