@@ -25,17 +25,17 @@ jobs:
             frontend/package-lock.json
 
       - name: Install Root Dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install Backend Dependencies
         run: |
           cd backend
-          npm ci
+          npm install --no-audit --no-fund
 
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm ci
+          npm install --no-audit --no-fund
 
       - name: Build Frontend
         run: |
