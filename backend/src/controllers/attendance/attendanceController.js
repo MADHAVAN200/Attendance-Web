@@ -312,10 +312,10 @@ export const submitCorrectionRequest = catchAsync(async (req, res) => {
  * Fetch correction requests with filters
  */
 export const getCorrectionRequests = catchAsync(async (req, res) => {
-  const { status, date, month, year, page = 1, limit = 10 } = req.query;
+  const { status, date, month, year, page = 1, limit = 10, my_requests } = req.query;
   const org_id = req.user.org_id;
   const user_id = req.user.id || req.user.user_id;
-  const user_type = req.user.user_type;
+  const user_type = (my_requests === 'true' || my_requests === true) ? 'employee' : req.user.user_type;
 
   const result = await AttendanceService.fetchCorrectionRequests({
     org_id,

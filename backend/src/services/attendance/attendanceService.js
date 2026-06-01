@@ -636,7 +636,8 @@ export async function fetchCorrectionRequests({
     .join("users as u", "u.user_id", "acr.user_id")
     .where("acr.org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("acr.user_id", user_id);
+      const lowerType = String(user_type || "").toLowerCase();
+      if (lowerType !== "admin" && lowerType !== "hr") qb.where("acr.user_id", user_id);
       if (status) qb.where("acr.status", status);
       if (date) qb.where("acr.request_date", date);
       if (month) qb.whereRaw('MONTH(acr.request_date) = ?', [month]);
@@ -653,7 +654,8 @@ export async function fetchCorrectionRequests({
       "acr.submitted_at",
       "u.user_id",
       "u.user_name",
-      "u.desg_id"
+      "u.desg_id",
+      "u.profile_image_url"
     )
     .orderBy("acr.submitted_at", "desc")
     .limit(limit)
@@ -662,7 +664,8 @@ export async function fetchCorrectionRequests({
   const countResult = await attendanceDB("attendance_correction_requests")
     .where("org_id", org_id)
     .modify(qb => {
-      if (user_type !== "admin") qb.where("user_id", user_id);
+      const lowerType = String(user_type || "").toLowerCase();
+      if (lowerType !== "admin" && lowerType !== "hr") qb.where("user_id", user_id);
       if (status) qb.where("status", status);
       if (date) qb.where("request_date", date);
       if (month) qb.whereRaw('MONTH(request_date) = ?', [month]);
@@ -699,6 +702,7 @@ export async function fetchCorrectionRequestById({ acr_id, org_id, user_id, role
       "acr.submitted_at",
       "u.user_id",
       "u.user_name",
+      "u.profile_image_url",
       "d.desg_name as designation"
     )
     .where("acr.acr_id", acr_id)
@@ -838,7 +842,6 @@ export async function reviewCorrectionRequest({
         updated_at: attendanceDB.fn.now(),
         time_in_address: 'Manual Correction',
         time_out_address: 'Manual Correction',
-        is_manual: true,
         altered_by: reviewer_id
       };
     });

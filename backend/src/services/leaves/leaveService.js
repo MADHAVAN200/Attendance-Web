@@ -3,9 +3,11 @@ import { attendanceDB } from '../../config/database.js';
 import * as S3Service from '../s3/s3Service.js';
 
 export async function getMyHistory({ user_id, org_id }) {
-    const leaves = await attendanceDB('leave_requests')
-        .where({ user_id, org_id })
-        .orderBy('applied_at', 'desc');
+    const leaves = await attendanceDB('leave_requests as lr')
+        .join('users as u', 'lr.user_id', 'u.user_id')
+        .select('lr.*', 'u.user_name', 'u.profile_image_url')
+        .where({ 'lr.user_id': user_id, 'lr.org_id': org_id })
+        .orderBy('lr.applied_at', 'desc');
 
     const leaveIds = leaves.map(l => l.lr_id);
     if (leaveIds.length > 0) {
@@ -134,7 +136,7 @@ export async function withdrawLeaveRequest({ id, user_id, org_id }) {
 export async function getPendingRequests({ org_id }) {
     const requests = await attendanceDB('leave_requests as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
-        .select('lr.*', 'u.user_name', 'u.email', 'u.phone_no')
+        .select('lr.*', 'u.user_name', 'u.email', 'u.phone_no', 'u.profile_image_url')
         .where('lr.org_id', org_id)
         .where('lr.status', 'Pending')
         .orderBy('lr.applied_at', 'asc');
@@ -165,7 +167,7 @@ export async function getPendingRequests({ org_id }) {
 export async function getAdminHistory({ org_id, user_id, status, start_date, end_date }) {
     let query = attendanceDB('leave_requests as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
-        .select('lr.*', 'u.user_name')
+        .select('lr.*', 'u.user_name', 'u.profile_image_url')
         .where('lr.org_id', org_id);
 
     if (user_id) query = query.where('lr.user_id', user_id);
