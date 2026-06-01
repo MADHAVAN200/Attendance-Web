@@ -7,6 +7,7 @@ import { initAttendanceProcessor } from './src/cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './src/cron/cleanupScheduler.js';
 import { initDARReportScheduler } from './src/cron/DARReportScheduler.js';
 import { initChatDatabase } from './src/services/collaboration/chatDatabaseInit.js';
+import { initReportsDatabase } from './src/services/reports/reportsDatabaseInit.js';
 import EventBus from './src/utils/EventBus.js';
 import './src/workers/reportWorker.js';
 
@@ -124,6 +125,9 @@ server.listen(activePort, '0.0.0.0', () => {
 
   // Auto-initialize Collaboration / Chat tables if needed
   initChatDatabase();
+  
+  // Auto-initialize Reports database table if needed
+  initReportsDatabase();
 
   if (!hasStartedSchedulers) {
     hasStartedSchedulers = true;

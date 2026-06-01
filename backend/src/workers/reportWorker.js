@@ -5,7 +5,7 @@ import { compileReportBuffer } from '../controllers/reports/reportsController.js
 import * as S3Service from '../services/s3/s3Service.js';
 import EventBus from '../utils/EventBus.js';
 
-const reportWorker = new Worker('ReportQueue', async (job) => {
+const reportWorker = new Worker('{ReportQueue}', async (job) => {
     const { reportId, org_id, user_id, targetUserId, month, date, type, format } = job.data;
     console.log(`👷 [Worker] Processing report job #${reportId} for Org ${org_id}...`);
 

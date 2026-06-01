@@ -145,49 +145,75 @@ const Attendance = () => {
             }
 
             setIsLoadingLoc(true);
-            navigator.geolocation.getCurrentPosition(
-                async (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-                        const data = await res.json();
-                        const addr = data.address;
-                        const simplifiedAddress = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.village || data.display_name?.split(',')[0];
-                        
-                        setLocation({
-                            lat: latitude,
-                            lng: longitude,
-                            address: simplifiedAddress || 'Unknown Location',
-                            error: null
-                        });
-                    } catch (err) {
-                        setLocation({ lat: latitude, lng: longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, error: null });
-                    } finally {
-                        setIsLoadingLoc(false);
-                    }
-                },
-                (err) => {
+
+            const onSuccess = async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
+                    const addr = data.address;
+                    const simplifiedAddress = addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.village || data.display_name?.split(',')[0];
+                    
+                    setLocation({
+                        lat: latitude,
+                        lng: longitude,
+                        address: simplifiedAddress || 'Unknown Location',
+                        error: null
+                    });
+                } catch (err) {
+                    setLocation({ lat: latitude, lng: longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, error: null });
+                } finally {
+                    setIsLoadingLoc(false);
+                }
+            };
+
+            const onError = (err) => {
+                console.warn("fetchLocation (highAccuracy=true) failed, trying fallback with low accuracy...", err);
+                if (err.code === 3 || err.code === 1) {
+                    navigator.geolocation.getCurrentPosition(
+                        onSuccess,
+                        (fallbackErr) => {
+                            setLocation(prev => ({ ...prev, error: fallbackErr.message, address: 'Location Access Denied' }));
+                            setIsLoadingLoc(false);
+                        },
+                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+                    );
+                } else {
                     setLocation(prev => ({ ...prev, error: err.message, address: 'Location Access Denied' }));
                     setIsLoadingLoc(false);
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                }
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                onSuccess,
+                onError,
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
             );
         };
 
         fetchLocation();
         
         let watchId;
-        if (navigator.geolocation) {
+        const startWatch = (highAccuracy = true) => {
+            if (!navigator.geolocation) return;
             watchId = navigator.geolocation.watchPosition(
                 async (pos) => {
                     const { latitude, longitude } = pos.coords;
                     // Only update address if moved significantly (approx 100m)
                     setLocation(prev => ({ ...prev, lat: latitude, lng: longitude }));
                 },
-                null,
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                (err) => {
+                    console.warn(`watchPosition (highAccuracy=${highAccuracy}) failed in Attendance.jsx:`, err);
+                    if (highAccuracy && (err.code === 3 || err.code === 1)) {
+                        if (watchId) navigator.geolocation.clearWatch(watchId);
+                        startWatch(false);
+                    }
+                },
+                { enableHighAccuracy: highAccuracy, timeout: 15000, maximumAge: 30000 }
             );
-        }
+        };
+
+        startWatch(true);
 
         return () => {
             clearInterval(timer);
@@ -565,7 +591,7 @@ const Attendance = () => {
             return;
         }
 
-        navigator.geolocation.getCurrentPosition(async (position) => {
+        const submitData = async (position) => {
             try {
                 const { latitude, longitude, accuracy } = position.coords;
                 // const MAX_ALLOWED_ACCURACY = 200; 
@@ -606,11 +632,31 @@ const Attendance = () => {
             } finally {
                 setIsSubmitting(false);
             }
-        }, (error) => {
-            console.error(error);
-            toast.error("Location error: " + error.message);
-            setIsSubmitting(false);
-        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        };
+
+        const handleGeoError = (error) => {
+            console.warn("High accuracy geolocation failed during punch-in/out, retrying with low accuracy...", error);
+            if (error.code === 3 || error.code === 1) {
+                navigator.geolocation.getCurrentPosition(
+                    submitData,
+                    (fallbackError) => {
+                        console.error("Fallback geolocation also failed:", fallbackError);
+                        toast.error("Location error: " + fallbackError.message);
+                        setIsSubmitting(false);
+                    },
+                    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+                );
+            } else {
+                toast.error("Location error: " + error.message);
+                setIsSubmitting(false);
+            }
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            submitData,
+            handleGeoError,
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        );
     };
 
     const handleDownloadReport = async () => {
