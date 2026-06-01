@@ -553,7 +553,7 @@ const GeoFencing = () => {
 
   return (
     <DashboardLayout title="Geo-Fencing" noPadding={true}>
-      <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden p-6 gap-6 bg-slate-50 dark:bg-dark-bg">
+      <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden p-3 gap-3 bg-slate-50 dark:bg-dark-bg">
 
         {/* Left Panel: Locations List as a Card */}
         <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm flex flex-col overflow-hidden">

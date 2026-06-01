@@ -174,7 +174,7 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
                 </header>
 
                 {/* Scrollable Content Area */}
-                <main className={`flex-1 flex flex-col ${noPadding ? '' : 'p-4 sm:p-6'} bg-slate-50/50 dark:bg-github-dark-bg transition-colors duration-300 mt-16`}>
+                <main className={`flex-1 flex flex-col ${noPadding ? '' : 'p-3'} bg-slate-50/50 dark:bg-github-dark-bg transition-colors duration-300 mt-16`}>
                     {children}
                 </main>
             </div>

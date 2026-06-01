@@ -11,7 +11,8 @@ import {
     XCircle,
     TrendingUp,
     ChevronRight,
-    Coffee
+    Coffee,
+    Activity
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
@@ -29,6 +30,7 @@ const EmployeeDashboard = () => {
     const [upcomingHolidays, setUpcomingHolidays] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [missedPunchWarning, setMissedPunchWarning] = useState(null);
 
     useEffect(() => {
         fetchDashboardData();
@@ -47,9 +49,38 @@ const EmployeeDashboard = () => {
             if (todayRes.success) setTodayStatus(todayRes.data);
             if (holidaysRes.success) setUpcomingHolidays(holidaysRes.data);
             if (activityRes.success) setRecentActivity(activityRes.data);
+
+            // Fetch recent records to detect missed punches
+            const recentRes = await attendanceService.getMyRecords();
+            if (recentRes && recentRes.data && recentRes.data.length > 0) {
+                const today = new Date();
+                const todayDateStr = today.toISOString().split('T')[0];
+                
+                const todayMidnight = new Date(today);
+                todayMidnight.setHours(0, 0, 0, 0);
+
+                const missedDates = [];
+
+                for (const session of recentRes.data) {
+                    if (!session.time_out) {
+                        const sessionDate = new Date(session.time_in);
+                        const sessionDateStr = sessionDate.toISOString().split('T')[0];
+
+                        if (sessionDateStr < todayDateStr) {
+                            const diffTime = todayMidnight - new Date(sessionDate).setHours(0, 0, 0, 0);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                            const isNotProcessed = !['ABSENT', 'REJECTED'].includes(session.status);
+                            if (isNotProcessed && diffDays <= 7) {
+                                missedDates.push(sessionDateStr);
+                            }
+                        }
+                    }
+                }
+                setMissedPunchWarning(missedDates.length > 0 ? { dates: [...new Set(missedDates)] } : null);
+            }
         } catch (error) {
             console.error("Dashboard Error:", error);
-            // toast.error("Failed to load dashboard data");
         } finally {
             setLoading(false);
         }
@@ -63,7 +94,7 @@ const EmployeeDashboard = () => {
     };
 
     return (
-        <MobileDashboardLayout title="Employee Dashboard" hideHeader={true}>
+        <MobileDashboardLayout title="Employee Dashboard" hideHeader={false}>
             <div className="space-y-6">
                 {/* 1. Welcome Section */}
                 <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
@@ -108,6 +139,34 @@ const EmployeeDashboard = () => {
                         </button>
                     </div>
                 </div>
+
+                {/* Missed Time Out Banner */}
+                {missedPunchWarning && (
+                    <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 rounded-2xl flex flex-col gap-3 justify-between animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2.5 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-500 rounded-xl relative mt-0.5 shrink-0">
+                                <AlertCircle size={20} />
+                                {missedPunchWarning.dates.length > 1 && (
+                                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                                        {missedPunchWarning.dates.length}
+                                    </span>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-amber-800 dark:text-amber-500">Missed Time Out</p>
+                                <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-1 leading-relaxed font-medium">
+                                    You forgot to time out on {missedPunchWarning.dates.join(', ')}. Please submit a correction request or it will be marked absent.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => navigate('/attendance?tab=my_attendance&subTab=correction')}
+                            className="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white text-xs font-bold rounded-xl transition-all shadow-md text-center"
+                        >
+                            Fix Now
+                        </button>
+                    </div>
+                )}
 
                 {/* 2. Today's Status Card */}
                 <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">

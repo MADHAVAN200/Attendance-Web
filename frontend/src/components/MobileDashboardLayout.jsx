@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Bell, Moon, Sun, ArrowLeft } from 'lucide-react';
+import { Menu, Bell, Moon, Sun, ArrowLeft, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MobileSidebar from './MobileSidebar';
 import { useAuth } from '../context/AuthContext';
@@ -36,8 +36,8 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
         setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
     };
 
-    const avatarUrl = user?.avatar 
-        ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/uploads/avatars/${user.avatar}?t=${avatarTimestamp}`
+    const avatarUrl = user?.profile_image_url 
+        ? `${user.profile_image_url}?t=${avatarTimestamp}`
         : null;
 
     return (
@@ -72,6 +72,13 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                         >
                             <Moon size={18} fill="currentColor" />
                         </button>
+                        <button
+                            onClick={() => navigate('/collaboration')}
+                            className="text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors flex items-center"
+                            title="Chat"
+                        >
+                            <MessageSquare size={18} />
+                        </button>
                         <div className="relative">
                             <button
                                 onClick={() => navigate('/notifications')}
@@ -93,7 +100,7 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                                 <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full bg-indigo-500 flex items-center justify-center text-white text-sm font-bold uppercase">
-                                    {user?.name?.charAt(0) || 'U'}
+                                    {user?.user_name?.charAt(0) || 'U'}
                                 </div>
                             )}
                         </button>

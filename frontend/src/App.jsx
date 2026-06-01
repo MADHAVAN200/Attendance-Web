@@ -71,6 +71,7 @@ import OrganizationListMobile from "./pages/organizations/OrganizationList-mv";
 import SecurityAlertsMobile from "./pages/super-admin/SecurityAlerts-mv";
 import UserFeedbackMobile from "./pages/super-admin/UserFeedback-mv";
 import SystemLogsMobile from "./pages/super-admin/SystemLogs-mv";
+import MobileChatPage from "./pages/collaboration/ChatPage-mv";
 
 
 import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
@@ -293,7 +294,7 @@ function App() {
               <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
               <Route path="/daily-activity" element={<ResponsiveRoute DesktopComponent={DailyActivity} MobileComponent={DailyActivityMobile} />} />
               <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
-              <Route path="/collaboration" element={<ChatPage />} />
+              <Route path="/collaboration" element={<ResponsiveRoute DesktopComponent={ChatPage} MobileComponent={MobileChatPage} />} />
 
               {/* Mobile-Only Pages fallback */}
               <Route path="/notifications" element={<MobileNotifications />} />

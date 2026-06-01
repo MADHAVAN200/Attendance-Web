@@ -118,16 +118,16 @@ const HolidayCalendarView = ({ holidays, leaves = [], selectedLeave = null, onDe
             </div>
 
             {/* Weekday Labels */}
-            <div className="grid grid-cols-7 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/30">
+            <div className="grid grid-cols-7 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/30 px-2">
                 {daysOfWeek.map(day => (
-                    <div key={day} className="py-4 text-center text-[10px] font-black text-slate-500 dark:text-github-dark-muted uppercase tracking-[0.2em] leading-none">
+                    <div key={day} className="py-4 text-center text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-wider leading-none">
                         {day}
                     </div>
                 ))}
             </div>
 
             {/* Day Grid */}
-            <div className="grid grid-cols-7 flex-1">
+            <div className="grid grid-cols-7 p-2 gap-y-1 bg-white dark:bg-dark-card">
                 {days.map((dayObj, index) => {
                     const isCurrentMonth = dayObj.type === 'current';
                     const dayHolidays = getHolidaysForDate(dayObj.day, dayObj.type);
@@ -138,50 +138,53 @@ const HolidayCalendarView = ({ holidays, leaves = [], selectedLeave = null, onDe
                         year === new Date().getFullYear();
 
                     const leaveState = getSelectedLeaveState(dayObj.day, dayObj.type);
-                    const highlightClass = leaveState
-                        ? `bg-indigo-50/50 dark:bg-indigo-900/10 border-y border-indigo-150 dark:border-indigo-950/50 
-                           ${leaveState.isStart ? 'rounded-l-xl border-l border-indigo-200 dark:border-indigo-900/50 z-10' : ''} 
-                           ${leaveState.isEnd ? 'rounded-r-xl border-r border-indigo-200 dark:border-indigo-900/50 z-10' : ''}`
-                        : '';
 
                     return (
                         <div
                             key={index}
                             className={`
-                                aspect-square p-2 border-r border-b border-slate-100 dark:border-github-dark-border relative transition-all group
-                                ${!isCurrentMonth ? 'bg-slate-50/20 dark:bg-github-dark-subtle/10' : 'bg-white dark:bg-dark-card hover:bg-slate-50/50 dark:hover:bg-slate-800/40'}
-                                ${index % 7 === 6 ? 'border-r-0' : ''}
-                                ${highlightClass}
+                                aspect-square relative flex flex-col items-center justify-center transition-all group cursor-pointer rounded-xl
+                                ${!isCurrentMonth ? 'opacity-30' : ''}
+                                ${!leaveState ? 'hover:bg-slate-50 dark:hover:bg-slate-800/50' : ''}
                             `}
                         >
-                            <div className="flex justify-start mb-1">
-                                <span className={`
-                                    w-8 h-8 flex items-center justify-center rounded-full text-xs font-black transition-all
-                                    ${isToday 
-                                        ? 'bg-blue-600 text-white shadow-xl scale-110 z-10' 
-                                        : leaveState && (leaveState.isStart || leaveState.isEnd)
-                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 scale-105 z-10'
-                                            : leaveState && leaveState.isInBetween
-                                                ? 'text-indigo-600 dark:text-indigo-400 font-extrabold'
-                                                : isCurrentMonth ? 'text-slate-700 dark:text-github-dark-text' : 'text-slate-300 dark:text-slate-600'}
-                                `}>
-                                    {dayObj.day}
-                                </span>
-                            </div>
+                            {/* Range Track Background */}
+                            {leaveState && (
+                                <div className={`absolute top-1/2 -translate-y-1/2 h-8 bg-indigo-100/80 dark:bg-indigo-600/30 z-0
+                                    ${leaveState.isStart && leaveState.isEnd ? 'rounded-full left-1 right-1' : ''}
+                                    ${leaveState.isStart && !leaveState.isEnd ? 'rounded-l-full left-1 right-0' : ''}
+                                    ${leaveState.isEnd && !leaveState.isStart ? 'rounded-r-full left-0 right-1' : ''}
+                                    ${leaveState.isInBetween ? 'left-0 right-0' : ''}
+                                `} />
+                            )}
+
+                            {/* Date Number Circle */}
+                            <span className={`
+                                w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold transition-all relative z-10
+                                ${isToday 
+                                    ? 'bg-indigo-600 text-white font-black shadow-lg shadow-indigo-500/30 scale-105' 
+                                    : leaveState && (leaveState.isStart || leaveState.isEnd)
+                                        ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-500/20 scale-105'
+                                        : leaveState && leaveState.isInBetween
+                                            ? 'text-indigo-600 dark:text-indigo-400 font-extrabold'
+                                            : 'text-slate-700 dark:text-github-dark-text'}
+                            `}>
+                                {dayObj.day}
+                            </span>
 
                             {/* Indicators: Holidays & Leaves */}
-                            <div className="flex flex-wrap gap-1 px-1">
+                            <div className="absolute bottom-1.5 flex gap-0.5 justify-center z-20">
                                 {dayHolidays.map(holiday => (
-                                    <div
+                                    <span
                                         key={holiday.id}
-                                        className={`w-1.5 h-1.5 rounded-full ${holiday.type === 'Public' ? 'bg-purple-500 shadow-purple-500/30' : 'bg-amber-500 shadow-amber-400/30'} shadow-sm`}
+                                        className={`w-1 h-1 rounded-full ${holiday.type === 'Public' ? 'bg-purple-500 shadow-purple-500/30' : 'bg-amber-500 shadow-amber-400/30'}`}
                                         title={`Holiday: ${holiday.name}`}
                                     />
                                 ))}
                                 {dayLeaves.map(leave => (
-                                    <div
+                                    <span
                                         key={leave.lr_id}
-                                        className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-indigo-400' : leave.status === 'rejected' ? 'bg-red-400' : 'bg-amber-300'} shadow-sm`}
+                                        className={`w-1 h-1 rounded-full ${leave.status === 'approved' ? 'bg-indigo-400' : leave.status === 'rejected' ? 'bg-red-400' : 'bg-amber-300'}`}
                                         title={`Leave: ${leave.user_name} (${leave.status})`}
                                     />
                                 ))}

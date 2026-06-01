@@ -273,7 +273,7 @@ const ShiftManagement = () => {
 
     return (
         <DashboardLayout title="Shift Management" noPadding={true}>
-            <div className="flex h-[calc(100vh-64px)] p-6 gap-6 animate-in fade-in duration-300">
+            <div className="flex h-[calc(100vh-64px)] p-3 gap-3 animate-in fade-in duration-300">
 
                 {/* LEFT: Shift List */}
                 <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
