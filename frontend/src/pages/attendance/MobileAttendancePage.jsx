@@ -173,7 +173,8 @@ const MobileAttendancePage = () => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         
         let watchId;
-        if (navigator.geolocation) {
+        const startWatch = (highAccuracy = true) => {
+            if (!navigator.geolocation) return;
             setIsLoadingLoc(true);
             watchId = navigator.geolocation.watchPosition(
                 async (pos) => {
@@ -194,12 +195,20 @@ const MobileAttendancePage = () => {
                     }
                 },
                 (err) => {
-                    setLocation(prev => ({ ...prev, error: err.message, address: 'Location Access Denied' }));
-                    setIsLoadingLoc(false);
+                    console.warn(`watchPosition (highAccuracy=${highAccuracy}) failed in MobileAttendancePage.jsx:`, err);
+                    if (highAccuracy && (err.code === 3 || err.code === 1)) {
+                        if (watchId) navigator.geolocation.clearWatch(watchId);
+                        startWatch(false);
+                    } else {
+                        setLocation(prev => ({ ...prev, error: err.message, address: 'Location Access Denied' }));
+                        setIsLoadingLoc(false);
+                    }
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                { enableHighAccuracy: highAccuracy, timeout: 15000, maximumAge: 30000 }
             );
-        }
+        };
+
+        startWatch(true);
 
         fetchDailyRecords();
         fetchMonthlyRecords();
