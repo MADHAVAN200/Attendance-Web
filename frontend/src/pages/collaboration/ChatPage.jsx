@@ -133,6 +133,10 @@ const ChatPage = () => {
     // Pinned rooms state & handlers
     const [pinnedRoomIds, setPinnedRoomIds] = useState([]);
 
+    // Keep a ref to the currently selected room so socket handlers always have
+    // the latest value without needing to re-register listeners on every change.
+    const selectedRoomRef = useRef(null);
+
     useEffect(() => {
         if (currentUserId) {
             try {
@@ -158,7 +162,15 @@ const ChatPage = () => {
 
     // Active states
     const [rooms, setRooms] = useState([]);
-    const [selectedRoom, setSelectedRoom] = useState(null);
+    const [selectedRoom, _setSelectedRoom] = useState(null);
+    // Wrapper that keeps the ref in sync so socket handlers are always fresh
+    const setSelectedRoom = (roomOrUpdater) => {
+        _setSelectedRoom(prev => {
+            const next = typeof roomOrUpdater === 'function' ? roomOrUpdater(prev) : roomOrUpdater;
+            selectedRoomRef.current = next;
+            return next;
+        });
+    };
     const [messages, setMessages] = useState([]);
     const [newMessageText, setNewMessageText] = useState('');
     const [coworkers, setCoworkers] = useState([]);
@@ -314,20 +326,24 @@ const ChatPage = () => {
         }
     }, [rooms, loadingRooms, selectedRoom, hasAttemptedAutoSelect]);
 
-    // Set up Socket listeners
+    // Set up Socket listeners — registered ONCE per socket instance.
+    // We read the current room via selectedRoomRef so we never need to
+    // re-subscribe just because the active room changed (which was causing
+    // a brief listener gap and dropped messages on every room switch).
     useEffect(() => {
         if (!socket) return;
 
         const handleIncomingMessage = (message) => {
-            // If the message belongs to the currently active room, append it and mark as read
-            if (selectedRoom && Number(selectedRoom.room_id) === Number(message.room_id)) {
+            const currentRoom = selectedRoomRef.current;
+            // If the message belongs to the currently active room, append it
+            if (currentRoom && Number(currentRoom.room_id) === Number(message.room_id)) {
                 setMessages(prev => {
                     // Reconcile and replace optimistic message placeholders
-                    const matchIndex = prev.findIndex(m => 
-                        (m.message_id === message.message_id) || 
-                        (m.status === 'sending' && 
-                         Number(m.sender_id) === Number(message.sender_id) && 
-                         m.message_text === message.message_text && 
+                    const matchIndex = prev.findIndex(m =>
+                        (m.message_id === message.message_id) ||
+                        (m.status === 'sending' &&
+                         Number(m.sender_id) === Number(message.sender_id) &&
+                         m.message_text === message.message_text &&
                          (!m.attachment || !message.attachment || m.attachment.name === message.attachment.name))
                     );
 
@@ -342,8 +358,8 @@ const ChatPage = () => {
                 });
                 markRoomAsRead(message.room_id);
             }
-            
-            // Refresh room previews to show latest message and update unread count
+
+            // Always refresh room list so sidebar shows latest preview + unread badge
             fetchRooms(false);
         };
 
@@ -374,7 +390,8 @@ const ChatPage = () => {
         socket.on('user_stop_typing', handleUserStopTyping);
 
         const handleGroupUpdated = ({ room_id, member_ids, members }) => {
-            if (selectedRoom && Number(selectedRoom.room_id) === Number(room_id)) {
+            const currentRoom = selectedRoomRef.current;
+            if (currentRoom && Number(currentRoom.room_id) === Number(room_id)) {
                 if (!member_ids.map(Number).includes(Number(currentUserId))) {
                     toast.info("You have been removed from this group.");
                     setSelectedRoom(prev => ({
@@ -395,12 +412,13 @@ const ChatPage = () => {
             fetchRooms(false);
         };
 
-        const handleRoomCreated = (room) => {
+        const handleRoomCreated = () => {
             fetchRooms(false);
         };
 
         const handleRoomDeleted = ({ room_id }) => {
-            if (selectedRoom && Number(selectedRoom.room_id) === Number(room_id)) {
+            const currentRoom = selectedRoomRef.current;
+            if (currentRoom && Number(currentRoom.room_id) === Number(room_id)) {
                 toast.info("This chat conversation has been deleted.");
                 setSelectedRoom(null);
                 setShowMobileChatWindow(false);
@@ -412,20 +430,23 @@ const ChatPage = () => {
         socket.on('room_created', handleRoomCreated);
         socket.on('room_deleted', handleRoomDeleted);
 
+        // On (re)connect, re-join whichever room is currently open so messages
+        // aren't missed while the socket was temporarily disconnected.
         const handleConnect = () => {
-            if (selectedRoom) {
-                console.log(`🔌 Socket (re)connected. Re-joining room: ${selectedRoom.room_id}`);
-                socket.emit('join_room', selectedRoom.room_id);
+            const currentRoom = selectedRoomRef.current;
+            if (currentRoom) {
+                console.log(`🔌 Socket (re)connected. Re-joining room: ${currentRoom.room_id}`);
+                socket.emit('join_room', currentRoom.room_id);
             }
+            // Refresh rooms to catch any messages that arrived while offline
+            fetchRooms(false);
         };
 
         socket.on('connect', handleConnect);
 
-        // If a room is selected and socket is already connected, join it immediately
-        if (selectedRoom) {
-            if (socket.connected) {
-                socket.emit('join_room', selectedRoom.room_id);
-            }
+        // If already connected when this effect runs, join the room immediately
+        if (socket.connected && selectedRoomRef.current) {
+            socket.emit('join_room', selectedRoomRef.current.room_id);
         }
 
         return () => {
@@ -436,16 +457,28 @@ const ChatPage = () => {
             socket.off('room_created', handleRoomCreated);
             socket.off('room_deleted', handleRoomDeleted);
             socket.off('connect', handleConnect);
-            if (selectedRoom) {
-                socket.emit('leave_room', selectedRoom.room_id);
+            // Leave the current room socket channel on unmount
+            if (selectedRoomRef.current) {
+                socket.emit('leave_room', selectedRoomRef.current.room_id);
             }
         };
-    }, [socket, selectedRoom, currentUserId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [socket, currentUserId]); // ← selectedRoom intentionally excluded; we use selectedRoomRef instead
 
     // Scroll to bottom of message thread
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Whenever the active room changes, tell the socket server to subscribe us
+    // to that room's channel. This is separate from the listener setup effect so
+    // join_room is emitted even after listeners have already been registered.
+    useEffect(() => {
+        if (!socket || !selectedRoom) return;
+        if (socket.connected) {
+            socket.emit('join_room', selectedRoom.room_id);
+        }
+    }, [socket, selectedRoom?.room_id]);
 
     const fetchRooms = async (showLoading = true) => {
         if (showLoading) setLoadingRooms(true);
@@ -461,19 +494,35 @@ const ChatPage = () => {
                         name.includes('ai')
                     );
                 });
-                
+
+                // Use the ref so we always have the latest selected room even
+                // if this async function was started before a room switch.
+                const currentRoom = selectedRoomRef.current;
+
                 const mapped = filtered.map(room => {
-                    if (selectedRoom && Number(room.room_id) === Number(selectedRoom.room_id)) {
+                    if (currentRoom && Number(room.room_id) === Number(currentRoom.room_id)) {
                         return { ...room, unread_count: 0 };
                     }
                     return room;
                 });
                 setRooms(mapped);
-                
-                // Keep selected room details updated
-                if (selectedRoom) {
-                    const updatedSelected = mapped.find(r => r.room_id === selectedRoom.room_id);
-                    if (updatedSelected) setSelectedRoom(updatedSelected);
+
+                // Keep selected room sidebar metadata in sync (members list, etc.)
+                // but do NOT overwrite the whole selectedRoom while user is actively
+                // chatting — that could cause a re-render flicker.
+                if (currentRoom) {
+                    const updatedSelected = mapped.find(r => r.room_id === currentRoom.room_id);
+                    if (updatedSelected) {
+                        // Preserve only metadata fields; never clobber message state
+                        setSelectedRoom(prev => prev ? {
+                            ...prev,
+                            members: updatedSelected.members ?? prev.members,
+                            member_ids: updatedSelected.member_ids ?? prev.member_ids,
+                            is_removed: updatedSelected.is_removed ?? prev.is_removed,
+                            room_name: updatedSelected.room_name ?? prev.room_name,
+                            avatar_url: updatedSelected.avatar_url ?? prev.avatar_url,
+                        } : prev);
+                    }
                 }
             }
         } catch (err) {
@@ -526,8 +575,9 @@ const ChatPage = () => {
     };
 
     const handleRoomSelect = (room) => {
-        if (socket && selectedRoom) {
-            socket.emit('leave_room', selectedRoom.room_id);
+        // Leave the previous room's socket channel
+        if (socket && selectedRoomRef.current) {
+            socket.emit('leave_room', selectedRoomRef.current.room_id);
         }
         setSelectedRoom(room);
         if (room && room.room_id) {

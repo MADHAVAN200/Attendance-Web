@@ -41,6 +41,10 @@ jobs:
         env:
           VITE_RECAPTCHA_SITE_KEY: "6Lf49jksAAAAAG9BCGdoBfzCSJZF72EEEAn-ue0b"
           VITE_ENABLE_CAPTCHA: "true"
+          # VITE_BACKEND_URL points to the backend API/socket origin.
+          # The frontend socket will connect to this URL directly,
+          # bypassing the Nginx static file server to avoid WebSocket proxy issues.
+          VITE_BACKEND_URL: "https://attendance.mano.co.in"
         run: |
           cd frontend
           npm run build
@@ -92,6 +96,22 @@ jobs:
       - name: Deploy Frontend to Nginx Target
         run: |
           echo "📁 Copying pre-built assets to Nginx target..."
-          # Copy the pre-built dist folder downloaded inside the runner's workspace to Nginx
           sudo cp -r $GITHUB_WORKSPACE/frontend/dist/* /var/www/attendance/
+
+          # Deploy the Nginx config with proper WebSocket upgrade headers.
+          # Without proxy_set_header Upgrade / Connection "upgrade", Socket.IO
+          # silently falls back to HTTP long-polling and messages only appear
+          # after a full page reload (the bug we are fixing).
+          echo "🔧 Deploying Nginx configuration with WebSocket proxy support..."
+          sudo cp $GITHUB_WORKSPACE/scripts/nginx.conf /etc/nginx/sites-available/attendance
+          sudo ln -sf /etc/nginx/sites-available/attendance /etc/nginx/sites-enabled/attendance
+
+          # Validate and reload Nginx
+          if sudo nginx -t; then
+            sudo systemctl reload nginx
+            echo "✅ Nginx reloaded with WebSocket-enabled config."
+          else
+            echo "❌ Nginx config test failed. Keeping the previous config."
+            exit 1
+          fi
           echo "🎉 Deployment successfully completed!"

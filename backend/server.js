@@ -49,6 +49,17 @@ const io = new SocketIO(server, {
     },
     credentials: true,
   },
+  // Allow both WebSocket and HTTP long-polling so the client can fall back
+  // gracefully if the WebSocket upgrade is blocked by a proxy layer.
+  transports: ['websocket', 'polling'],
+  // Ping settings: detect dead connections within 30 s and drop them.
+  // Clients that are still alive will respond to the ping and stay connected.
+  pingInterval: 10000,   // How often to send a ping (ms)
+  pingTimeout:  20000,   // How long to wait for a pong before dropping (ms)
+  // Allow Socket.IO v2 clients to connect (backwards-compat)
+  allowEIO3: true,
+  // Maximum HTTP buffer size for a single message
+  maxHttpBufferSize: 1e6,
 });
 
 app.set('io', io);
