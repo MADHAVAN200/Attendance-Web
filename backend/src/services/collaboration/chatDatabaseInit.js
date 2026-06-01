@@ -12,16 +12,24 @@ export const initChatDatabase = async () => {
         const connName = adminDB ? 'adminDB' : 'attendanceDB';
 
         // Drop old tables that are no longer needed
-        await db.schema.dropTableIfExists('chat_room_members');
-        await db.schema.dropTableIfExists('chat_messages');
+        try {
+            await db.schema.dropTableIfExists('chat_room_members');
+            await db.schema.dropTableIfExists('chat_messages');
+        } catch (dropErr) {
+            // Ignore silently if production DB user lacks drop privileges
+        }
 
         const hasRooms = await db.schema.hasTable('chat_rooms');
         if (hasRooms) {
             // Drop legacy table if it doesn't have the optimized columns
             const hasMessagesCol = await db.schema.hasColumn('chat_rooms', 'messages');
             if (!hasMessagesCol) {
-                await db.schema.dropTable('chat_rooms');
-                console.log('Old chat_rooms table dropped for single-row optimization.');
+                try {
+                    await db.schema.dropTable('chat_rooms');
+                    console.log('Old chat_rooms table dropped for single-row optimization.');
+                } catch (dropErr) {
+                    console.warn('⚠️ Unable to drop legacy chat_rooms table due to lack of DROP permission.');
+                }
             }
         }
 

@@ -38,6 +38,9 @@ jobs:
           npm install --no-audit --no-fund
 
       - name: Build Frontend
+        env:
+          VITE_RECAPTCHA_SITE_KEY: "6Lf49jksAAAAAG9BCGdoBfzCSJZF72EEEAn-ue0b"
+          VITE_ENABLE_CAPTCHA: "true"
         run: |
           cd frontend
           npm run build
@@ -64,10 +67,17 @@ jobs:
           name: frontend-build
           path: frontend/dist
 
+      - name: Sync Production Codebase
+        run: |
+          echo "📥 Updating production repository codebase..."
+          cd /home/ubuntu/MANO-Attendance || exit
+          git fetch origin main
+          git reset --hard origin/main
+
       - name: Deploy Backend & Restart PM2
         run: |
-          echo "⚙ Setting up Backend..."
-          cd backend
+          echo "⚙ Setting up Backend in production directory..."
+          cd /home/ubuntu/MANO-Attendance/backend
           npm install --production --no-audit --no-fund
           
           # Restart backend process using PM2
@@ -82,5 +92,6 @@ jobs:
       - name: Deploy Frontend to Nginx Target
         run: |
           echo "📁 Copying pre-built assets to Nginx target..."
-          sudo cp -r frontend/dist/* /var/www/attendance/
+          # Copy the pre-built dist folder downloaded inside the runner's workspace to Nginx
+          sudo cp -r $GITHUB_WORKSPACE/frontend/dist/* /var/www/attendance/
           echo "🎉 Deployment successfully completed!"

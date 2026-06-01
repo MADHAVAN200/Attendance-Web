@@ -7,57 +7,9 @@ import { generateNarrativeWithGroq } from '../auth/DARLLMService.js';
 const router = express.Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TABLE INITIALIZATION
+// TABLE INITIALIZATION REMOVED
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function ensureReportTables() {
-    const hasSchedules = await attendanceDB.schema.hasTable('dar_report_schedules');
-    if (!hasSchedules) {
-        await attendanceDB.schema.createTable('dar_report_schedules', (t) => {
-            t.increments('schedule_id').primary();
-            t.integer('org_id').notNullable().index();
-            t.enum('frequency', ['daily', 'weekly', 'monthly']).notNullable();
-            t.string('email_to', 500).nullable();
-            t.time('send_time').defaultTo('07:00:00');
-            t.tinyint('day_of_week').nullable();   // 0=Sun … 6=Sat (weekly trigger day)
-            t.tinyint('day_of_month').nullable();  // 1..28 (monthly trigger day)
-            t.boolean('is_active').defaultTo(false);
-            t.datetime('last_run_at').nullable();
-            t.timestamp('created_at').defaultTo(attendanceDB.fn.now());
-            t.unique(['org_id', 'frequency']);
-        });
-        console.log('✅ Created dar_report_schedules table');
-    }
-
-    const hasHistory = await attendanceDB.schema.hasTable('dar_report_history');
-    if (!hasHistory) {
-        await attendanceDB.schema.createTable('dar_report_history', (t) => {
-            t.increments('report_id').primary();
-            t.integer('org_id').notNullable().index();
-            t.integer('user_id').nullable();  // null = all users
-            t.enum('period_type', ['daily', 'weekly', 'monthly', 'custom']).notNullable();
-            t.date('date_from').notNullable();
-            t.date('date_to').notNullable();
-            t.enum('trigger_type', ['manual', 'scheduled']).defaultTo('manual');
-            t.enum('status', ['done', 'failed']).defaultTo('done');
-            t.string('generated_by', 120).nullable();
-            t.timestamp('created_at').defaultTo(attendanceDB.fn.now());
-        });
-        console.log('✅ Created dar_report_history table');
-    }
-}
-
-const shouldAutoInitDarReportTables = String(process.env.DAR_REPORT_SCHEMA_AUTO_CREATE || 'false').toLowerCase() === 'true';
-
-if (shouldAutoInitDarReportTables) {
-    ensureReportTables().catch((err) => {
-        if (err?.code === 'ER_TABLEACCESS_DENIED_ERROR' || err?.code === 'ER_DBACCESS_DENIED_ERROR') {
-            console.warn('⚠ DAR report table auto-init skipped: database user lacks CREATE permission.');
-            return;
-        }
-        console.error('❌ DARReportAPI table init failed:', err);
-    });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITIES
