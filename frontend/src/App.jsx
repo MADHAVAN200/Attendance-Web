@@ -42,7 +42,7 @@ import ChatPage from "./pages/collaboration/ChatPage";
 import OrganizationList from "./pages/organizations/OrganizationList"
 import SecurityAlerts from "./pages/super-admin/SecurityAlerts"
 import UserFeedback from "./pages/super-admin/UserFeedback"
-import SystemLogs from "./pages/super-admin/SystemLogs"
+import PM2LogsConsole from "./pages/super-admin/PM2LogsConsole"
 
 // Mobile View Imports
 
@@ -70,7 +70,6 @@ import SuperAdminDashboardMobile from "./pages/dashboard/SuperAdminDashboard-mv"
 import OrganizationListMobile from "./pages/organizations/OrganizationList-mv";
 import SecurityAlertsMobile from "./pages/super-admin/SecurityAlerts-mv";
 import UserFeedbackMobile from "./pages/super-admin/UserFeedback-mv";
-import SystemLogsMobile from "./pages/super-admin/SystemLogs-mv";
 import MobileChatPage from "./pages/collaboration/ChatPage-mv";
 
 
@@ -325,7 +324,7 @@ function App() {
               <Route path="/organizations" element={<ResponsiveRoute DesktopComponent={OrganizationList} MobileComponent={OrganizationListMobile} />} />
               <Route path="/super-admin/alerts" element={<ResponsiveRoute DesktopComponent={SecurityAlerts} MobileComponent={SecurityAlertsMobile} />} />
               <Route path="/super-admin/feedback" element={<ResponsiveRoute DesktopComponent={UserFeedback} MobileComponent={UserFeedbackMobile} />} />
-              <Route path="/super-admin/logs" element={<ResponsiveRoute DesktopComponent={SystemLogs} MobileComponent={SystemLogsMobile} />} />
+              <Route path="/super-admin/logs" element={<ResponsiveRoute DesktopComponent={PM2LogsConsole} MobileComponent={PM2LogsConsole} />} />
             </Route>
           </Route>
 
