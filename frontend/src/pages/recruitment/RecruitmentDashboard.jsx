@@ -160,6 +160,7 @@ const RecruitmentDashboard = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [editingJobId, setEditingJobId] = useState(null);
 
   // Form Fields for new job opening
   const [newJob, setNewJob] = useState({
@@ -197,22 +198,14 @@ const RecruitmentDashboard = () => {
   const [editingFieldId, setEditingFieldId] = useState(null);
 
   // ─── PIPELINE CUSTOMIZATION STATE ───────────────────────────────────────────
-  const [pipelineStages, setPipelineStages] = useState(() => {
-    const stored = localStorage.getItem('mano_pipeline_stages');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return DEFAULT_PIPELINE_STAGES;
-  });
+  const [pipelineStages, setPipelineStages] = useState([]);
   const [isCustomizingPipeline, setIsCustomizingPipeline] = useState(false);
   const [editingStages, setEditingStages] = useState([]);
   const [newStageName, setNewStageName] = useState('');
   const [newStageColor, setNewStageColor] = useState('blue');
+
+  const [currentTemplateId, setCurrentTemplateId] = useState(null);
+  const [currentTemplateSource, setCurrentTemplateSource] = useState('scratch');
 
   // ─── CREATE OPENING WIZARD STATE ─────────────────────────────────────────────
   const [createStep, setCreateStep] = useState('details'); // 'details' | 'formbuilder'
@@ -222,61 +215,117 @@ const RecruitmentDashboard = () => {
   const [draggedCandidateId, setDraggedCandidateId] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
 
-  // Load from localStorage on mount
+  const fetchData = async () => {
+    try {
+      const openingsRes = await api.get('/recruitment/openings');
+      setOpenings(openingsRes.data);
+      
+      const candidatesRes = await api.get('/recruitment/candidates');
+      setCandidates(candidatesRes.data);
+
+      const stagesRes = await api.get('/recruitment/pipeline-stages');
+      let stages = stagesRes.data;
+      if (!stages || stages.length === 0) {
+        await api.post('/recruitment/pipeline-stages', { stages: DEFAULT_PIPELINE_STAGES });
+        stages = DEFAULT_PIPELINE_STAGES;
+      }
+      setPipelineStages(stages);
+
+      const templatesRes = await api.get('/recruitment/templates');
+      setSavedFormTemplates(templatesRes.data);
+
+      if (openingsRes.data.length > 0) {
+        setSelectedJob(prev => {
+          if (prev) {
+            const found = openingsRes.data.find(o => o.id === prev.id);
+            if (found) return found;
+          }
+          return openingsRes.data[0];
+        });
+      } else {
+        setSelectedJob(null);
+      }
+    } catch (err) {
+      console.error('Error fetching recruitment data:', err);
+      toast.error('Failed to load recruitment data from server.');
+    }
+  };
+
+  // Load from database on mount
   useEffect(() => {
-    const storedOpenings = localStorage.getItem('mano_recruitment_openings');
-    const storedCandidates = localStorage.getItem('mano_recruitment_candidates');
-
-    let parsedOpenings = BASELINE_OPENINGS;
-    let parsedCandidates = BASELINE_CANDIDATES;
-
-    if (storedOpenings) {
-      try { parsedOpenings = JSON.parse(storedOpenings); } catch (e) { console.error(e); }
-    } else {
-      localStorage.setItem('mano_recruitment_openings', JSON.stringify(BASELINE_OPENINGS));
-    }
-
-    if (storedCandidates) {
-      try { parsedCandidates = JSON.parse(storedCandidates); } catch (e) { console.error(e); }
-    } else {
-      localStorage.setItem('mano_recruitment_candidates', JSON.stringify(BASELINE_CANDIDATES));
-    }
-
-    setOpenings(parsedOpenings);
-    setCandidates(parsedCandidates);
-    if (parsedOpenings.length > 0) {
-      setSelectedJob(parsedOpenings[0]);
-    }
-
-    // Load saved form templates
-    const storedFormTemplates = localStorage.getItem('mano_form_templates');
-    if (storedFormTemplates) {
-      try { setSavedFormTemplates(JSON.parse(storedFormTemplates)); } catch (e) { console.error(e); }
-    }
+    fetchData();
   }, []);
 
-  // Sync back to localStorage helper
-  const saveOpenings = (updatedList) => {
-    setOpenings(updatedList);
-    localStorage.setItem('mano_recruitment_openings', JSON.stringify(updatedList));
-  };
-
-  const saveCandidates = (updatedList) => {
-    setCandidates(updatedList);
-    localStorage.setItem('mano_recruitment_candidates', JSON.stringify(updatedList));
-  };
-
   // Toggle opening status
-  const toggleJobStatus = (id) => {
-    const updated = openings.map(job => {
-      if (job.id === id) {
-        const nextStatus = job.status === 'active' ? 'inactive' : 'active';
-        toast.info(`Job opening set to ${nextStatus}.`);
-        return { ...job, status: nextStatus };
+  const toggleJobStatus = async (id) => {
+    const job = openings.find(j => j.id === id);
+    if (!job) return;
+    try {
+      const nextStatus = job.status === 'active' ? 'inactive' : 'active';
+      await api.put(`/recruitment/openings/${id}/status`, { status: nextStatus });
+      toast.info(`Job opening set to ${nextStatus}.`);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update job status.');
+    }
+  };
+
+  const handleDeleteJob = async (id, title) => {
+    if (window.confirm(`Are you sure you want to delete the job opening "${title}"? This will also delete all candidate applications for this job.`)) {
+      try {
+        await api.delete(`/recruitment/openings/${id}`);
+        toast.success('Job opening and associated candidates deleted.');
+        await fetchData();
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to delete job opening.');
       }
-      return job;
+    }
+  };
+
+  const handleDeleteCandidate = async (id, name) => {
+    if (window.confirm(`Are you sure you want to delete the candidate application for ${name}?`)) {
+      try {
+        await api.delete(`/recruitment/candidates/${id}`);
+        toast.success(`Candidate ${name}'s application deleted.`);
+        setSelectedCandidate(null);
+        await fetchData();
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to delete candidate application.');
+      }
+    }
+  };
+
+  const handleEditJob = (job) => {
+    setEditingJobId(job.id);
+    setNewJob({
+      job_title: job.job_title || '',
+      department: job.department || '',
+      location: job.location || '',
+      employment_type: job.employment_type || 'Full-time',
+      experience_required: job.experience_required || '',
+      salary_range: job.salary_range || '',
+      skills_required: job.skills_required || '',
+      responsibilities: job.responsibilities || '',
+      benefits: job.benefits || '',
+      deadline: job.deadline ? job.deadline.split('T')[0] : '',
+      status: job.status || 'active'
     });
-    saveOpenings(updated);
+    if (job.form_config) {
+      setFormComponents(job.form_config);
+      setFormTitle(job.job_title + ' — Application Form');
+      setCurrentTemplateId(job.template_id);
+      setCurrentTemplateSource(job.template_source || 'scratch');
+    } else {
+      setFormComponents([]);
+      setFormTitle('New Application Form');
+      setCurrentTemplateId(null);
+      setCurrentTemplateSource('scratch');
+    }
+    setCreateStep('details');
+    setActiveTab('create');
   };
 
   // Generate public link copy to clipboard
@@ -288,29 +337,40 @@ const RecruitmentDashboard = () => {
     setTimeout(() => setCopiedLink(''), 2000);
   };
 
-  // Shared logic to actually publish a job
-  const publishJob = (jobData, withFormConfig = false) => {
-    const cleanTitle = jobData.job_title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const code = Math.floor(100 + Math.random() * 900);
-    const slug = `${cleanTitle}-${code}`;
-    const createdJob = {
-      ...jobData,
-      id: Date.now(),
-      slug,
-      status: 'active',
-      ...(withFormConfig && formComponents.length > 0 ? { formConfig: formComponents } : {})
-    };
-    saveOpenings([...openings, createdJob]);
-    setSelectedJob(createdJob);
-    toast.success(`"${createdJob.job_title}" published successfully!${withFormConfig && formComponents.length > 0 ? ' (with custom application form)' : ''}`);
-    // Reset everything
-    setNewJob({ job_title: '', department: '', location: '', employment_type: 'Full-time', experience_required: '', salary_range: '', skills_required: '', responsibilities: '', benefits: '', deadline: '', status: 'active' });
-    setFormComponents([]);
-    setFormTitle('New Application Form');
-    setFormBuilderStep('choose');
-    setPendingJobData(null);
-    setCreateStep('details');
-    setActiveTab('openings');
+  // Shared logic to actually publish or update a job
+  const publishJob = async (jobData, withFormConfig = false) => {
+    try {
+      const payload = {
+        ...jobData,
+        form_config: (withFormConfig || editingJobId) && formComponents.length > 0 ? formComponents : null,
+        template_id: (withFormConfig || editingJobId) ? currentTemplateId : null,
+        template_source: (withFormConfig || editingJobId) ? currentTemplateSource : 'scratch'
+      };
+
+      if (editingJobId) {
+        await api.put(`/recruitment/openings/${editingJobId}`, payload);
+        toast.success(`"${jobData.job_title}" updated successfully!`);
+      } else {
+        await api.post('/recruitment/openings', payload);
+        toast.success(`"${jobData.job_title}" published successfully!`);
+      }
+
+      // Reset everything
+      setNewJob({ job_title: '', department: '', location: '', employment_type: 'Full-time', experience_required: '', salary_range: '', skills_required: '', responsibilities: '', benefits: '', deadline: '', status: 'active' });
+      setFormComponents([]);
+      setFormTitle('New Application Form');
+      setFormBuilderStep('choose');
+      setPendingJobData(null);
+      setCreateStep('details');
+      setCurrentTemplateId(null);
+      setCurrentTemplateSource('scratch');
+      setEditingJobId(null);
+      await fetchData();
+      setActiveTab('openings');
+    } catch (err) {
+      console.error(err);
+      toast.error(editingJobId ? 'Failed to update job opening.' : 'Failed to publish job opening.');
+    }
   };
 
   // Step 1 → Step 2: validate job details, move to form builder
@@ -402,15 +462,15 @@ const RecruitmentDashboard = () => {
   };
 
   // Move candidate to a different stage
-  const handleUpdateStage = (candId, newStage) => {
-    const updated = candidates.map(c => {
-      if (c.id === candId) {
-        toast.success(`${c.full_name} moved to: ${newStage}`);
-        return { ...c, stage: newStage };
-      }
-      return c;
-    });
-    saveCandidates(updated);
+  const handleUpdateStage = async (candId, newStage) => {
+    try {
+      await api.put(`/recruitment/candidates/${candId}/stage`, { stage: newStage });
+      toast.success('Candidate stage updated.');
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to move candidate stage.');
+    }
   };
 
   // Open pipeline customization modal
@@ -420,7 +480,7 @@ const RecruitmentDashboard = () => {
   };
 
   // Save customized pipeline stages
-  const handleSaveCustomizePipeline = () => {
+  const handleSaveCustomizePipeline = async () => {
     // 1. Validations
     if (editingStages.length === 0) {
       toast.error('The recruitment pipeline must have at least one stage.');
@@ -444,56 +504,15 @@ const RecruitmentDashboard = () => {
       return;
     }
 
-    // 2. Candidate migrations
-    let updatedCandidates = [...candidates];
-    let migratedCount = 0;
-    let renamedCount = 0;
-
-    const firstNewStageName = trimmedStages[0].name;
-
-    pipelineStages.forEach(oldStage => {
-      const correspondingNewStage = trimmedStages.find(ns => ns.id === oldStage.id);
-
-      if (correspondingNewStage) {
-        // Check if renamed
-        if (correspondingNewStage.name !== oldStage.name) {
-          updatedCandidates = updatedCandidates.map(c => {
-            if (c.stage === oldStage.name) {
-              renamedCount++;
-              return { ...c, stage: correspondingNewStage.name };
-            }
-            return c;
-          });
-        }
-      } else {
-        // Deleted! Migrate candidates to first new stage
-        updatedCandidates = updatedCandidates.map(c => {
-          if (c.stage === oldStage.name) {
-            migratedCount++;
-            return { ...c, stage: firstNewStageName };
-          }
-          return c;
-        });
-      }
-    });
-
-    // Save candidates if changes occurred
-    if (migratedCount > 0 || renamedCount > 0) {
-      saveCandidates(updatedCandidates);
-      if (migratedCount > 0 && renamedCount > 0) {
-        toast.info(`Renamed stages for ${renamedCount} and migrated ${migratedCount} candidates to "${firstNewStageName}".`);
-      } else if (migratedCount > 0) {
-        toast.info(`Migrated ${migratedCount} candidates from deleted stages to "${firstNewStageName}".`);
-      } else if (renamedCount > 0) {
-        toast.success(`Updated stage names for ${renamedCount} candidates.`);
-      }
+    try {
+      await api.post('/recruitment/pipeline-stages', { stages: trimmedStages });
+      setIsCustomizingPipeline(false);
+      toast.success('Recruitment pipeline customized successfully!');
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to customize recruitment pipeline.');
     }
-
-    // Save pipeline stages
-    setPipelineStages(trimmedStages);
-    localStorage.setItem('mano_pipeline_stages', JSON.stringify(trimmedStages));
-    setIsCustomizingPipeline(false);
-    toast.success('Recruitment pipeline customized successfully!');
   };
 
   // Modal list editing helpers
@@ -567,12 +586,7 @@ const RecruitmentDashboard = () => {
 
   // ─── FORM BUILDER HANDLERS ──────────────────────────────────────────────────
 
-  const persistFormTemplates = (list) => {
-    setSavedFormTemplates(list);
-    localStorage.setItem('mano_form_templates', JSON.stringify(list));
-  };
-
-  const loadFormTemplate = (fields, title = 'Application Form') => {
+  const loadFormTemplate = (fields, title = 'Application Form', templateId = null, templateSource = 'scratch') => {
     const freshFields = fields.map((f, idx) => ({
       ...f,
       id: `field_${Date.now()}_${idx}`
@@ -581,6 +595,8 @@ const RecruitmentDashboard = () => {
     setFormTitle(title);
     setEditingFieldId(null);
     setFormBuilderStep('build');
+    setCurrentTemplateId(templateId);
+    setCurrentTemplateSource(templateSource);
   };
 
   const addFieldToCanvas = (paletteItem) => {
@@ -644,31 +660,39 @@ const RecruitmentDashboard = () => {
     }));
   };
 
-  const handleSaveAsTemplate = () => {
+  const handleSaveAsTemplate = async () => {
     if (!saveTemplateName.trim()) {
       toast.error('Please enter a template name.');
       return;
     }
-    const newTemplate = {
-      id: `saved_${Date.now()}`,
-      name: saveTemplateName.trim(),
-      description: saveTemplateDesc.trim() || 'Custom application form template',
-      savedAt: new Date().toISOString(),
-      fields: formComponents
-    };
-    const updated = [newTemplate, ...savedFormTemplates];
-    persistFormTemplates(updated);
-    setIsSaveTemplateModalOpen(false);
-    setSaveTemplateName('');
-    setSaveTemplateDesc('');
-    toast.success(`Template "${newTemplate.name}" saved successfully!`);
+    try {
+      const payload = {
+        name: saveTemplateName.trim(),
+        description: saveTemplateDesc.trim() || 'Custom application form template',
+        fields: formComponents
+      };
+      await api.post('/recruitment/templates', payload);
+      setIsSaveTemplateModalOpen(false);
+      setSaveTemplateName('');
+      setSaveTemplateDesc('');
+      toast.success(`Template "${payload.name}" saved successfully!`);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to save template to database.');
+    }
   };
 
-  const handleDeleteSavedTemplate = (id) => {
+  const handleDeleteSavedTemplate = async (id) => {
     if (window.confirm('Delete this saved template?')) {
-      const updated = savedFormTemplates.filter(t => t.id !== id);
-      persistFormTemplates(updated);
-      toast.success('Template deleted.');
+      try {
+        await api.delete(`/recruitment/templates/${id}`);
+        toast.success('Template deleted.');
+        await fetchData();
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to delete template.');
+      }
     }
   };
 
@@ -734,14 +758,25 @@ const RecruitmentDashboard = () => {
             <span className="leading-none">Job Openings</span>
           </button>
           <button
-            onClick={() => setActiveTab('create')}
+            onClick={() => {
+              setEditingJobId(null);
+              setNewJob({ job_title: '', department: '', location: '', employment_type: 'Full-time', experience_required: '', salary_range: '', skills_required: '', responsibilities: '', benefits: '', deadline: '', status: 'active' });
+              setFormComponents([]);
+              setFormTitle('New Application Form');
+              setFormBuilderStep('choose');
+              setPendingJobData(null);
+              setCreateStep('details');
+              setCurrentTemplateId(null);
+              setCurrentTemplateSource('scratch');
+              setActiveTab('create');
+            }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'create'
               ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
               : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
               }`}
           >
             <Plus size={15} className={`${activeTab === 'create' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
-            <span className="leading-none">Create Opening</span>
+            <span className="leading-none">{editingJobId ? 'Edit Job Opening' : 'Create Opening'}</span>
           </button>
           <button
             onClick={() => {
@@ -858,6 +893,20 @@ const RecruitmentDashboard = () => {
                         <Sliders size={14} />
                       </button>
                       <button
+                        onClick={() => handleEditJob(job)}
+                        className="p-1.5 text-slate-500 hover:text-blue-500 rounded-lg border border-slate-200 dark:border-github-dark-border transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                        title="Edit job opening"
+                      >
+                        <PenLine size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteJob(job.id, job.job_title)}
+                        className="p-1.5 text-slate-500 hover:text-rose-500 rounded-lg border border-slate-200 dark:border-github-dark-border transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                        title="Delete job opening"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
                         onClick={() => handleCopyLink(job.slug)}
                         className="px-3 py-1.5 bg-slate-100 dark:bg-github-dark-border hover:bg-slate-200 dark:hover:bg-github-dark-border/70 text-slate-700 dark:text-github-dark-text rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors border border-transparent dark:border-github-dark-border"
                       >
@@ -895,7 +944,7 @@ const RecruitmentDashboard = () => {
               <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl p-6 shadow-sm">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2">
-                    <h3 className="font-bold text-slate-800 dark:text-github-dark-text mb-6">Job Opening Details</h3>
+                    <h3 className="font-bold text-slate-800 dark:text-github-dark-text mb-6">{editingJobId ? 'Edit Job Opening' : 'Job Opening Details'}</h3>
                     <form className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1031,7 +1080,7 @@ const RecruitmentDashboard = () => {
                       onClick={handlePublishDirectly}
                       className="flex items-center gap-2 px-6 py-2.5 bg-slate-100 dark:bg-github-dark-border hover:bg-slate-200 dark:hover:bg-github-dark-border/80 text-slate-700 dark:text-github-dark-text rounded-xl text-sm font-semibold transition-all border border-slate-200 dark:border-github-dark-border"
                     >
-                      <CheckCircle2 size={15} className="text-emerald-500" /> Publish Directly
+                      <CheckCircle2 size={15} className="text-emerald-500" /> {editingJobId ? 'Save Changes' : 'Publish Directly'}
                     </button>
                     <button
                       type="button"
@@ -1119,7 +1168,7 @@ const RecruitmentDashboard = () => {
                       <Save size={14} /> Save as Template
                     </button>
                     <button onClick={handlePublishWithForm} className="flex items-center gap-1.5 px-5 py-2 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-xl text-xs font-bold transition-colors shadow-md">
-                      <CheckCircle2 size={14} /> Publish Opening
+                      <CheckCircle2 size={14} /> {editingJobId ? 'Save Changes' : 'Publish Opening'}
                     </button>
                   </div>
                 </div>
@@ -2187,6 +2236,29 @@ const RecruitmentDashboard = () => {
                     </p>
                   </div>
                 )}
+
+                {selectedCandidate.form_responses && Object.keys(selectedCandidate.form_responses).length > 0 && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-github-dark-border mt-4">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase block mb-2">Form Questionnaire Responses</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-github-dark-bg/30 p-4 rounded-xl">
+                      {Object.entries(selectedCandidate.form_responses).map(([label, val]) => {
+                        if (
+                          ['resume_name', 'resume_url'].includes(label) ||
+                          val === null || val === undefined || val === ''
+                        ) return null;
+                        
+                        const displayVal = Array.isArray(val) ? val.join(', ') : String(val);
+
+                        return (
+                          <div key={label} className="text-xs">
+                            <span className="font-semibold text-slate-400 dark:text-github-dark-muted block mb-0.5">{label}</span>
+                            <span className="font-medium text-slate-800 dark:text-[#c9d1d9]">{displayVal}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2208,12 +2280,20 @@ const RecruitmentDashboard = () => {
                 </select>
               </div>
 
-              <button
-                onClick={() => setSelectedCandidate(null)}
-                className="px-5 py-2 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
-              >
-                Close Profile
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDeleteCandidate(selectedCandidate.id, selectedCandidate.full_name)}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <Trash2 size={13} /> Delete Application
+                </button>
+                <button
+                  onClick={() => setSelectedCandidate(null)}
+                  className="px-5 py-2 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+                >
+                  Close Profile
+                </button>
+              </div>
             </div>
 
           </div>
