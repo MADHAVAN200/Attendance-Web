@@ -328,5 +328,144 @@
       "How do I filter logs by date?",
       "How do I search for a specific error?"
     ]
+  },
+  {
+    "route": "/recruitment",
+    "roles": ["admin", "hr"],
+    "moduleName": "Careers & Recruitment",
+    "description": "Manage job openings, view the recruitment pipeline, and rank candidate resumes using AI.",
+    "roleDetails": {
+      "admin": "Create new career openings using the AI JD Generator, copy sharing links, track candidate application stages, and review AI candidate rankings.",
+      "hr": "Create new career openings using the AI JD Generator, copy sharing links, track candidate application stages, and review AI candidate rankings."
+    },
+    "faqs": [
+      {
+        "question": "How do I create a job opening?",
+        "answer": "Go to the recruitment tab, click 'Create Career Opening'. You can fill it manually or use the 'AI JD Generator' prompt assistant to auto-fill description details."
+      },
+      {
+        "question": "How does the AI Candidates Ranking work?",
+        "answer": "It parses PDF resumes uploaded by applicants and scores them (out of 100) based on skill matching, experience, education, and culture fit, listing key strengths and weaknesses."
+      }
+    ],
+    "suggestions": [
+      "How do I create a job opening?",
+      "How does AI candidate ranking work?",
+      "How do I move candidates to a different stage?"
+    ]
+  },
+  {
+    "route": "/documents",
+    "roles": ["admin", "hr"],
+    "moduleName": "HR Document Studio",
+    "description": "Compile formal corporate documents and letters including Offer Letters, Appraisals, Contracts, and Policies.",
+    "roleDetails": {
+      "admin": "Select templates, quick-populate employee details, generate annualized salary breakdowns, and preview print layouts.",
+      "hr": "Select templates, quick-populate employee details, generate annualized salary breakdowns, and preview print layouts."
+    },
+    "faqs": [
+      {
+        "question": "How do I quick populate employee data?",
+        "answer": "Use the 'Quick Populate' panel to fetch employee designation and CTC directly from the Employee Master list."
+      },
+      {
+        "question": "How is the salary breakdown calculated?",
+        "answer": "The studio automatically divides Gross CTC into Basic (40%), HRA (50% of Basic), PF (12% of Basic), and Special Allowance."
+      }
+    ],
+    "suggestions": [
+      "How do I generate an Offer Letter?",
+      "What templates are available?",
+      "How do I print a generated document?"
+    ]
+  },
+  {
+    "route": "/subscription",
+    "roles": ["admin"],
+    "moduleName": "Subscription Billing",
+    "description": "Select a pricing tier, scale seats, and activate subscriptions.",
+    "roleDetails": {
+      "admin": "Scale employee seat ranges from 1 to 1000+, toggle billing cycle (monthly/yearly), and complete secure payments via Razorpay."
+    },
+    "faqs": [
+      {
+        "question": "What billing cycles are supported?",
+        "answer": "You can subscribe monthly or yearly (which includes a 20% discount on the total amount)."
+      },
+      {
+        "question": "How does pricing scale?",
+        "answer": "Pricing is calculated per employee seat based on selected tier: Basic, Professional, or Enterprise."
+      }
+    ],
+    "suggestions": [
+      "What are the pricing plans?",
+      "How do I pay for a subscription?",
+      "How does the pricing slider work?"
+    ]
+  },
+  {
+    "route": "/collaboration",
+    "roles": ["employee", "admin", "hr", "super_admin"],
+    "moduleName": "Chat & Collaboration",
+    "description": "Send direct messages or chat in group channels, share files, and collaborate in real-time.",
+    "roleDetails": {
+      "employee": "Allows you to chat with your teammates in direct messages or group channels, search messages, mention users using @, pin chats, and share files up to 50MB.",
+      "admin": "Allows you to participate in chat rooms, search conversations, mention teammates, pin chats, and view historical messaging records.",
+      "hr": "Allows you to participate in chat rooms, search conversations, mention teammates, pin chats, and view historical messaging records.",
+      "super_admin": "Allows you to chat with system admins or organizations, pin conversations, and manage logs."
+    },
+    "faqs": [
+      {
+        "question": "How do I mention a teammate in chat?",
+        "answer": "Type '@' followed by their username to trigger the member autocomplete search list, then select them to add the highlight link."
+      },
+      {
+        "question": "Can users removed from a group see prior chat history?",
+        "answer": "Yes, removed group members retain read-only access to historical group messages sent prior to the exact timestamp of their removal. They cannot send new messages or view newly sent content."
+      },
+      {
+        "question": "How do I pin a chat conversation?",
+        "answer": "Click the 'Pin' icon on the conversation list next to the room name. Pinned conversations will stick to the top of your sidebar list."
+      }
+    ],
+    "suggestions": [
+      "How do I mention a teammate in chat?",
+      "Can removed members view group chat history?",
+      "How do I pin a chat?"
+    ]
+  },
+  {
+    "route": "/employee-master",
+    "roles": ["admin", "hr"],
+    "moduleName": "Employee Master & Onboarding",
+    "description": "Comprehensive employee profiles, onboarding checklist tracker, digital document lockers, and KPI performance cycles.",
+    "roleDetails": {
+      "admin": "Manage onboarding checklist status, upload and verify official files, run the simulated AI Document Auditor, check compliance warning flags, and evaluate employee KPI goal sheets, reviews, and ratings.",
+      "hr": "Upload and inspect employee credential scans, manage checklist tasks (e.g., laptop assignment, training), check compliance warnings, and process performance cycles."
+    },
+    "faqs": [
+      {
+        "question": "What document categories are managed in Employee Master?",
+        "answer": "Documents are categorized into six folders: Identity (Aadhaar, PAN, Passport, License), Educational (SSC, HSC, Degree, transcripts), Employment (Previous offers, relieving, experience letters, payslips), Banking (cheques, bank statements), Compliance (PF, UAN, ESIC), and Other (photos, speculative signatures, emergency contacts, medical declarations)."
+      },
+      {
+        "question": "How does the AI Document Auditor check credentials?",
+        "answer": "It audits uploaded files to identify missing required documents, flag expired items (e.g. passport limits), and runs name matching comparisons to alert administrators of name discrepancies (Name on Document vs system Profile Name)."
+      },
+      {
+        "question": "What is the onboarding checklist progress indicator?",
+        "answer": "It represents the percentage of completed tasks (out of 7 tasks like laptop assignment, email setup, contract signed) tracked on the employee files. The progress percentage is displayed as a colored status bar in the master table."
+      },
+      {
+        "question": "How are performance cycles integrated into Employee Master?",
+        "answer": "Each employee file includes a tab for active performance reviews, allowing administrators to configure KPI goal sheets, submit scores/appraisals, and run AI evaluations of reviews."
+      }
+    ],
+    "suggestions": [
+      "What documents are required for onboarding?",
+      "How does the AI Document Auditor scan name mismatches?",
+      "How is onboarding progress calculated?",
+      "Where do I find employee KPI goals?"
+    ]
   }
 ]

@@ -1,6 +1,12 @@
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import AppError from '../../utils/AppError.js';
 import catchAsync from '../../utils/catchAsync.js';
 import { answerWebsiteQuestion, answerInternalQuestion } from '../../services/chatbot/websiteRagService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const askWebsiteChatbot = catchAsync(async (req, res, next) => {
     const { question, message, history } = req.body || {};
@@ -68,5 +74,21 @@ export const askInternalChatbot = catchAsync(async (req, res, next) => {
             question: String(input).trim(),
             answer: result.answer,
         },
+    });
+});
+
+export const getAppGuide = catchAsync(async (req, res, next) => {
+    let guides = [];
+    try {
+        const fileContent = await fs.readFile(path.resolve(__dirname, '../../services/chatbot/internalAppGuide.json'), 'utf-8');
+        guides = JSON.parse(fileContent);
+    } catch (error) {
+        console.error('Failed to load internalAppGuide.json:', error);
+        return next(new AppError('Failed to load application guide', 500));
+    }
+
+    res.status(200).json({
+        ok: true,
+        data: guides,
     });
 });

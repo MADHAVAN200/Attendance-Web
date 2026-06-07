@@ -138,7 +138,6 @@ export const sendPushNotification = async (userId, title, body, data = {}) => {
           color: '#5B60F6',
           clickAction: 'FLUTTER_NOTIFICATION_CLICK',
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          category: 'msg',
         },
       },
       // ── iOS / macOS config ───────────────────────────────────────────────
@@ -169,7 +168,8 @@ export const sendPushNotification = async (userId, title, body, data = {}) => {
         // If token is invalid/expired, queue it for cleanup
         if (
           err.code === 'messaging/registration-token-not-registered' ||
-          err.code === 'messaging/invalid-registration-token'
+          err.code === 'messaging/invalid-registration-token' ||
+          err.code === 'messaging/third-party-auth-error'
         ) {
           invalidTokens.push(token);
         }
