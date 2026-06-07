@@ -53,8 +53,8 @@ const SecurityAlerts = () => {
     };
 
     return (
-        <DashboardLayout title="Security Alerts">
-            <div className="flex flex-col flex-1 space-y-4 min-h-0">
+        <DashboardLayout title="Security Alerts" noPadding={true}>
+            <div className="flex flex-col h-auto lg:h-[calc(100vh-64px)] p-3 space-y-4 overflow-y-auto lg:overflow-hidden">
                 {/* Action Bar */}
                 <div className="flex justify-end items-center shrink-0">
                     <div className="flex items-center gap-3">
@@ -72,11 +72,11 @@ const SecurityAlerts = () => {
                 </div>
 
                 {/* List Content */}
-                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative min-h-[300px]">
+                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative min-h-[300px] lg:min-h-0">
                     {loading ? (
                         <LoadingScreen message="Fetching security alerts..." isSuperAdmin={true} fullScreen={false} />
                     ) : (
-                        <div className="flex-1 overflow-x-auto">
+                        <div className="flex-1 overflow-auto">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted">
                                 <tr>

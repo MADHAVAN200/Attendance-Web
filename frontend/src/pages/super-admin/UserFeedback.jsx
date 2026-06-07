@@ -197,9 +197,9 @@ ${item.description}
     };
 
     return (
-        <DashboardLayout title="User Feedback" noPadding={false}>
+        <DashboardLayout title="User Feedback" noPadding={true}>
             {/* Height stretched to take up the full screen down to the footer */}
-            <div className="flex flex-col h-[calc(100vh-100px)] space-y-4 overflow-hidden">
+            <div className="flex flex-col h-auto lg:h-[calc(100vh-64px)] p-3 space-y-4 overflow-y-auto lg:overflow-hidden">
                 
                 {/* Dynamic Metric Cards (Top) - Updates dynamically based on category */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">

@@ -227,14 +227,24 @@ const PM2LogsConsole = () => {
   };
 
   // Category Theme
-  const getCategoryStyles = (category) => {
+  const getCategoryStyles = (category, isTerminal = false) => {
+    if (isTerminal) {
+      switch (category) {
+        case 'Database': return 'text-cyan-400 bg-cyan-950/30 border-cyan-800/40';
+        case 'Cache & Queues': return 'text-violet-400 bg-violet-950/30 border-violet-800/40';
+        case 'Security & Auth': return 'text-pink-400 bg-pink-950/30 border-pink-800/40';
+        case 'FCM & Push': return 'text-orange-400 bg-orange-950/30 border-orange-800/40';
+        case 'API & Requests': return 'text-teal-400 bg-teal-950/30 border-teal-800/40';
+        default: return 'text-slate-400 bg-slate-900 border-slate-700/40';
+      }
+    }
     switch (category) {
-      case 'Database': return 'text-cyan-400 bg-cyan-950/30 border-cyan-800/40';
-      case 'Cache & Queues': return 'text-violet-400 bg-violet-950/30 border-violet-800/40';
-      case 'Security & Auth': return 'text-pink-400 bg-pink-950/30 border-pink-800/40';
-      case 'FCM & Push': return 'text-orange-400 bg-orange-950/30 border-orange-800/40';
-      case 'API & Requests': return 'text-teal-400 bg-teal-950/30 border-teal-800/40';
-      default: return 'text-slate-400 bg-slate-900 border-slate-700/40';
+      case 'Database': return 'text-cyan-700 bg-cyan-50 border-cyan-200 dark:text-cyan-400 dark:bg-cyan-950/30 dark:border-cyan-800/40';
+      case 'Cache & Queues': return 'text-violet-700 bg-violet-50 border-violet-200 dark:text-violet-400 dark:bg-violet-950/30 dark:border-violet-800/40';
+      case 'Security & Auth': return 'text-pink-700 bg-pink-50 border-pink-200 dark:text-pink-400 dark:bg-pink-950/30 dark:border-pink-800/40';
+      case 'FCM & Push': return 'text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950/30 dark:border-orange-800/40';
+      case 'API & Requests': return 'text-teal-700 bg-teal-50 border-teal-200 dark:text-teal-400 dark:bg-teal-950/30 dark:border-teal-800/40';
+      default: return 'text-slate-700 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900 dark:border-slate-700/40';
     }
   };
 
@@ -259,7 +269,7 @@ const PM2LogsConsole = () => {
 
   // Page Content Inner component
   const renderContent = () => (
-    <div className="space-y-4 pb-10">
+    <div className="flex flex-col h-auto lg:h-[calc(100vh-64px)] p-3 space-y-4 overflow-y-auto lg:overflow-hidden">
       
       {/* Top Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -427,7 +437,7 @@ const PM2LogsConsole = () => {
                   onClick={() => toggleSource(src)}
                   className={`px-2.5 py-1 rounded border transition-all ${
                     selectedSources[src]
-                      ? 'bg-indigo-500/10 border-indigo-500 text-indigo-650 dark:text-indigo-400 font-bold'
+                      ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold'
                       : 'bg-slate-50 dark:bg-github-dark-bg border-slate-200 dark:border-github-dark-border text-slate-400 dark:text-github-dark-muted opacity-50'
                   }`}
                 >
@@ -443,7 +453,7 @@ const PM2LogsConsole = () => {
               onClick={() => setAutoScroll(!autoScroll)}
               className={`px-3 py-1.5 rounded border transition-all text-center w-full md:w-fit self-start md:self-end flex items-center justify-center gap-1.5 ${
                 autoScroll 
-                  ? 'bg-indigo-500/15 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold' 
+                  ? 'bg-indigo-50 dark:bg-indigo-500/15 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold' 
                   : 'bg-slate-50 dark:bg-github-dark-bg border-slate-200 dark:border-github-dark-border text-slate-500 dark:text-github-dark-muted'
               }`}
             >
@@ -476,7 +486,7 @@ const PM2LogsConsole = () => {
       </div>
 
       {/* Terminal View Console */}
-      <div className="bg-slate-950 dark:bg-black border border-slate-800 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xl relative flex flex-col">
+      <div className="bg-slate-950 dark:bg-black border border-slate-800 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xl relative flex flex-col h-[450px] sm:h-[550px] lg:h-auto lg:flex-1 lg:min-h-0">
         {/* Terminal Header */}
         <div className="bg-slate-900 border-b border-slate-800 flex justify-between items-center px-4 py-2 shrink-0">
           <div className="flex items-center gap-2">
@@ -504,7 +514,7 @@ const PM2LogsConsole = () => {
         {/* Terminal Body */}
         <div 
           ref={terminalBodyRef}
-          className="p-4 h-[450px] sm:h-[550px] overflow-y-auto no-scrollbar font-mono text-xs text-slate-300 space-y-1.5 select-text"
+          className="p-4 flex-1 overflow-y-auto no-scrollbar font-mono text-xs text-slate-300 space-y-1.5 select-text"
         >
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
@@ -549,7 +559,7 @@ const PM2LogsConsole = () => {
                   </span>
 
                   {/* Category */}
-                  <span className={`px-1 rounded font-bold border text-[9px] ${getCategoryStyles(log.category)}`}>
+                  <span className={`px-1 rounded font-bold border text-[9px] ${getCategoryStyles(log.category, true)}`}>
                     {log.category}
                   </span>
                 </div>
@@ -593,7 +603,7 @@ const PM2LogsConsole = () => {
   }
 
   return (
-    <DashboardLayout title="PM2 Logs Console">
+    <DashboardLayout title="PM2 Logs Console" noPadding={true}>
       {renderContent()}
     </DashboardLayout>
   );
