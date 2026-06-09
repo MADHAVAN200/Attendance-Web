@@ -165,7 +165,17 @@ export function evaluateSessionList(rules, sessions, dateStr) {
         const tIn = typeof s.time_in === 'string' && s.time_in.length === 5 ? s.time_in + ':00' : s.time_in;
         const tOut = typeof s.time_out === 'string' && s.time_out.length === 5 ? s.time_out + ':00' : s.time_out;
 
-        const durationHours = calculateDurationHours(`${dateStr} ${tIn}`, `${dateStr} ${tOut}`);
+        // For overnight sessions (e.g. 22:30 → 06:30), time_out is on the NEXT calendar day.
+        // Detect this by comparing the raw time strings; if end ≤ start, add 1 day to the end date.
+        const nextDateStr = (() => {
+            const d = new Date(`${dateStr}T12:00:00`);
+            d.setDate(d.getDate() + 1);
+            return d.toISOString().split('T')[0];
+        })();
+        const isOvernight = tOut <= tIn;
+        const outDateStr = isOvernight ? nextDateStr : dateStr;
+
+        const durationHours = calculateDurationHours(`${dateStr} ${tIn}`, `${outDateStr} ${tOut}`);
         runningTotalHours += durationHours;
 
         // Late Calculation (only for the first session of the day)
@@ -186,7 +196,7 @@ export function evaluateSessionList(rules, sessions, dateStr) {
         return {
             ...s,
             time_in: `${dateStr} ${tIn}`,
-            time_out: `${dateStr} ${tOut}`,
+            time_out: `${outDateStr} ${tOut}`,
             duration_hours: durationHours,
             total_hours_today: runningTotalHours,
             late_minutes: lateMins,
@@ -194,6 +204,7 @@ export function evaluateSessionList(rules, sessions, dateStr) {
         };
     });
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Daily Status Derivation
@@ -230,19 +241,25 @@ export function deriveDailyStatus(records) {
 /**
  * Build session context for a user's day.
  * Aggregates all sessions from the DB to provide running totals.
- * 
+ *
  * @param {number} user_id
- * @param {string} localTime - Current local time
+ * @param {string|Date} localTime - Current local time
  * @param {string} eventType - "time_in" or "time_out"
  * @returns {Promise<Object>} Session context data
  */
 export async function buildSessionContext(user_id, localTime, eventType) {
-    // Sanitize time for SQL
-    const sanitizedLocalTime = localTime.replace('T', ' ').split('.')[0];
+    // Ensure localTime is a string in ISO format without milliseconds
+    const timeStr = (localTime instanceof Date && typeof localTime.toISOString === 'function')
+        ? localTime.toISOString()
+        : String(localTime);
+    const sanitizedLocalTime = timeStr.replace('T', ' ').split('.')[0];
+
+    // Extract date portion from the local time string for DB filtering
+    const dateOnly = sanitizedLocalTime.split(' ')[0];
 
     const todaySessions = await attendanceDB("attendance_records")
         .where({ user_id })
-        .whereRaw("DATE(time_in) = DATE(?)", [sanitizedLocalTime])
+        .whereRaw("DATE(time_in) = ?", [dateOnly])
         .orderBy("time_in", "asc");
 
     const isFirstSession = todaySessions.length === 0;
@@ -277,6 +294,8 @@ export async function buildSessionContext(user_id, localTime, eventType) {
     };
 }
 
+
+
 // ─────────────────────────────────────────────────────────────
 // Dynamic Daily Summary
 // ─────────────────────────────────────────────────────────────
@@ -287,21 +306,21 @@ export async function buildSessionContext(user_id, localTime, eventType) {
 function normalizeDate(d) {
     if (!d) return null;
     if (typeof d === 'string') return d.split('T')[0].split(' ')[0];
-    if (d instanceof Date || (typeof d === 'object' && typeof d.getFullYear === 'function')) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+    if (d instanceof Date || (typeof d === 'object' && typeof d.getUTCFullYear === 'function')) {
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
-    try { 
+    try {
         const dateObj = new Date(d);
         if (isNaN(dateObj.getTime())) return null;
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getDate()).padStart(2, '0');
+        const year = dateObj.getUTCFullYear();
+        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getUTCDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
-    } catch { 
-        return null; 
+    } catch {
+        return null;
     }
 }
 
@@ -389,13 +408,21 @@ function evaluateDayStatus({ dateStr, todayStr, dayRecords, dailyRecord, holiday
 
     const expectedHours = ShiftService.getExpectedHours(dateStr, rules.week_off_policy, rules);
 
-    return { 
-        status, 
-        total_hours: totalHours, 
-        first_in: firstIn, 
-        last_out: lastOut, 
-        late_minutes: lateMinutes, 
-        late_reason: lateReason, 
+    // Serialize Date objects to plain "YYYY-MM-DD HH:mm:ss" strings so the
+    // frontend receives the stored local time without UTC re-interpretation.
+    const toPlainStr = (v) => {
+        if (!v) return null;
+        if (v instanceof Date) return v.toISOString().replace('T', ' ').split('.')[0];
+        return String(v).split('.')[0];
+    };
+
+    return {
+        status,
+        total_hours: totalHours,
+        first_in: toPlainStr(firstIn),
+        last_out: toPlainStr(lastOut),
+        late_minutes: lateMinutes,
+        late_reason: lateReason,
         overtime_hours: overtimeHours,
         expected_hours: expectedHours
     };
@@ -607,7 +634,21 @@ export async function getDailySummary({ org_id, user_id = null, date_from, date_
             });
 
             const result = evaluateDayStatus({ dateStr, todayStr, dayRecords, dailyRecord, holiday, leave, rules });
-            return { date: dateStr, ...result, sessions: dayRecords };
+            // Serialize time fields to plain strings (prevent UTC shift from JS Date serialization)
+            const serializedSessions = dayRecords.map(r => ({
+                ...r,
+                time_in: r.time_in
+                    ? (r.time_in instanceof Date
+                        ? r.time_in.toISOString().replace('T', ' ').split('.')[0]
+                        : String(r.time_in).split('.')[0])
+                    : null,
+                time_out: r.time_out
+                    ? (r.time_out instanceof Date
+                        ? r.time_out.toISOString().replace('T', ' ').split('.')[0]
+                        : String(r.time_out).split('.')[0])
+                    : null,
+            }));
+            return { date: dateStr, ...result, sessions: serializedSessions };
         });
 
         return {

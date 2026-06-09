@@ -44,23 +44,38 @@ export async function getShiftsForOrg(org_id) {
  * Create a new shift
  */
 export async function createShift({ org_id, shift_name, start_time, end_time, grace_period_mins, is_overtime_enabled, overtime_threshold_hours, policy_rules }) {
-    // Bundle columns into JSON logic structure
+    // Bundle columns into JSON logic structure.
+    // Important: new frontend sends timing/grace/overtime inside policy_rules.
+    // Older clients may send legacy top-level fields. We should NOT overwrite
+    // policy_rules with undefined legacy values.
     const rules = policy_rules || {};
+
+    const resolvedStart = start_time ?? rules.shift_timing?.start_time ?? null;
+    const resolvedEnd = end_time ?? rules.shift_timing?.end_time ?? null;
+    const resolvedGrace = grace_period_mins ?? rules.grace_period?.minutes ?? 0;
+
+    const resolvedOtEnabled = (is_overtime_enabled ?? rules.overtime?.enabled) ? true : false;
+    const resolvedOtThreshold = Number(overtime_threshold_hours ?? rules.overtime?.threshold ?? 8);
+    const resolvedOtBuffer = rules.overtime?.buffer ?? 0.5;
+
     const finalRules = {
         ...rules,
         shift_timing: {
-            start_time,
-            end_time
+            ...(rules.shift_timing || {}),
+            start_time: resolvedStart,
+            end_time: resolvedEnd,
         },
         grace_period: {
-            minutes: Number(grace_period_mins) || 0
+            ...(rules.grace_period || {}),
+            minutes: Number(resolvedGrace) || 0,
         },
         overtime: {
-            enabled: is_overtime_enabled ? true : false,
-            threshold: Number(overtime_threshold_hours) || 8,
-            buffer: rules.overtime?.buffer ?? 0.5
+            ...(rules.overtime || {}),
+            enabled: resolvedOtEnabled,
+            threshold: Number.isFinite(resolvedOtThreshold) ? resolvedOtThreshold : 8,
+            buffer: resolvedOtBuffer,
         },
-        entry_requirements: rules.entry_requirements || { selfie: true, geofence: true }
+        entry_requirements: rules.entry_requirements || { selfie: true, geofence: true },
     };
 
     const [id] = await attendanceDB('shifts').insert({

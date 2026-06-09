@@ -309,6 +309,11 @@ export function getShiftRules(shift) {
             selfie: true,
             geofence: true
         },
+        exit_requirements: rules.exit_requirements || {
+            selfie: true,
+            geofence: true
+        },
+        correction_deadline: rules.correction_deadline ?? 2,
         week_off_policy: normalisePolicyInput(rules.week_off_policy)
     };
 }
@@ -334,6 +339,11 @@ function getDefaultShiftConfig() {
             selfie: true,
             geofence: true
         },
+        exit_requirements: {
+            selfie: true,
+            geofence: true
+        },
+        correction_deadline: 2,
         week_off_policy: [
             { day: 'Sun', type: 'full', frequency: 'every' }  // Sunday off by default
         ]
@@ -378,7 +388,7 @@ export async function checkLocationCompliance(user_id, lat, lng, accuracy, requi
  */
 export function checkBiometricCompliance(file, requirements) {
     const reqs = requirements || {};
-    const selfiePolicy = reqs.selfie || {};
+    const selfiePolicy = (reqs.selfie !== undefined && reqs.selfie !== null) ? reqs.selfie : {};
 
     // If not required, pass
     if (selfiePolicy === false || selfiePolicy.required === false) return { ok: true };

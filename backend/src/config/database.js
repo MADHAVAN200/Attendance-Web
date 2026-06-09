@@ -16,6 +16,7 @@ if (process.env.NODE_ENV === 'development') {
       user: process.env.DB_ADMIN_USER,
       password: process.env.DB_ADMIN_PASSWORD,
       database: process.env.DB_ADMIN_NAME,
+      timezone: 'Z',
     },
   });
 }
@@ -28,6 +29,7 @@ export const attendanceDB = knex({
     user: process.env.ATTENDANCE_DB_USER,
     password: process.env.ATTENDANCE_DB_PASSWORD,
     database: process.env.ATTENDANCE_DB_NAME,
+    timezone: 'Z',
   },
   pool: { min: 0, max: 10 },
 });
@@ -40,6 +42,7 @@ export const paymentDB = knex({
     user: process.env.PAYMENT_DB_USER,
     password: process.env.PAYMENT_DB_PASSWORD,
     database: process.env.PAYMENT_DB_NAME,
+    timezone: 'Z',
   },
   pool: { min: 0, max: 5 },
 });

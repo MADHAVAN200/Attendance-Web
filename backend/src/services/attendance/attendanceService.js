@@ -253,7 +253,13 @@ export async function processTimeOut(context) {
   const minutesLate = openSession.late_minutes || 0;
 
   // Status Evaluation (Re-fetch context to include the session we just calculated)
-  const currentSessionContext = await StatusService.buildSessionContext(user_id, localTime, "time_out");
+  // For overnight shifts the checkout date (e.g. 3:30 AM June 6) differs from the session's
+  // time_in date (June 5). buildSessionContext queries by date, so we must pass the session's
+  // time_in as the reference when the calendar date has rolled over.
+  const sessionDateStr  = new Date(openSession.time_in).toISOString().split('T')[0];
+  const checkoutDateStr = new Date(localTime).toISOString().split('T')[0];
+  const contextRefTime  = sessionDateStr !== checkoutDateStr ? new Date(openSession.time_in).toISOString() : new Date(localTime).toISOString();
+  const currentSessionContext = await StatusService.buildSessionContext(user_id, contextRefTime, "time_out");
   currentSessionContext.total_hours = totalHours; // Pass session duration to engine
   currentSessionContext.minutes_late = minutesLate; // Ensure lateness is available
   currentSessionContext.total_hours_today = parseFloat((currentSessionContext.total_hours_today + totalHours).toFixed(2)); // Update aggregate
@@ -962,5 +968,5 @@ const getTimeStr = (d) => {
   const dateObj = new Date(d);
   if (isNaN(dateObj.getTime())) return null;
   const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:${pad(dateObj.getSeconds())}`;
+  return `${pad(dateObj.getUTCHours())}:${pad(dateObj.getUTCMinutes())}:${pad(dateObj.getUTCSeconds())}`;
 };
