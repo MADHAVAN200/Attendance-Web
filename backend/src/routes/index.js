@@ -22,6 +22,7 @@ import systemMonitorRoutes from './admin/systemMonitorRoutes.js';
 import superAdminRoutes from './superAdmin/superAdminRoutes.js';
 import chatbotRoutes from './chatbot/chatbotRoutes.js';
 import chatRoutes from './collaboration/chatRoutes.js';
+import recruitmentRoutes from './recruitment/recruitmentRoutes.js';
 
 import { requireActiveOrg } from '../middleware/auth.js';
 
@@ -52,6 +53,7 @@ router.use('/payment', paymentRoutes); // For Razorpay payments
 router.use('/profile', profileRoutes); // For user profile management
 router.use('/website-chatbot', chatbotRoutes); // Public website chatbot endpoint
 router.use('/collaboration', chatRoutes); // Real-time chat & messaging
+router.use('/recruitment', recruitmentRoutes); // Recruitment workflow management
 
 router.get('/health', (req, res) => {
     res.json({ message: 'API is working' });
