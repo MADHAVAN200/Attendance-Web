@@ -315,7 +315,7 @@ function App() {
               <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={ShiftManagement} MobileComponent={MobileShiftManagement} />} />
               <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={GeoFencing} MobileComponent={MobileGeoFencing} />} />
               <Route path="/employee-master" element={<Navigate to="/employees" replace />} />
-              <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeUnifiedMaster} MobileComponent={MobileEmployeeList} />} />>
+              <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeUnifiedMaster} MobileComponent={MobileEmployeeList} />} />
               <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/edit/:id" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/bulk" element={<ResponsiveRoute DesktopComponent={BulkUpload} MobileComponent={MobileBulkUpload} />} />
