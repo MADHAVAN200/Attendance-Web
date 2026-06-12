@@ -44,7 +44,8 @@ import {
     Table,
     ChevronDown,
     Layers,
-    Check
+    Check,
+    Users
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
@@ -251,89 +252,40 @@ const ClusterDrillDownPopup = ({ data, onClose }) => {
     );
 };
 
-// Timezone abbreviation helper
-const getTimezoneAbbreviation = (tzName) => {
-    if (!tzName || tzName === 'N/A' || tzName === 'Simulated Timezone') return '';
-    try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: tzName,
-            timeZoneName: 'short'
-        });
-        const parts = formatter.formatToParts(new Date());
-        const tzPart = parts.find(p => p.type === 'timeZoneName');
-        return tzPart ? tzPart.value : tzName;
-    } catch (e) {
-        return tzName;
-    }
-};
-
 // Timezone-aware date/time parser and normalizer
 const parseTimeInTimezone = (r, isOut, orgTimezone) => {
     let utcStr = null;
     let fallbackStr = isOut ? r.time_out : r.time_in;
-    let recordTimezone = null;
-
+    
     if (r.metadata) {
         try {
             const meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
             utcStr = isOut ? meta?.time_out?.timestamp_utc : meta?.time_in?.timestamp_utc;
-            recordTimezone = isOut ? meta?.time_out?.timezone : meta?.time_in?.timezone;
-            if (recordTimezone === 'N/A' || recordTimezone === 'Simulated Timezone' || !recordTimezone) {
-                recordTimezone = null;
-            }
         } catch (e) {
             console.error("Failed to parse metadata", e);
         }
     }
-
-    const timezoneToUse = recordTimezone || orgTimezone || 'UTC';
-
+    
     // If we have a valid UTC string from metadata, we convert it to the organization's timezone.
     if (utcStr) {
         try {
             const d = new Date(utcStr);
             if (!isNaN(d.getTime())) {
-                // Sanity-check: metadata timestamp_utc must be within 24h of the DB value.
-                // For simulated records the metadata contains the simulation run-time (when
-                // the API was called), NOT the actual attendance time – so we must ignore it
-                // when it diverges significantly from the stored time_in / time_out.
-                if (fallbackStr) {
-                    const normalizedFb = (typeof fallbackStr === 'string' && !fallbackStr.includes('Z') && !fallbackStr.includes('+'))
-                        ? fallbackStr.replace(' ', 'T') + 'Z'
-                        : fallbackStr;
-                    const fallbackD = new Date(normalizedFb);
-                    if (!isNaN(fallbackD.getTime()) && Math.abs(d - fallbackD) > 24 * 60 * 60 * 1000) {
-                        // Metadata timestamp is stale / from a simulation run – skip it.
-                        utcStr = null;
-                    }
-                }
-
-                if (utcStr) {
-                    const localStr = d.toLocaleString('en-US', { timeZone: timezoneToUse });
-                    const parsed = new Date(localStr);
-                    if (!isNaN(parsed.getTime())) return parsed;
-                }
+                const localStr = d.toLocaleString('en-US', { timeZone: orgTimezone || 'UTC' });
+                const parsed = new Date(localStr);
+                if (!isNaN(parsed.getTime())) return parsed;
             }
         } catch (err) {
             console.error("Error parsing UTC timestamp:", err);
         }
     }
-
+    
     // Otherwise, fallback to database time_in/time_out.
     if (fallbackStr) {
         try {
-            // The DB stores the local clock time (e.g. '2026-06-05 22:30:00' IST).
-            // With timezone:'Z' the backend serialises it as a plain string with NO
-            // timezone suffix.  Browsers parse bare datetime strings as LOCAL time
-            // (IST), which introduces a -5:30 h shift.  Force UTC by appending 'Z'
-            // so the literal stored digits are preserved as the UTC value.
-            const normalized = (typeof fallbackStr === 'string' && !fallbackStr.includes('Z') && !fallbackStr.includes('+'))
-                ? fallbackStr.replace(' ', 'T') + 'Z'
-                : fallbackStr;
-            const d = new Date(normalized);
+            const d = new Date(fallbackStr);
             if (!isNaN(d.getTime())) {
-                // Re-express in UTC so that local Date methods (.getHours() etc.)
-                // return the stored clock value, not a timezone-shifted one.
+                // If it represents local clock time stored as UTC, we treat fallbackStr as UTC to preserve it
                 const localStr = d.toLocaleString('en-US', { timeZone: 'UTC' });
                 const parsed = new Date(localStr);
                 if (!isNaN(parsed.getTime())) return parsed;
@@ -342,7 +294,7 @@ const parseTimeInTimezone = (r, isOut, orgTimezone) => {
             console.error("Error parsing fallback timestamp:", err);
         }
     }
-
+    
     return null;
 };
 
@@ -353,6 +305,28 @@ const getCurrentTimeInTimezone = (orgTimezone) => {
         return new Date(localStr);
     } catch (e) {
         return d;
+    }
+};
+
+const formatTotalTime = (totalMin, fallbackHours) => {
+    let minutes = 0;
+    if (totalMin > 0) {
+        minutes = totalMin;
+    } else if (fallbackHours > 0) {
+        minutes = fallbackHours * 60;
+    }
+    
+    if (minutes <= 0) return '-';
+    
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    
+    if (hrs > 0 && mins > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'} ${mins} ${mins === 1 ? 'min' : 'mins'}`;
+    } else if (hrs > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'}`;
+    } else {
+        return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
     }
 };
 
@@ -394,7 +368,8 @@ const AttendanceMonitoring = () => {
         present: 0,
         late: 0,
         absent: 0,
-        active: 0
+        active: 0,
+        total: 0
     });
 
     // Correction Requests State
@@ -425,9 +400,8 @@ const AttendanceMonitoring = () => {
     // Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('All');
-    const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const [statusFilter, setStatusFilter] = useState('All');
-    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split("T")[0]);
     const [lastSynced, setLastSynced] = React.useState(new Date());
 
@@ -439,15 +413,6 @@ const AttendanceMonitoring = () => {
         { value: 'Operations', label: 'Operations' },
         { value: 'IT', label: 'IT' },
         { value: 'HR', label: 'HR' }
-    ];
-
-    const STATUS_OPTIONS = [
-        { value: 'All', label: 'All Statuses' },
-        { value: 'Active', label: 'Timed-In (Active)' },
-        { value: 'Present', label: 'Timed-Out (Done)' },
-        { value: 'Missed Punch', label: 'Missed Punch' },
-        { value: 'Absent', label: 'Absent' },
-        { value: 'Leave', label: 'Leave / Holiday / Off' }
     ];
 
     // Data Fetching
@@ -466,35 +431,18 @@ const AttendanceMonitoring = () => {
                 let totalMin = 0;
                 const sessions = daySessions.map(r => {
                     const inTime = parseTimeInTimezone(r, false, resolvedTz);
-                    const outTime = parseTimeInTimezone(r, true, resolvedTz);
-
-                    let inTz = null;
-                    let outTz = null;
-                    if (r.metadata) {
-                        try {
-                            const meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
-                            inTz = meta?.time_in?.timezone;
-                            outTz = meta?.time_out?.timezone;
-                        } catch (e) {}
-                    }
-                    if (inTz === 'N/A' || inTz === 'Simulated Timezone' || !inTz) inTz = resolvedTz;
-                    if (outTz === 'N/A' || outTz === 'Simulated Timezone' || !outTz) outTz = resolvedTz;
-
-                    const inTzAbbr = getTimezoneAbbreviation(inTz);
-                    const outTzAbbr = getTimezoneAbbreviation(outTz);
-
-                    const formatTime = (d, tzAbbr) => {
+                    const formatTime = (d) => {
                         if (!d) return '-';
-                        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        return tzAbbr ? `${timeStr} (${tzAbbr})` : timeStr;
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     };
 
-                    const inStr = formatTime(inTime, inTzAbbr);
+                    const inStr = formatTime(inTime);
                     let outStr = '-';
                     let isActive = !r.time_out && r.status !== 'MISSED_PUNCH';
 
+                    const outTime = parseTimeInTimezone(r, true, resolvedTz);
                     if (outTime) {
-                        outStr = formatTime(outTime, outTzAbbr);
+                        outStr = formatTime(outTime);
                         if (inTime) totalMin += Math.max(0, (outTime - inTime) / 60000);
                     } else if (isActive && inTime) {
                         const nowTZ = getCurrentTimeInTimezone(resolvedTz);
@@ -541,7 +489,7 @@ const AttendanceMonitoring = () => {
                 };
                 const status = statusMap[u.status] || u.status || 'Absent';
 
-                const totalHrs = u.total_hours > 0 ? `${Number(u.total_hours).toFixed(1)} hrs` : '-';
+                const totalHrs = formatTotalTime(totalMin, u.total_hours > 0 ? Number(u.total_hours) : 0);
                 const expectedHrs = u.expected_hours !== undefined && u.expected_hours !== null && u.expected_hours > 0 ? `${Number(u.expected_hours).toFixed(1)} hrs` : '-';
                 const lastLocation = u.sessions && u.sessions.length > 0
                     ? u.sessions[0].time_in_address || (u.sessions[0].time_in_lat ? `${u.sessions[0].time_in_lat}, ${u.sessions[0].time_in_lng}` : '-')
@@ -598,7 +546,8 @@ const AttendanceMonitoring = () => {
                 present: mergedData.filter(d => d.status !== 'Absent' && d.status !== 'Week Off' && d.status !== 'Holiday' && d.status !== 'Leave').length,
                 late: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Late') : d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length
+                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length,
+                total: mergedData.length
             });
 
         } catch (error) {
@@ -705,32 +654,29 @@ const AttendanceMonitoring = () => {
 
     // Stats Cards Data
     const statCards = [
-        { label: 'Total Present', value: stats.present, icon: <UserCheck size={20} />, bg: 'bg-emerald-50 dark:bg-emerald-500/10', color: 'text-emerald-600 dark:text-emerald-400' },
-        { label: 'Late Arrivals', value: stats.late, icon: <Clock size={20} />, bg: 'bg-amber-50 dark:bg-amber-500/10', color: 'text-amber-600 dark:text-amber-400' },
-        { label: 'Absent', value: stats.absent, icon: <UserX size={20} />, bg: 'bg-rose-50 dark:bg-rose-500/10', color: 'text-rose-600 dark:text-rose-400' },
-        { label: 'Currently Active', value: stats.active, icon: <Activity size={20} />, bg: 'bg-blue-50 dark:bg-blue-500/10', color: 'text-blue-600 dark:text-blue-400' },
+        { id: 'total', label: 'Total Employees', value: stats.total, icon: <Users size={20} />, bg: 'bg-indigo-50 dark:bg-indigo-500/10', color: 'text-indigo-600 dark:text-indigo-400' },
+        { id: 'present', label: 'Total Present', value: stats.present, icon: <UserCheck size={20} />, bg: 'bg-emerald-50 dark:bg-emerald-500/10', color: 'text-emerald-600 dark:text-emerald-400' },
+        { id: 'late', label: 'Late Arrivals', value: stats.late, icon: <Clock size={20} />, bg: 'bg-amber-50 dark:bg-amber-500/10', color: 'text-amber-600 dark:text-amber-400' },
+        { id: 'absent', label: 'Absent', value: stats.absent, icon: <UserX size={20} />, bg: 'bg-rose-50 dark:bg-rose-500/10', color: 'text-rose-600 dark:text-rose-400' },
+        { id: 'active', label: 'Currently Active', value: stats.active, icon: <Activity size={20} />, bg: 'bg-blue-50 dark:bg-blue-500/10', color: 'text-blue-600 dark:text-blue-400' },
     ];
 
     // Filter Logic for Live Tab
     const filteredData = attendanceData.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             item.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             item.department.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = departmentFilter === 'All' || item.department === departmentFilter;
         
         let matchesStatus = true;
-        if (statusFilter === 'Active') {
-            matchesStatus = item.status === 'Active' || item.status === 'Late Active' || (item.sessions && item.sessions.some(s => s.isActive));
-        } else if (statusFilter === 'Present') { // Timed-Out (Done)
-            matchesStatus = item.sessions && item.sessions.some(s => s.rawOut !== null);
-        } else if (statusFilter === 'Missed Punch') {
-            matchesStatus = item.status === 'Missed Punch';
-        } else if (statusFilter === 'Absent') {
+        if (statusFilter === 'present') {
+            matchesStatus = item.status !== 'Absent' && item.status !== 'Week Off' && item.status !== 'Holiday' && item.status !== 'Leave';
+        } else if (statusFilter === 'late') {
+            matchesStatus = item.allStatuses ? item.allStatuses.includes('Late') : item.status.includes('Late');
+        } else if (statusFilter === 'absent') {
             matchesStatus = item.status === 'Absent';
-        } else if (statusFilter === 'Leave') {
-            matchesStatus = item.status === 'Leave' || item.status === 'Holiday' || item.status === 'Week Off';
+        } else if (statusFilter === 'active') {
+            matchesStatus = item.allStatuses ? item.allStatuses.includes('Active') : item.status.includes('Active');
         }
-
+        
         return matchesSearch && matchesDept && matchesStatus;
     });
 
@@ -823,15 +769,15 @@ const AttendanceMonitoring = () => {
 
     const getStatusData = () => {
         // Create disjoint sets that sum to total headcount for a valid Pie Chart
-        const active = filteredData.filter(d => d.status === 'Active' || d.status === 'Late Active').length;
-        const missedPunch = filteredData.filter(d => d.status === 'Missed Punch').length;
-        const overtime = filteredData.filter(d => d.status === 'Overtime').length;
-        const late = filteredData.filter(d => d.status === 'Late').length;
-        const present = filteredData.filter(d => d.status === 'Present').length;
-        const absent = filteredData.filter(d => d.status === 'Absent').length;
-        const weekOff = filteredData.filter(d => d.status === 'Week Off').length;
-        const holiday = filteredData.filter(d => d.status === 'Holiday').length;
-        const leave = filteredData.filter(d => d.status === 'Leave').length;
+        const active = attendanceData.filter(d => d.status === 'Active' || d.status === 'Late Active').length;
+        const missedPunch = attendanceData.filter(d => d.status === 'Missed Punch').length;
+        const overtime = attendanceData.filter(d => d.status === 'Overtime').length;
+        const late = attendanceData.filter(d => d.status === 'Late').length;
+        const present = attendanceData.filter(d => d.status === 'Present').length;
+        const absent = attendanceData.filter(d => d.status === 'Absent').length;
+        const weekOff = attendanceData.filter(d => d.status === 'Week Off').length;
+        const holiday = attendanceData.filter(d => d.status === 'Holiday').length;
+        const leave = attendanceData.filter(d => d.status === 'Leave').length;
 
         return [
             { name: 'Present', value: present, color: '#10b981' },
@@ -848,7 +794,7 @@ const AttendanceMonitoring = () => {
 
     const getDepartmentData = () => {
         const deptStats = {};
-        filteredData.forEach(item => {
+        attendanceData.forEach(item => {
             const dept = item.department || 'Unknown';
             if (!deptStats[dept]) deptStats[dept] = { name: dept, Present: 0, Absent: 0, Late: 0 };
 
@@ -866,7 +812,7 @@ const AttendanceMonitoring = () => {
             hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
         }
 
-        filteredData.forEach(item => {
+        attendanceData.forEach(item => {
             item.sessions.forEach((session, index) => {
                 const inTime = session.rawIn;
                 const inHour = inTime.getHours();
@@ -911,7 +857,7 @@ const AttendanceMonitoring = () => {
             '4+ Sessions': 0
         };
 
-        filteredData.forEach(item => {
+        attendanceData.forEach(item => {
             if (item.status !== 'Absent') {
                 const count = item.sessions.length;
                 if (count === 1) frequency['1 Session']++;
@@ -1017,29 +963,23 @@ const AttendanceMonitoring = () => {
                 }
                 `}
             </style>
-
             <DashboardLayout title="Live Attendance" noPadding={true}>
-                <div className="p-3 space-y-3" style={{ zoom: 0.8 }}>
-
+                <div className="p-3 pb-0">
                     {/* Tabs */}
-                    <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
+                    <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
                         <button
                             onClick={() => setActiveTab('live')}
-                            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'live' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'live' ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
                         >
-                            <div className="flex items-center gap-2">
-                                <LayoutGrid size={18} />
-                                Live Dashboard
-                            </div>
+                            <LayoutGrid size={15} className={`${activeTab === 'live' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                            <span className="leading-none">Live Dashboard</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('requests')}
-                            className={`relative px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'requests' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
+                            className={`relative flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'requests' ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
                         >
-                            <div className="flex items-center gap-2">
-                                <FileText size={18} />
-                                Correction Requests
-                            </div>
+                            <FileText size={15} className={`${activeTab === 'requests' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                            <span className="leading-none">Correction Requests</span>
                             {requestCount > 0 && activeTab !== 'requests' && (
                                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full animate-pulse border-2 border-slate-100 dark:border-github-dark-subtle">
                                     {requestCount}
@@ -1047,22 +987,41 @@ const AttendanceMonitoring = () => {
                             )}
                         </button>
                     </div>
+                </div>
+
+                <div className="p-3 space-y-3" style={{ zoom: 0.8 }}>
 
                     {activeTab === 'live' ? (
                         <>
                             {/* Stats Cards */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {statCards.map((stat, index) => (
-                                    <div key={index} className="bg-white dark:bg-dark-card p-4 rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between transition-colors duration-300">
-                                        <div>
-                                            <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">{stat.label}</p>
-                                            <p className="text-2xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{stat.value}</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                                {statCards.map((stat, index) => {
+                                    const isSelected = statusFilter === stat.id;
+                                    return (
+                                        <div
+                                            key={index}
+                                            onClick={() => setStatusFilter(isSelected ? 'All' : stat.id)}
+                                            className={`p-4 rounded-lg shadow-sm flex items-center justify-between transition-all duration-300 cursor-pointer select-none bg-white dark:bg-dark-card border-2 ${
+                                                isSelected
+                                                    ? 'border-indigo-500 dark:border-indigo-500 scale-[1.01] shadow-md'
+                                                    : 'border-slate-200 dark:border-github-dark-border hover:border-slate-350 dark:hover:border-slate-700'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">{stat.label}</p>
+                                                    {isSelected && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                                    )}
+                                                </div>
+                                                <p className="text-2xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{stat.value}</p>
+                                            </div>
+                                            <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
+                                                {stat.icon}
+                                            </div>
                                         </div>
-                                        <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
-                                            {stat.icon}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* Main Content */}
@@ -1080,6 +1039,15 @@ const AttendanceMonitoring = () => {
                                                     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
                                                     <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Real-time</span>
                                                 </div>
+                                                {statusFilter !== 'All' && (
+                                                    <button
+                                                        onClick={() => setStatusFilter('All')}
+                                                        className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-500/20 rounded-md text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-500/30 transition-colors"
+                                                    >
+                                                        <span>Filter: {statusFilter === 'total' ? 'Total Employees' : statusFilter === 'present' ? 'Present' : statusFilter === 'late' ? 'Late Arrivals' : statusFilter === 'absent' ? 'Absent' : statusFilter === 'active' ? 'Currently Active' : statusFilter}</span>
+                                                        <span className="text-xs font-normal">×</span>
+                                                    </button>
+                                                )}
                                             </div>
                                             <p className="text-xs text-slate-400 dark:text-github-dark-muted font-medium mt-1">
                                                 {activeView === 'cards' && 'Monitoring all on-duty staff status and session availability.'}
@@ -1154,8 +1122,8 @@ const AttendanceMonitoring = () => {
                                                                                     setIsDeptDropdownOpen(false);
                                                                                 }}
                                                                                 className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors text-left ${isSelected
-                                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
-                                                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                                                        ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
+                                                                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                                                                                     }`}
                                                                             >
                                                                                 <span>{dept.label}</span>
@@ -1169,83 +1137,32 @@ const AttendanceMonitoring = () => {
                                                     )}
                                                 </AnimatePresence>
                                             </div>
-
-                                            <div className="relative">
-                                                <button
-                                                    onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                                                    className="pl-10 pr-8 py-2.5 text-xs rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-700 dark:text-github-dark-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner min-w-[155px] font-bold text-left flex items-center justify-between gap-2"
-                                                >
-                                                    <span className="truncate">
-                                                        {STATUS_OPTIONS.find(s => s.value === statusFilter)?.label || 'All Statuses'}
-                                                    </span>
-                                                    <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 shrink-0 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
-                                                </button>
-                                                <Filter size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-
-                                                <AnimatePresence>
-                                                    {isStatusDropdownOpen && (
-                                                        <>
-                                                            <div
-                                                                className="fixed inset-0 z-[80]"
-                                                                onClick={() => setIsStatusDropdownOpen(false)}
-                                                            />
-                                                            <motion.div
-                                                                initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                                exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                                                transition={{ duration: 0.15 }}
-                                                                className="absolute top-full left-0 mt-1.5 w-full min-w-[180px] bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-github-dark-border rounded-xl shadow-2xl overflow-hidden z-[90]"
-                                                            >
-                                                                <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
-                                                                    {STATUS_OPTIONS.map((statusOpt) => {
-                                                                        const isSelected = statusFilter === statusOpt.value;
-                                                                        return (
-                                                                            <button
-                                                                                key={statusOpt.value}
-                                                                                onClick={() => {
-                                                                                    setStatusFilter(statusOpt.value);
-                                                                                    setIsStatusDropdownOpen(false);
-                                                                                }}
-                                                                                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors text-left ${isSelected
-                                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
-                                                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                                                                                    }`}
-                                                                            >
-                                                                                <span>{statusOpt.label}</span>
-                                                                                {isSelected && <Check size={12} className="text-indigo-500" />}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </motion.div>
-                                                        </>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
                                         </div>
 
                                         {/* Uniform View Switcher */}
-                                        <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit border border-slate-200 dark:border-github-dark-border/50">
+                                        <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit border border-slate-200 dark:border-github-dark-border/50">
                                             {[
                                                 { id: 'cards', label: 'Overview', icon: LayoutGrid },
                                                 { id: 'graph', label: 'Analytics', icon: BarChartIcon },
                                                 { id: 'table', label: 'Timeline', icon: Table },
                                                 { id: 'map', label: 'Map View', icon: MapPin }
-                                            ].map((view) => (
-                                                <button
-                                                    key={view.id}
-                                                    onClick={() => setActiveView(view.id)}
-                                                    className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeView === view.id
-                                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                        : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
+                                            ].map((view) => {
+                                                const isSelected = activeView === view.id;
+                                                return (
+                                                    <button
+                                                        key={view.id}
+                                                        onClick={() => setActiveView(view.id)}
+                                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                                                            isSelected
+                                                                ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
+                                                                : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-202'
                                                         }`}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <view.icon size={18} />
-                                                        {view.label}
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                    >
+                                                        <view.icon size={15} className={`${isSelected ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                                                        <span className="leading-none">{view.label}</span>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
@@ -1307,7 +1224,7 @@ const AttendanceMonitoring = () => {
                                                                                             {item.status.split(' ')[0]}
                                                                                         </span>
                                                                                         <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-mono font-bold">
-                                                                                            {item.totalHours && item.totalHours.toLowerCase().includes('hrs') ? item.totalHours : `${item.totalHours} Hrs`}
+                                                                                            {item.totalHours && (item.totalHours.toLowerCase().includes('hr') || item.totalHours.toLowerCase().includes('min') || item.totalHours === '-') ? item.totalHours : `${item.totalHours} Hrs`}
                                                                                             {item.expectedHours && item.expectedHours !== '-' && ` / ${item.expectedHours}`}
                                                                                         </span>
                                                                                     </div>
@@ -1359,7 +1276,7 @@ const AttendanceMonitoring = () => {
                                                                                                     <MapPin size={12} className="text-indigo-400 shrink-0" />
                                                                                                     <div className="flex flex-col">
                                                                                                         <span className="text-[8px] uppercase text-slate-500 font-bold">Location</span>
-                                                                                                        <span className="text-[10px] leading-tight max-w-[140px] truncate">{session.inLocation}</span>
+                                                                                                        <span className="text-[10px] leading-tight break-words whitespace-normal">{session.inLocation}</span>
                                                                                                     </div>
                                                                                                 </div>
                                                                                                 <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 dark:bg-github-dark-bg rotate-45 border-r border-b border-slate-700 dark:border-github-dark-border"></div>
@@ -1407,7 +1324,7 @@ const AttendanceMonitoring = () => {
                                                             )}
                                                             <div
                                                                 onClick={() => setSelectedLiveUser(item)}
-                                                                className={`bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
+                                                                className={`bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border/60 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
                                                             >
                                                                 {/* Card Header */}
                                                                 <div className="p-5 flex items-start justify-between">
@@ -1478,7 +1395,7 @@ const AttendanceMonitoring = () => {
                                                                                     </div>
                                                                                     <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-subtle/50 p-1.5 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                                                                         <MapPin size={10} className="shrink-0 mt-0.5 text-indigo-400" />
-                                                                                        <span className="line-clamp-2" title={item.sessions[0].inLocation}>{item.sessions[0].inLocation}</span>
+                                                                                        <span className="break-words whitespace-normal" title={item.sessions[0].inLocation}>{item.sessions[0].inLocation}</span>
                                                                                     </div>
                                                                                 </div>
 
@@ -1490,7 +1407,7 @@ const AttendanceMonitoring = () => {
                                                                                     {item.sessions[0].outLocation ? (
                                                                                         <div className="flex items-start gap-1 text-[9px] text-slate-500 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-subtle/50 p-1.5 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                                                                             <MapPin size={10} className="shrink-0 mt-0.5 text-rose-400" />
-                                                                                            <span className="line-clamp-2" title={item.sessions[0].outLocation}>{item.sessions[0].outLocation}</span>
+                                                                                            <span className="break-words whitespace-normal" title={item.sessions[0].outLocation}>{item.sessions[0].outLocation}</span>
                                                                                         </div>
                                                                                     ) : item.sessions[0].isActive ? (
                                                                                         <div className="h-full flex items-center p-1.5">
@@ -1807,7 +1724,7 @@ const AttendanceMonitoring = () => {
                                                                                                             </div>
                                                                                                             {session.outImage && (
                                                                                                                 <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-20 bg-slate-100 dark:bg-github-dark-subtle">
-                                                                                                                    <img src={session.outImage} className="w-full h-full object-cover" />
+                                                                                                                <img src={session.outImage} className="w-full h-full object-cover" />
                                                                                                                 </div>
                                                                                                             )}
                                                                                                         </div>
@@ -1996,17 +1913,17 @@ const AttendanceMonitoring = () => {
                             </div>
                         </>
                     ) : (
-                        // Approvals Tab Content
-                        <div className="flex flex-col lg:flex-row gap-6 items-start">
+                    // Approvals Tab Content
+                    <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-                            <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" style={{ height: 'calc(125vh - 10rem)' }}>
-                                {/* Header and Search */}
-                                <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
-                                    <div className="flex justify-between items-center px-1">
-                                        <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Requests</h3>
-                                        <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-                                            {requestCount} Pending
-                                        </div>
+                        <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" style={{ height: 'calc(125vh - 10rem)' }}>
+                            {/* Header and Search */}
+                            <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
+                                <div className="flex justify-between items-center px-1">
+                                    <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Requests</h3>
+                                    <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
+                                        {requestCount} Pending
+                                    </div>
                                     </div>
 
                                     <div className="relative">
@@ -2020,458 +1937,463 @@ const AttendanceMonitoring = () => {
                                         />
                                     </div>
 
-                                    {/* Date Navigation */}
-                                    { /* Date Navigation Removed */}
-                                </div>
-                                <div className="overflow-y-auto no-scrollbar flex-1 p-3 space-y-3">
-                                    {requestsLoading ? (
-                                        <div className="p-10 text-center text-slate-400">Loading...</div>
-                                    ) : filteredRequests.length === 0 ? (
-                                        <div className="p-10 text-center text-slate-400">No requests found.</div>
-                                    ) : (
-                                        filteredRequests.map((request) => (
-                                            <div
-                                                key={request.acr_id}
-                                                onClick={() => {
-                                                    setSelectedRequestId(request.acr_id);
-                                                    fetchRequestDetail(request.acr_id);
-                                                }}
-                                                className={`p-4 rounded-xl border transition-all cursor-pointer shadow-sm ${selectedRequestId === request.acr_id
-                                                        ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-400/40 dark:border-indigo-500/40 shadow-indigo-500/5'
-                                                        : 'bg-slate-50/40 dark:bg-github-dark-subtle/20 border-slate-200/60 dark:border-github-dark-border/80 hover:bg-slate-50/80 dark:hover:bg-github-dark-subtle/40 hover:border-slate-300 dark:hover:border-github-dark-border'
-                                                    }`}
-                                            >
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
-                                                            {request.profile_image_url && request.profile_image_url.startsWith('http') ? (
-                                                                <img src={`${request.profile_image_url}?t=${avatarTimestamp}`} alt={request.user_name} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                (request.user_name || 'U').charAt(0).toUpperCase()
-                                                            )}
-                                                        </div>
-                                                        <div>
-                                                            <p className={`text-xs font-bold leading-none ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
-                                                            <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-medium mt-1 inline-block">ID: {request.user_id}</span>
-                                                        </div>
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${getRequestTypeStyle(request.correction_type)}`}>
-                                                            {(request.correction_type || '').replace('_', ' ')}
-                                                        </span>
-                                                    </div>
-                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${request.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                                                            : request.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                                                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                                                        }`}>{request.status}</span>
-                                                </div>
-
-                                                <p className={`text-sm font-semibold mb-1 ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
-                                                    {formatCorrectionDate(request.request_date)}
-                                                </p>
-                                                <p className="text-xs text-slate-500 dark:text-github-dark-muted italic line-clamp-1">"{request.reason || 'No reason provided.'}"</p>
-                                                <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 font-mono border-t border-slate-100/50 dark:border-github-dark-border/30 pt-2">
-                                                    <span>Sub. {request.submitted_at ? formatCorrectionDate(request.submitted_at) : '—'}</span>
-                                                    <span className={`font-bold text-[9px] ${getRequestTypeStyle(request.correction_type)} bg-transparent dark:bg-transparent p-0`}>{(request.correction_type || '').replace('_', ' ')}</span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
+                                {/* Date Navigation */}
+                                { /* Date Navigation Removed */}
                             </div>
-
-                            {/* Detail Panel */}
-                            <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col min-h-[calc(125vh-10rem)] h-fit">
-                                {detailLoading ? (
-                                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 dark:text-github-dark-muted">
-                                        <RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
-                                        <p className="text-xs font-bold uppercase tracking-wider">Fetching details...</p>
-                                    </div>
-                                ) : selectedRequestData ? (
-                                    <>
-                                        <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
-                                                    {selectedRequestData.profile_image_url && selectedRequestData.profile_image_url.startsWith('http') ? (
-                                                        <img src={`${selectedRequestData.profile_image_url}?t=${avatarTimestamp}`} alt={selectedRequestData.user_name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        (selectedRequestData.user_name || 'U').charAt(0).toUpperCase()
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text mb-0.5">Request #{selectedRequestData.acr_id}</h2>
-                                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted">
-                                                        By <span className="font-bold text-slate-700 dark:text-slate-350">{selectedRequestData.user_name}</span> ({selectedRequestData.designation || 'Employee'}) • {formatCorrectionDate(selectedRequestData.request_date)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {selectedRequestData.status === 'pending' ? (
-                                                <div className="flex gap-2.5">
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
-                                                        className="px-4 py-2 border border-rose-200 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
-                                                    >
-                                                        <XCircle size={15} /> Reject
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
-                                                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-600/10 hover:shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
-                                                    >
-                                                        <CheckCircle size={15} /> Approve
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className={`text-xs font-bold uppercase px-3 py-1.5 rounded-lg border ${selectedRequestData.status === 'approved'
-                                                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/30'
-                                                        : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/30'
-                                                    }`}>
-                                                    {selectedRequestData.status}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* ADMIN OVERRIDE SECTION */}
-                                        {selectedRequestData.status === 'pending' && (
-                                            <div className="px-6 py-4 bg-slate-50 dark:bg-github-dark-subtle/50 border-b border-slate-200 dark:border-github-dark-border">
-                                                <div className="flex items-center gap-3 mb-4">
-                                                    <input
-                                                        type="checkbox"
-                                                        id="overrideToggle"
-                                                        checked={overrideMode}
-                                                        onChange={(e) => {
-                                                            const isChecked = e.target.checked;
-                                                            setOverrideMode(isChecked);
-                                                            if (isChecked && selectedRequestData) {
-                                                                const getTime = (val) => {
-                                                                    if (!val) return '';
-                                                                    const timePart = val.includes(' ') ? val.split(' ')[1] : (val.includes('T') ? val.split('T')[1] : val);
-                                                                    return timePart.substring(0, 5);
-                                                                };
-                                                                setOverrideIn(getTime(selectedRequestData.requested_time_in));
-                                                                setOverrideOut(getTime(selectedRequestData.requested_time_out));
-                                                                setOverrideMethod(selectedRequestData.correction_method || 'fix');
-                                                            }
-                                                        }}
-                                                        className="w-4 h-4 text-indigo-600 rounded border-slate-350 dark:border-github-dark-border focus:ring-indigo-500"
-                                                    />
-                                                    <label htmlFor="overrideToggle" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-github-dark-text select-none cursor-pointer">
-                                                        Override Request Details
-                                                    </label>
-                                                </div>
-
-                                                {overrideMode && (
-                                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                                        {/* Method Selector */}
-                                                        <div className="flex bg-slate-100 dark:bg-github-dark-subtle/50 p-1 rounded-xl w-fit mb-4 border border-slate-200 dark:border-github-dark-border">
-                                                            {['add_session', 'reset'].map(m => (
-                                                                <button
-                                                                    key={m}
-                                                                    type="button"
-                                                                    onClick={() => setOverrideMethod(m)}
-                                                                    className={`px-4 py-2 text-xs font-bold uppercase rounded-lg transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
-                                                                        ? 'bg-white dark:bg-[#1e202e] text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border'
-                                                                        : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200 border border-transparent'
-                                                                        }`}
-                                                                >
-                                                                    {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-
-                                                        {/* Dynamic Inputs */}
-                                                        {overrideMethod === 'add_session' || overrideMethod === 'fix' ? (
-                                                            <div className="space-y-4">
-                                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                                                    {overrideSessions.map((s, idx) => (
-                                                                        <div key={idx} className="flex items-center gap-4 bg-white dark:bg-[#13151f] p-3 rounded-xl border border-slate-200 dark:border-github-dark-border shadow-sm relative group w-full">
-                                                                            <div className="flex-1 flex items-center justify-between">
-                                                                                <div className="flex items-center gap-3 w-full">
-                                                                                    <div className="relative flex-1">
-                                                                                        <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time In</label>
-                                                                                        <input type="time" value={s.time_in} onChange={(e) => {
-                                                                                            const ns = [...overrideSessions]; ns[idx].time_in = e.target.value; setOverrideSessions(ns);
-                                                                                        }}
-                                                                                            className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-github-dark-text transition-all font-mono"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <span className="text-slate-400 font-bold px-1">→</span>
-                                                                                    <div className="relative flex-1">
-                                                                                        <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time Out</label>
-                                                                                        <input type="time" value={s.time_out} onChange={(e) => {
-                                                                                            const ns = [...overrideSessions]; ns[idx].time_out = e.target.value; setOverrideSessions(ns);
-                                                                                        }}
-                                                                                            className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-github-dark-text transition-all font-mono"
-                                                                                        />
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                            {overrideSessions.length > 1 && (
-                                                                                <button type="button" onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors" title="Remove session">
-                                                                                    <XCircle size={18} />
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                <button type="button" onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 px-1 pt-1 transition-colors">
-                                                                    <span className="text-lg leading-none">+</span> Add Session
-                                                                </button>
-                                                            </div>
+                            <div className="overflow-y-auto no-scrollbar flex-1 p-3 space-y-3">
+                                {requestsLoading ? (
+                                    <div className="p-10 text-center text-slate-400">Loading...</div>
+                                ) : filteredRequests.length === 0 ? (
+                                    <div className="p-10 text-center text-slate-400">No requests found.</div>
+                                ) : (
+                                    filteredRequests.map((request) => (
+                                        <div
+                                            key={request.acr_id}
+                                            onClick={() => {
+                                                setSelectedRequestId(request.acr_id);
+                                                fetchRequestDetail(request.acr_id);
+                                            }}
+                                            className={`p-4 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                                selectedRequestId === request.acr_id
+                                                    ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-400/40 dark:border-indigo-500/40 shadow-indigo-500/5'
+                                                    : 'bg-slate-50/40 dark:bg-github-dark-subtle/20 border-slate-200/60 dark:border-github-dark-border/80 hover:bg-slate-50/80 dark:hover:bg-github-dark-subtle/40 hover:border-slate-300 dark:hover:border-github-dark-border'
+                                            }`}
+                                        >
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                        {request.profile_image_url && request.profile_image_url.startsWith('http') ? (
+                                                            <img src={`${request.profile_image_url}?t=${avatarTimestamp}`} alt={request.user_name} className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <div className="flex gap-4 w-full md:w-3/4 lg:w-1/2">
-                                                                <div className="relative flex-1">
-                                                                    <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-github-dark-subtle/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time In</label>
-                                                                    <input type="time" value={overrideIn} onChange={(e) => setOverrideIn(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-github-dark-text transition-all font-mono" />
-                                                                </div>
-                                                                <div className="relative flex-1">
-                                                                    <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-github-dark-subtle/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time Out</label>
-                                                                    <input type="time" value={overrideOut} onChange={(e) => setOverrideOut(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-github-dark-text transition-all font-mono" />
-                                                                </div>
-                                                            </div>
+                                                            (request.user_name || 'U').charAt(0).toUpperCase()
                                                         )}
                                                     </div>
+                                                    <div>
+                                                        <p className={`text-xs font-bold leading-none ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
+                                                        <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-medium mt-1 inline-block">ID: {request.user_id}</span>
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${getRequestTypeStyle(request.correction_type)}`}>
+                                                        {(request.correction_type || '').replace('_', ' ')}
+                                                    </span>
+                                                </div>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                    request.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                                    : request.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                }`}>{request.status}</span>
+                                            </div>
+
+                                            <p className={`text-sm font-semibold mb-1 ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
+                                                {formatCorrectionDate(request.request_date)}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted italic line-clamp-1">"{request.reason || 'No reason provided.'}"</p>
+                                            <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 font-mono border-t border-slate-100/50 dark:border-github-dark-border/30 pt-2">
+                                                <span>Sub. {request.submitted_at ? formatCorrectionDate(request.submitted_at) : '—'}</span>
+                                                <span className={`font-bold text-[9px] ${getRequestTypeStyle(request.correction_type)} bg-transparent dark:bg-transparent p-0`}>{(request.correction_type || '').replace('_', ' ')}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Detail Panel */}
+                        <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col min-h-[calc(125vh-10rem)] h-fit">
+                            {detailLoading ? (
+                                <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 dark:text-github-dark-muted">
+                                    <RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
+                                    <p className="text-xs font-bold uppercase tracking-wider">Fetching details...</p>
+                                </div>
+                            ) : selectedRequestData ? (
+                                <>
+                                    <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                {selectedRequestData.profile_image_url && selectedRequestData.profile_image_url.startsWith('http') ? (
+                                                    <img src={`${selectedRequestData.profile_image_url}?t=${avatarTimestamp}`} alt={selectedRequestData.user_name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    (selectedRequestData.user_name || 'U').charAt(0).toUpperCase()
                                                 )}
                                             </div>
+                                            <div>
+                                                <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text mb-0.5">Request #{selectedRequestData.acr_id}</h2>
+                                                <p className="text-xs text-slate-500 dark:text-github-dark-muted">
+                                                    By <span className="font-bold text-slate-700 dark:text-slate-350">{selectedRequestData.user_name}</span> ({selectedRequestData.designation || 'Employee'}) • {formatCorrectionDate(selectedRequestData.request_date)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {selectedRequestData.status === 'pending' ? (
+                                            <div className="flex gap-2.5">
+                                                <button
+                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
+                                                    className="px-4 py-2 border border-rose-200 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
+                                                >
+                                                    <XCircle size={15} /> Reject
+                                                </button>
+                                                <button
+                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-600/10 hover:shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
+                                                >
+                                                    <CheckCircle size={15} /> Approve
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className={`text-xs font-bold uppercase px-3 py-1.5 rounded-lg border ${
+                                                selectedRequestData.status === 'approved' 
+                                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/30' 
+                                                    : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/30'
+                                            }`}>
+                                                {selectedRequestData.status}
+                                            </span>
                                         )}
+                                    </div>
 
-                                        <div className="flex-1">
+                                    {/* ADMIN OVERRIDE SECTION */}
+                                    {selectedRequestData.status === 'pending' && (
+                                        <div className="px-6 py-4 bg-slate-50 dark:bg-github-dark-subtle/50 border-b border-slate-200 dark:border-github-dark-border">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <input
+                                                    type="checkbox"
+                                                    id="overrideToggle"
+                                                    checked={overrideMode}
+                                                    onChange={(e) => {
+                                                        const isChecked = e.target.checked;
+                                                        setOverrideMode(isChecked);
+                                                        if (isChecked && selectedRequestData) {
+                                                            const getTime = (val) => {
+                                                                if (!val) return '';
+                                                                const timePart = val.includes(' ') ? val.split(' ')[1] : (val.includes('T') ? val.split('T')[1] : val);
+                                                                return timePart.substring(0, 5);
+                                                            };
+                                                            setOverrideIn(getTime(selectedRequestData.requested_time_in));
+                                                            setOverrideOut(getTime(selectedRequestData.requested_time_out));
+                                                            setOverrideMethod(selectedRequestData.correction_method || 'fix');
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 text-indigo-600 rounded border-slate-350 dark:border-github-dark-border focus:ring-indigo-500"
+                                                />
+                                                <label htmlFor="overrideToggle" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-github-dark-text select-none cursor-pointer">
+                                                    Override Request Details
+                                                </label>
+                                            </div>
 
-                                            {/* ── Visual Sync Timeline ── */}
-                                            {(() => {
-                                                const originalSnap = Array.isArray(selectedRequestData.original_data) ? selectedRequestData.original_data : [];
-                                                const proposedSnap = Array.isArray(selectedRequestData.proposed_data) ? selectedRequestData.proposed_data : [];
-                                                const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
-                                                const originalTasks = originalSnap.map((s, i) => ({ id: `orig-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
-                                                const proposedTasks = proposedSnap.map((s, i) => ({ id: `prop-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
-                                                const allTasks = [...originalTasks, ...proposedTasks];
-                                                if (allTasks.length === 0) return null;
-                                                const getMinutes = (t) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
-                                                let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
-                                                let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
-                                                let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
-                                                let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
-                                                const span = Math.max(1, endHour - startHour);
-                                                const timeToPos = (time) => { if (!time) return 0; const [h, m] = time.split(':').map(Number); const mins = (h || 0) * 60 + (m || 0); return Math.max(0, Math.min(100, ((mins - startHour * 60) / (span * 60)) * 100)); };
-                                                const getDurationPct = (s, e) => Math.max(0, timeToPos(e) - timeToPos(s));
-                                                const changesList = [];
-                                                const origCopy = originalTasks.map(t => ({ ...t }));
-                                                proposedTasks.forEach(prop => {
-                                                    const match = origCopy.find(o => o.startTime === prop.startTime && o.endTime === prop.endTime);
-                                                    if (match) { match.matched = true; } else {
-                                                        const over = origCopy.find(o => !o.matched && (Math.abs(getMinutes(o.startTime) - getMinutes(prop.startTime)) < 120 || Math.abs(getMinutes(o.endTime) - getMinutes(prop.endTime)) < 120));
-                                                        if (over) { over.matched = true; changesList.push({ type: 'MODIFY', task: prop, original: over }); }
-                                                        else { changesList.push({ type: 'ADD', task: prop }); }
-                                                    }
-                                                });
-                                                origCopy.filter(o => !o.matched).forEach(o => changesList.push({ type: 'DELETE', task: o }));
-                                                const hourStep = span > 8 ? 2 : 1;
-                                                return (
-                                                    <div className="bg-slate-50 dark:bg-[#13151f] border-b border-slate-200 dark:border-github-dark-border px-6 pt-4 pb-5">
-                                                        {/* Title row */}
-                                                        <div className="flex items-center gap-2 mb-4">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Visual Sync Timeline</span>
-                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
-                                                                {(selectedRequestData.correction_type || 'correction').toUpperCase()}
-                                                            </span>
-                                                            {/* Legend */}
-                                                            <div className="ml-auto flex items-center gap-3 text-[9px] font-bold uppercase text-slate-400">
-                                                                <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-slate-400/30 border border-slate-400/40"></span>Original</span>
-                                                                <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/20 border border-emerald-500/40"></span>Proposed</span>
-                                                            </div>
-                                                        </div>
+                                            {overrideMode && (
+                                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                                    {/* Method Selector */}
+                                                    <div className="flex bg-slate-100 dark:bg-github-dark-subtle/50 p-1 rounded-xl w-fit mb-4 border border-slate-200 dark:border-github-dark-border">
+                                                        {['add_session', 'reset'].map(m => (
+                                                            <button
+                                                                key={m}
+                                                                type="button"
+                                                                onClick={() => setOverrideMethod(m)}
+                                                                className={`px-4 py-2 text-xs font-bold uppercase rounded-lg transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
+                                                                    ? 'bg-white dark:bg-[#1e202e] text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border'
+                                                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200 border border-transparent'
+                                                                    }`}
+                                                            >
+                                                                {m === 'add_session' ? 'Manual Correction' : 'Reset Day'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
 
-                                                        {/* Scale */}
-                                                        <div className="relative mb-1 h-5">
-                                                            {Array.from({ length: span + 1 }, (_, i) => startHour + i)
-                                                                .filter((_, i) => i % hourStep === 0)
-                                                                .map((h) => (
-                                                                    <span key={h} className="absolute text-[9px] text-slate-400 font-mono -translate-x-1/2" style={{ left: `${((h - startHour) / span) * 100}%` }}>
-                                                                        {h}:00
-                                                                    </span>
-                                                                ))}
-                                                        </div>
-
-                                                        {/* Tick lines + rows */}
-                                                        <div className="relative">
-                                                            {/* Vertical grid lines */}
-                                                            <div className="absolute inset-0 pointer-events-none flex">
-                                                                {Array.from({ length: span + 1 }, (_, i) => i).map(i => (
-                                                                    <div key={i} className="absolute top-0 bottom-0 border-l border-dashed border-slate-300/40 dark:border-github-dark-border/40" style={{ left: `${(i / span) * 100}%` }} />
-                                                                ))}
-                                                            </div>
-
-                                                            {/* Original row */}
-                                                            <div className="mb-1">
-                                                                <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</div>
-                                                                <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
-                                                                    {originalTasks.map(task => (
-                                                                        <div key={task.id}
-                                                                            className="absolute inset-y-1 rounded-md bg-slate-400/25 border border-slate-400/40 flex items-center justify-center overflow-hidden"
-                                                                            style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
-                                                                            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                    {originalTasks.length === 0 && (
-                                                                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Original Records</div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Proposed row */}
-                                                            <div>
-                                                                <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Proposed</div>
-                                                                <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
-                                                                    {proposedTasks.map(task => {
-                                                                        const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
-                                                                        const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
-                                                                        const cls = isNew
-                                                                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
-                                                                            : isChanged
-                                                                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400'
-                                                                                : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400';
-                                                                        return (
-                                                                            <div key={task.id}
-                                                                                className={`absolute inset-y-1 rounded-md border flex items-center justify-center overflow-hidden ${cls}`}
-                                                                                style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
-                                                                                {isNew && <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />}
-                                                                                <span className="text-[10px] font-mono font-bold px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                    {/* Dynamic Inputs */}
+                                                    {overrideMethod === 'add_session' || overrideMethod === 'fix' ? (
+                                                        <div className="space-y-4">
+                                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                                {overrideSessions.map((s, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-4 bg-white dark:bg-[#13151f] p-3 rounded-xl border border-slate-200 dark:border-github-dark-border shadow-sm relative group w-full">
+                                                                        <div className="flex-1 flex items-center justify-between">
+                                                                            <div className="flex items-center gap-3 w-full">
+                                                                                <div className="relative flex-1">
+                                                                                    <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time In</label>
+                                                                                    <input type="time" value={s.time_in} onChange={(e) => {
+                                                                                        const ns = [...overrideSessions]; ns[idx].time_in = e.target.value; setOverrideSessions(ns);
+                                                                                    }}
+                                                                                        className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-github-dark-text transition-all font-mono"
+                                                                                    />
+                                                                                </div>
+                                                                                <span className="text-slate-400 font-bold px-1">→</span>
+                                                                                <div className="relative flex-1">
+                                                                                    <label className="absolute -top-2.5 left-2 bg-white dark:bg-[#13151f] px-1 text-[10px] uppercase font-bold text-slate-500">Time Out</label>
+                                                                                    <input type="time" value={s.time_out} onChange={(e) => {
+                                                                                        const ns = [...overrideSessions]; ns[idx].time_out = e.target.value; setOverrideSessions(ns);
+                                                                                    }}
+                                                                                        className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent text-slate-800 dark:text-github-dark-text transition-all font-mono"
+                                                                                    />
+                                                                                </div>
                                                                             </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
+                                                                        </div>
+                                                                        {overrideSessions.length > 1 && (
+                                                                            <button type="button" onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors" title="Remove session">
+                                                                                <XCircle size={18} />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <button type="button" onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 px-1 pt-1 transition-colors">
+                                                                <span className="text-lg leading-none">+</span> Add Session
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-4 w-full md:w-3/4 lg:w-1/2">
+                                                            <div className="relative flex-1">
+                                                                <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-github-dark-subtle/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time In</label>
+                                                                <input type="time" value={overrideIn} onChange={(e) => setOverrideIn(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-github-dark-text transition-all font-mono" />
+                                                            </div>
+                                                            <div className="relative flex-1">
+                                                                <label className="absolute -top-2.5 left-2 bg-slate-50 dark:bg-github-dark-subtle/50 px-1 text-[10px] uppercase font-bold text-slate-500">New Time Out</label>
+                                                                <input type="time" value={overrideOut} onChange={(e) => setOverrideOut(e.target.value)} className="w-full pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white dark:bg-[#13151f] text-slate-800 dark:text-github-dark-text transition-all font-mono" />
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            {/* ── Info Cards & Layout ── */}
-                                            <div className="p-5 space-y-4">
-                                                {/* Meta row */}
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Type</p>
-                                                        <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">{selectedRequestData.correction_type || '—'}</p>
-                                                    </div>
-                                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Method</p>
-                                                        <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">
-                                                            {selectedRequestData.correction_method === 'add_session' ? 'Manual' : selectedRequestData.correction_method || 'Fix'}
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Submitted</p>
-                                                        <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text">
-                                                            {selectedRequestData.submitted_at ? new Date(selectedRequestData.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
-                                                        </p>
-                                                    </div>
+                                                    )}
                                                 </div>
+                                            )}
+                                        </div>
+                                    )}
 
-                                                {/* Proposed Sessions table */}
-                                                {Array.isArray(selectedRequestData.proposed_data) && selectedRequestData.proposed_data.length > 0 && (
-                                                    <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
-                                                        <div className="px-4 py-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between">
-                                                            <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-github-dark-text">Proposed Sessions</h3>
-                                                            <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
-                                                                {selectedRequestData.proposed_data.length} session{selectedRequestData.proposed_data.length !== 1 ? 's' : ''}
-                                                            </span>
+                                    <div className="flex-1">
+
+                                        {/* ── Visual Sync Timeline ── */}
+                                        {(() => {
+                                            const originalSnap = Array.isArray(selectedRequestData.original_data) ? selectedRequestData.original_data : [];
+                                            const proposedSnap = Array.isArray(selectedRequestData.proposed_data) ? selectedRequestData.proposed_data : [];
+                                            const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
+                                            const originalTasks = originalSnap.map((s, i) => ({ id: `orig-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                            const proposedTasks = proposedSnap.map((s, i) => ({ id: `prop-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                            const allTasks = [...originalTasks, ...proposedTasks];
+                                            if (allTasks.length === 0) return null;
+                                            const getMinutes = (t) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+                                            let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
+                                            let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
+                                            let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
+                                            let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
+                                            const span = Math.max(1, endHour - startHour);
+                                            const timeToPos = (time) => { if (!time) return 0; const [h, m] = time.split(':').map(Number); const mins = (h || 0) * 60 + (m || 0); return Math.max(0, Math.min(100, ((mins - startHour * 60) / (span * 60)) * 100)); };
+                                            const getDurationPct = (s, e) => Math.max(0, timeToPos(e) - timeToPos(s));
+                                            const changesList = [];
+                                            const origCopy = originalTasks.map(t => ({ ...t }));
+                                            proposedTasks.forEach(prop => {
+                                                const match = origCopy.find(o => o.startTime === prop.startTime && o.endTime === prop.endTime);
+                                                if (match) { match.matched = true; } else {
+                                                    const over = origCopy.find(o => !o.matched && (Math.abs(getMinutes(o.startTime) - getMinutes(prop.startTime)) < 120 || Math.abs(getMinutes(o.endTime) - getMinutes(prop.endTime)) < 120));
+                                                    if (over) { over.matched = true; changesList.push({ type: 'MODIFY', task: prop, original: over }); }
+                                                    else { changesList.push({ type: 'ADD', task: prop }); }
+                                                }
+                                            });
+                                            origCopy.filter(o => !o.matched).forEach(o => changesList.push({ type: 'DELETE', task: o }));
+                                            const hourStep = span > 8 ? 2 : 1;
+                                            return (
+                                                <div className="bg-slate-50 dark:bg-[#13151f] border-b border-slate-200 dark:border-github-dark-border px-6 pt-4 pb-5">
+                                                    {/* Title row */}
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Visual Sync Timeline</span>
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
+                                                            {(selectedRequestData.correction_type || 'correction').toUpperCase()}
+                                                        </span>
+                                                        {/* Legend */}
+                                                        <div className="ml-auto flex items-center gap-3 text-[9px] font-bold uppercase text-slate-400">
+                                                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-slate-400/30 border border-slate-400/40"></span>Original</span>
+                                                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/20 border border-emerald-500/40"></span>Proposed</span>
                                                         </div>
-                                                        <div className="divide-y divide-slate-100 dark:divide-github-dark-border">
-                                                            {selectedRequestData.proposed_data.map((s, i) => (
-                                                                <div key={i} className="flex items-center px-4 py-3 gap-4">
-                                                                    <span className="text-[10px] font-black text-slate-400 w-5 shrink-0">#{i + 1}</span>
-                                                                    <div className="flex items-center gap-2 flex-1">
-                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">In</span>
-                                                                        <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_in || '').substring(0, 5)}</span>
-                                                                    </div>
-                                                                    <span className="text-slate-300 dark:text-slate-600">→</span>
-                                                                    <div className="flex items-center gap-2 flex-1 justify-end">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Out</span>
-                                                                        <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_out || '').substring(0, 5)}</span>
-                                                                        <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                                                                    </div>
-                                                                </div>
+                                                    </div>
+
+                                                    {/* Scale */}
+                                                    <div className="relative mb-1 h-5">
+                                                        {Array.from({ length: span + 1 }, (_, i) => startHour + i)
+                                                            .filter((_, i) => i % hourStep === 0)
+                                                            .map((h) => (
+                                                                <span key={h} className="absolute text-[9px] text-slate-400 font-mono -translate-x-1/2" style={{ left: `${((h - startHour) / span) * 100}%` }}>
+                                                                    {h}:00
+                                                                </span>
+                                                            ))}
+                                                    </div>
+
+                                                    {/* Tick lines + rows */}
+                                                    <div className="relative">
+                                                        {/* Vertical grid lines */}
+                                                        <div className="absolute inset-0 pointer-events-none flex">
+                                                            {Array.from({ length: span + 1 }, (_, i) => i).map(i => (
+                                                                <div key={i} className="absolute top-0 bottom-0 border-l border-dashed border-slate-300/40 dark:border-github-dark-border/40" style={{ left: `${(i / span) * 100}%` }} />
                                                             ))}
                                                         </div>
-                                                    </div>
-                                                )}
 
-                                                {/* Audit Trail */}
-                                                {(() => {
-                                                    const trail = typeof selectedRequestData.audit_trail === 'string'
-                                                        ? (() => { try { return JSON.parse(selectedRequestData.audit_trail); } catch { return []; } })()
-                                                        : (Array.isArray(selectedRequestData.audit_trail) ? selectedRequestData.audit_trail : []);
-                                                    if (trail && trail.length > 0) {
-                                                        return (
-                                                            <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
-                                                                <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-github-dark-muted font-semibold mb-4 flex items-center gap-2">
-                                                                    <Activity size={14} /> Audit Trail
-                                                                </h4>
-                                                                <div className="relative pl-4 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
-                                                                    {trail.map((event, idx) => (
-                                                                        <div key={idx} className="relative">
-                                                                            <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-dark-card ring-1 ring-slate-100 dark:ring-slate-800"></div>
-                                                                            <p className="text-sm font-medium text-slate-800 dark:text-github-dark-text">
-                                                                                {String(event.action).charAt(0).toUpperCase() + String(event.action).slice(1)}
-                                                                            </p>
-                                                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted">
-                                                                                {new Date(event.at).toLocaleString()} • by {event.by === selectedRequestData.user_id ? selectedRequestData.user_name : 'Admin'}
-                                                                            </p>
-                                                                            {event.comments && (
-                                                                                <p className="text-xs text-slate-600 dark:text-github-dark-muted mt-1 italic">"{event.comments}"</p>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
+                                                        {/* Original row */}
+                                                        <div className="mb-1">
+                                                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</div>
+                                                            <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                {originalTasks.map(task => (
+                                                                    <div key={task.id}
+                                                                        className="absolute inset-y-1 rounded-md bg-slate-400/25 border border-slate-400/40 flex items-center justify-center overflow-hidden"
+                                                                        style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                                    </div>
+                                                                ))}
+                                                                {originalTasks.length === 0 && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Original Records</div>
+                                                                )}
                                                             </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })()}
+                                                        </div>
 
-                                                {/* Request Reason */}
-                                                <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
-                                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-                                                        <FileClock size={12} /> Request Reason
-                                                    </h3>
-                                                    <p className="text-sm text-slate-700 dark:text-slate-200 italic leading-relaxed">
-                                                        "{selectedRequestData.reason || 'No reason provided.'}"
+                                                        {/* Proposed row */}
+                                                        <div>
+                                                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Proposed</div>
+                                                            <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                {proposedTasks.map(task => {
+                                                                    const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
+                                                                    const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
+                                                                    const cls = isNew
+                                                                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                                                                        : isChanged
+                                                                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                                                                        : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400';
+                                                                    return (
+                                                                        <div key={task.id}
+                                                                            className={`absolute inset-y-1 rounded-md border flex items-center justify-center overflow-hidden ${cls}`}
+                                                                            style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                            {isNew && <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />}
+                                                                            <span className="text-[10px] font-mono font-bold px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* ── Info Cards & Layout ── */}
+                                        <div className="p-5 space-y-4">
+                                            {/* Meta row */}
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Type</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">{selectedRequestData.correction_type || '—'}</p>
+                                                </div>
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Method</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">
+                                                        {selectedRequestData.correction_method === 'add_session' ? 'Manual' : selectedRequestData.correction_method || 'Fix'}
                                                     </p>
                                                 </div>
-
-                                                {/* Decision Comments / Auditor card */}
-                                                {selectedRequestData.status !== 'pending' ? (
-                                                    <div className={`rounded-xl border p-4 ${selectedRequestData.status === 'approved'
-                                                            ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30'
-                                                            : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/30'
-                                                        }`}>
-                                                        <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${selectedRequestData.status === 'approved'
-                                                                ? 'text-emerald-600 dark:text-emerald-400'
-                                                                : 'text-red-600 dark:text-red-400'
-                                                            }`}>
-                                                            <CheckCircle size={12} /> Auditor Comments
-                                                        </h3>
-                                                        <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
-                                                            {selectedRequestData.review_comments || 'No auditor comments provided.'}
-                                                        </p>
-                                                        <p className="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                                            Reviewed {selectedRequestData.reviewed_at ? formatCorrectionDate(selectedRequestData.reviewed_at) : '—'}
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
-                                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-                                                            <MessageSquare size={12} /> Auditor Comments
-                                                        </h3>
-                                                        <textarea
-                                                            value={reviewComment}
-                                                            onChange={(e) => setReviewComment(e.target.value)}
-                                                            placeholder="Add auditor review comments, reasoning or remarks here before approving/rejecting..."
-                                                            className="w-full mt-1 p-3 text-sm bg-white dark:bg-[#13151f] border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-github-dark-text resize-none h-24"
-                                                        ></textarea>
-                                                    </div>
-                                                )}
-
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Submitted</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text">
+                                                        {selectedRequestData.submitted_at ? new Date(selectedRequestData.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                                                    </p>
+                                                </div>
                                             </div>
+
+                                            {/* Proposed Sessions table */}
+                                            {Array.isArray(selectedRequestData.proposed_data) && selectedRequestData.proposed_data.length > 0 && (
+                                                <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
+                                                    <div className="px-4 py-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between">
+                                                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-github-dark-text">Proposed Sessions</h3>
+                                                        <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                                                            {selectedRequestData.proposed_data.length} session{selectedRequestData.proposed_data.length !== 1 ? 's' : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div className="divide-y divide-slate-100 dark:divide-github-dark-border">
+                                                        {selectedRequestData.proposed_data.map((s, i) => (
+                                                            <div key={i} className="flex items-center px-4 py-3 gap-4">
+                                                                <span className="text-[10px] font-black text-slate-400 w-5 shrink-0">#{i + 1}</span>
+                                                                <div className="flex items-center gap-2 flex-1">
+                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">In</span>
+                                                                    <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_in || '').substring(0, 5)}</span>
+                                                                </div>
+                                                                <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                                <div className="flex items-center gap-2 flex-1 justify-end">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Out</span>
+                                                                    <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_out || '').substring(0, 5)}</span>
+                                                                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Audit Trail */}
+                                            {(() => {
+                                                const trail = typeof selectedRequestData.audit_trail === 'string'
+                                                    ? (() => { try { return JSON.parse(selectedRequestData.audit_trail); } catch { return []; } })()
+                                                    : (Array.isArray(selectedRequestData.audit_trail) ? selectedRequestData.audit_trail : []);
+                                                if (trail && trail.length > 0) {
+                                                    return (
+                                                        <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                            <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-github-dark-muted font-semibold mb-4 flex items-center gap-2">
+                                                                <Activity size={14} /> Audit Trail
+                                                            </h4>
+                                                            <div className="relative pl-4 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
+                                                                {trail.map((event, idx) => (
+                                                                    <div key={idx} className="relative">
+                                                                        <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-dark-card ring-1 ring-slate-100 dark:ring-slate-800"></div>
+                                                                        <p className="text-sm font-medium text-slate-800 dark:text-github-dark-text">
+                                                                            {String(event.action).charAt(0).toUpperCase() + String(event.action).slice(1)}
+                                                                        </p>
+                                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted">
+                                                                            {new Date(event.at).toLocaleString()} • by {event.by === selectedRequestData.user_id ? selectedRequestData.user_name : 'Admin'}
+                                                                        </p>
+                                                                        {event.comments && (
+                                                                            <p className="text-xs text-slate-600 dark:text-github-dark-muted mt-1 italic">"{event.comments}"</p>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+
+                                            {/* Request Reason */}
+                                            <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                                                    <FileClock size={12} /> Request Reason
+                                                </h3>
+                                                <p className="text-sm text-slate-700 dark:text-slate-200 italic leading-relaxed">
+                                                    "{selectedRequestData.reason || 'No reason provided.'}"
+                                                </p>
+                                            </div>
+
+                                            {/* Decision Comments / Auditor card */}
+                                            {selectedRequestData.status !== 'pending' ? (
+                                                <div className={`rounded-xl border p-4 ${
+                                                    selectedRequestData.status === 'approved'
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30'
+                                                        : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/30'
+                                                }`}>
+                                                    <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${
+                                                        selectedRequestData.status === 'approved'
+                                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                                            : 'text-red-600 dark:text-red-400'
+                                                    }`}>
+                                                        <CheckCircle size={12} /> Auditor Comments
+                                                    </h3>
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                                                        {selectedRequestData.review_comments || 'No auditor comments provided.'}
+                                                    </p>
+                                                    <p className="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                                        Reviewed {selectedRequestData.reviewed_at ? formatCorrectionDate(selectedRequestData.reviewed_at) : '—'}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                                                        <MessageSquare size={12} /> Auditor Comments
+                                                    </h3>
+                                                    <textarea
+                                                        value={reviewComment}
+                                                        onChange={(e) => setReviewComment(e.target.value)}
+                                                        placeholder="Add auditor review comments, reasoning or remarks here before approving/rejecting..."
+                                                        className="w-full mt-1 p-3 text-sm bg-white dark:bg-[#13151f] border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-github-dark-text resize-none h-24"
+                                                    ></textarea>
+                                                </div>
+                                            )}
+
+                                        </div>
 
                                         </div>
                                     </>
@@ -2563,7 +2485,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 {user.status}
                             </span>
                             <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-github-dark-muted bg-slate-100 dark:bg-github-dark-subtle/50 px-2 py-0.5 rounded border border-slate-200 dark:border-github-dark-border">
-                                {user.totalHours && user.totalHours.toLowerCase().includes('hrs') ? user.totalHours : `${user.totalHours} Hrs`}
+                                {user.totalHours && (user.totalHours.toLowerCase().includes('hr') || user.totalHours.toLowerCase().includes('min') || user.totalHours === '-') ? user.totalHours : `${user.totalHours} Hrs`}
                                 {user.expectedHours && user.expectedHours !== '-' && ` / ${user.expectedHours}`}
                             </span>
                         </div>
@@ -2623,7 +2545,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 <span className="text-[9px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest block">Punch In</span>
                                                 <div className="flex items-start gap-1.5">
                                                     <MapPin size={10} className="shrink-0 mt-0.5 text-emerald-500 opacity-70" />
-                                                    <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight line-clamp-2" title={session.inLocation}>
+                                                    <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight break-words whitespace-normal" title={session.inLocation}>
                                                         {session.inLocation}
                                                     </span>
                                                 </div>
@@ -2644,7 +2566,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 {session.outLocation ? (
                                                     <div className="flex items-start gap-1.5">
                                                         <MapPin size={10} className="shrink-0 mt-0.5 text-rose-500 opacity-70" />
-                                                        <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight line-clamp-2" title={session.outLocation}>
+                                                        <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight break-words whitespace-normal" title={session.outLocation}>
                                                             {session.outLocation}
                                                         </span>
                                                     </div>

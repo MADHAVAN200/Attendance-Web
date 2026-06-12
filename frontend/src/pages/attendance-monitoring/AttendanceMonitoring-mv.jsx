@@ -7,7 +7,7 @@ import {
     ChevronDown, FileText, CheckCircle, XCircle, AlertCircle, X, LogIn,
     LogOut, History, PieChart as PieChartIcon, BarChart as BarChartIcon,
     RefreshCcw, MoreVertical, LayoutGrid, ArrowRight, Eye, Info,
-    ChevronRight, ChevronLeft, Map, Camera
+    ChevronRight, ChevronLeft, Map, Camera, Users
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
@@ -31,49 +31,26 @@ L.Icon.Default.mergeOptions({
     shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-// Timezone abbreviation helper
-const getTimezoneAbbreviation = (tzName) => {
-    if (!tzName || tzName === 'N/A' || tzName === 'Simulated Timezone') return '';
-    try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: tzName,
-            timeZoneName: 'short'
-        });
-        const parts = formatter.formatToParts(new Date());
-        const tzPart = parts.find(p => p.type === 'timeZoneName');
-        return tzPart ? tzPart.value : tzName;
-    } catch (e) {
-        return tzName;
-    }
-};
-
 // Timezone-aware date/time parser and normalizer
 const parseTimeInTimezone = (r, isOut, orgTimezone) => {
     let utcStr = null;
     let fallbackStr = isOut ? r.time_out : r.time_in;
-    let recordTimezone = null;
     
     if (r.metadata) {
         try {
             const meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
             utcStr = isOut ? meta?.time_out?.timestamp_utc : meta?.time_in?.timestamp_utc;
-            recordTimezone = isOut ? meta?.time_out?.timezone : meta?.time_in?.timezone;
-            if (recordTimezone === 'N/A' || recordTimezone === 'Simulated Timezone' || !recordTimezone) {
-                recordTimezone = null;
-            }
         } catch (e) {
             console.error("Failed to parse metadata", e);
         }
     }
-    
-    const timezoneToUse = recordTimezone || orgTimezone || 'UTC';
     
     // If we have a valid UTC string from metadata, we convert it to the organization's timezone.
     if (utcStr) {
         try {
             const d = new Date(utcStr);
             if (!isNaN(d.getTime())) {
-                const localStr = d.toLocaleString('en-US', { timeZone: timezoneToUse });
+                const localStr = d.toLocaleString('en-US', { timeZone: orgTimezone || 'UTC' });
                 const parsed = new Date(localStr);
                 if (!isNaN(parsed.getTime())) return parsed;
             }
@@ -107,6 +84,28 @@ const getCurrentTimeInTimezone = (orgTimezone) => {
         return new Date(localStr);
     } catch (e) {
         return d;
+    }
+};
+
+const formatTotalTime = (totalMin, fallbackHours) => {
+    let minutes = 0;
+    if (totalMin > 0) {
+        minutes = totalMin;
+    } else if (fallbackHours > 0) {
+        minutes = fallbackHours * 60;
+    }
+    
+    if (minutes <= 0) return '-';
+    
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    
+    if (hrs > 0 && mins > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'} ${mins} ${mins === 1 ? 'min' : 'mins'}`;
+    } else if (hrs > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'}`;
+    } else {
+        return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
     }
 };
 
@@ -154,7 +153,7 @@ const MobileAttendanceMonitoring = () => {
 
     // Data State
     const [attendanceData, setAttendanceData] = useState([]);
-    const [stats, setStats] = useState({ present: 0, late: 0, absent: 0, active: 0 });
+    const [stats, setStats] = useState({ present: 0, late: 0, absent: 0, active: 0, total: 0 });
     const [correctionRequests, setCorrectionRequests] = useState([]);
     const [requestCount, setRequestCount] = useState(0);
 
@@ -162,7 +161,6 @@ const MobileAttendanceMonitoring = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDept, setSelectedDept] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
-    const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
     // Selection/Popup State
@@ -171,14 +169,6 @@ const MobileAttendanceMonitoring = () => {
     const [requestSubTab, setRequestSubTab] = useState('PENDING');
 
     const DEPARTMENTS = ['All', 'Sales', 'Retail', 'Logistics', 'Operations', 'IT', 'HR'];
-    const STATUS_OPTIONS = [
-        { value: 'All', label: 'All Statuses' },
-        { value: 'Active', label: 'Timed-In (Active)' },
-        { value: 'Present', label: 'Timed-Out (Done)' },
-        { value: 'Missed Punch', label: 'Missed Punch' },
-        { value: 'Absent', label: 'Absent' },
-        { value: 'Leave', label: 'Leave / Holiday / Off' }
-    ];
 
     const handleTabChange = (newTab) => {
         const currentIndex = MAIN_TABS.indexOf(activeTab);
@@ -249,37 +239,25 @@ const MobileAttendanceMonitoring = () => {
             // Merge Data Logic (Synchronized with Web)
             const mergedData = staff.map(u => {
                 const daySessions = u.sessions || [];
+                let totalMin = 0;
                 const sessions = daySessions.map(r => {
                     const inTime = parseTimeInTimezone(r, false, resolvedTz);
-                    const outTime = parseTimeInTimezone(r, true, resolvedTz);
-
-                    let inTz = null;
-                    let outTz = null;
-                    if (r.metadata) {
-                        try {
-                            const meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata;
-                            inTz = meta?.time_in?.timezone;
-                            outTz = meta?.time_out?.timezone;
-                        } catch (e) {}
-                    }
-                    if (inTz === 'N/A' || inTz === 'Simulated Timezone' || !inTz) inTz = resolvedTz;
-                    if (outTz === 'N/A' || outTz === 'Simulated Timezone' || !outTz) outTz = resolvedTz;
-
-                    const inTzAbbr = getTimezoneAbbreviation(inTz);
-                    const outTzAbbr = getTimezoneAbbreviation(outTz);
-
-                    const formatTime = (d, tzAbbr) => {
+                    const formatTime = (d) => {
                         if (!d) return '-';
-                        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        return tzAbbr ? `${timeStr} (${tzAbbr})` : timeStr;
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     };
 
-                    const inStr = formatTime(inTime, inTzAbbr);
+                    const inStr = formatTime(inTime);
                     let outStr = '-';
                     let isActive = !r.time_out && r.status !== 'MISSED_PUNCH';
 
+                    const outTime = parseTimeInTimezone(r, true, resolvedTz);
                     if (outTime) {
-                        outStr = formatTime(outTime, outTzAbbr);
+                        outStr = formatTime(outTime);
+                        if (inTime) totalMin += Math.max(0, (outTime - inTime) / 60000);
+                    } else if (isActive && inTime) {
+                        const nowTZ = getCurrentTimeInTimezone(resolvedTz);
+                        totalMin += Math.max(0, (nowTZ - inTime) / 60000);
                     }
 
                     const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
@@ -321,7 +299,7 @@ const MobileAttendanceMonitoring = () => {
                 };
                 const status = statusMap[u.status] || u.status || 'Absent';
 
-                const totalHrs = u.total_hours > 0 ? `${Number(u.total_hours).toFixed(1)} hrs` : '-';
+                const totalHrs = formatTotalTime(totalMin, u.total_hours > 0 ? Number(u.total_hours) : 0);
                 const lastLocation = u.sessions && u.sessions.length > 0
                     ? u.sessions[0].time_in_address || (u.sessions[0].time_in_lat ? `${u.sessions[0].time_in_lat}, ${u.sessions[0].time_in_lng}` : '-')
                     : '-';
@@ -374,7 +352,8 @@ const MobileAttendanceMonitoring = () => {
                 present: mergedData.filter(d => d.status !== 'Absent' && d.status !== 'Week Off' && d.status !== 'Holiday' && d.status !== 'Leave').length,
                 late: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Late') : d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length
+                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length,
+                total: mergedData.length
             });
 
             setCorrectionRequests(requests);
@@ -416,43 +395,20 @@ const MobileAttendanceMonitoring = () => {
         return () => observer.disconnect();
     }, []);
 
-    // --- FILTERED DATA ---
-    const filteredEmployees = attendanceData.filter(e => {
-        const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             e.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             e.department.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesDept = selectedDept === 'All' || e.department === selectedDept;
-
-        let matchesStatus = true;
-        if (statusFilter === 'Active') {
-            matchesStatus = e.status === 'Active' || e.status === 'Late Active' || (e.sessions && e.sessions.some(s => s.isActive));
-        } else if (statusFilter === 'Present') { // Timed-Out (Done)
-            matchesStatus = e.sessions && e.sessions.some(s => s.rawOut !== null);
-        } else if (statusFilter === 'Missed Punch') {
-            matchesStatus = e.status === 'Missed Punch';
-        } else if (statusFilter === 'Absent') {
-            matchesStatus = e.status === 'Absent';
-        } else if (statusFilter === 'Leave') {
-            matchesStatus = e.status === 'Leave' || e.status === 'Holiday' || e.status === 'Week Off';
-        }
-
-        return matchesSearch && matchesDept && matchesStatus;
-    });
-
     // --- ANALYTICS DATA PROCESSING (Ported from Web) ---
     const chartData = useMemo(() => {
-        if (!filteredEmployees.length) return { status: [], timeline: [], departments: [], frequency: [] };
+        if (!attendanceData.length) return { status: [], timeline: [], departments: [], frequency: [] };
 
         // 1. Status Pie
-        const active = filteredEmployees.filter(d => d.status === 'Active' || d.status === 'Late Active').length;
-        const present = filteredEmployees.filter(d => d.status === 'Present').length;
-        const late = filteredEmployees.filter(d => d.status === 'Late').length;
-        const overtime = filteredEmployees.filter(d => d.status === 'Overtime').length;
-        const missedPunch = filteredEmployees.filter(d => d.status === 'Missed Punch').length;
-        const absent = filteredEmployees.filter(d => d.status === 'Absent').length;
-        const weekOff = filteredEmployees.filter(d => d.status === 'Week Off').length;
-        const holiday = filteredEmployees.filter(d => d.status === 'Holiday').length;
-        const leave = filteredEmployees.filter(d => d.status === 'Leave').length;
+        const active = attendanceData.filter(d => d.status === 'Active' || d.status === 'Late Active').length;
+        const present = attendanceData.filter(d => d.status === 'Present').length;
+        const late = attendanceData.filter(d => d.status === 'Late').length;
+        const overtime = attendanceData.filter(d => d.status === 'Overtime').length;
+        const missedPunch = attendanceData.filter(d => d.status === 'Missed Punch').length;
+        const absent = attendanceData.filter(d => d.status === 'Absent').length;
+        const weekOff = attendanceData.filter(d => d.status === 'Week Off').length;
+        const holiday = attendanceData.filter(d => d.status === 'Holiday').length;
+        const leave = attendanceData.filter(d => d.status === 'Leave').length;
 
         const status = [
             { name: 'Active', value: active, color: '#3b82f6' },
@@ -470,7 +426,7 @@ const MobileAttendanceMonitoring = () => {
         const hourlyData = {};
         for (let i = 0; i <= 23; i++) hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
 
-        filteredEmployees.forEach(item => {
+        attendanceData.forEach(item => {
             item.sessions.forEach((s, idx) => {
                 const h = s.rawIn.getHours();
                 if (hourlyData.hasOwnProperty(h)) {
@@ -498,7 +454,7 @@ const MobileAttendanceMonitoring = () => {
 
         // 3. Department Breakdown
         const deptStats = {};
-        filteredEmployees.forEach(item => {
+        attendanceData.forEach(item => {
             const dept = item.department || 'General';
             if (!deptStats[dept]) deptStats[dept] = { name: dept, Present: 0, Absent: 0, Late: 0 };
 
@@ -510,7 +466,7 @@ const MobileAttendanceMonitoring = () => {
 
         // 4. Login Frequency
         const freq = { '1 Session': 0, '2 Sessions': 0, '3 Sessions': 0, '4+ Sessions': 0 };
-        filteredEmployees.forEach(item => {
+        attendanceData.forEach(item => {
             if (item.status !== 'Absent' && item.status !== 'Week Off' && item.status !== 'Holiday' && item.status !== 'Leave') {
                 const count = item.sessions.length;
                 if (count === 1) freq['1 Session']++;
@@ -522,7 +478,26 @@ const MobileAttendanceMonitoring = () => {
         const frequency = Object.entries(freq).map(([name, value]) => ({ name, value }));
 
         return { status, timeline, departments, frequency };
-    }, [filteredEmployees]);
+    }, [attendanceData]);
+
+    // --- FILTERED DATA ---
+    const filteredEmployees = attendanceData.filter(e => {
+        const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesDept = selectedDept === 'All' || e.department === selectedDept;
+        
+        let matchesStatus = true;
+        if (statusFilter === 'present') {
+            matchesStatus = e.status !== 'Absent' && e.status !== 'Week Off' && e.status !== 'Holiday' && e.status !== 'Leave';
+        } else if (statusFilter === 'late') {
+            matchesStatus = e.allStatuses ? e.allStatuses.includes('Late') : e.status.includes('Late');
+        } else if (statusFilter === 'absent') {
+            matchesStatus = e.status === 'Absent';
+        } else if (statusFilter === 'active') {
+            matchesStatus = e.allStatuses ? e.allStatuses.includes('Active') : e.status.includes('Active');
+        }
+        
+        return matchesSearch && matchesDept && matchesStatus;
+    });
 
     const activeEmployees = filteredEmployees.filter(e => e.status !== 'Absent' && e.status !== 'Week Off' && e.status !== 'Holiday' && e.status !== 'Leave');
     const absentEmployees = filteredEmployees.filter(e => ['Absent', 'Week Off', 'Holiday', 'Leave'].includes(e.status));
@@ -543,7 +518,7 @@ const MobileAttendanceMonitoring = () => {
                                 <button
                                     key={tab}
                                     onClick={() => handleTabChange(tab)}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 relative ${isActive
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 relative ${isActive
                                             ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
                                             : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
                                         }`}
@@ -576,7 +551,7 @@ const MobileAttendanceMonitoring = () => {
                                                 }`}
                                         >
                                             <sub.icon size={16} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[0.5px]`} />
-                                            <span className={`text-[11px] font-medium leading-none ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                                            <span className={`text-[11px] font-black uppercase tracking-tighter leading-none ${isActive ? 'opacity-100' : 'opacity-70'}`}>
                                                 {sub.label}
                                             </span>
                                             {isActive && (
@@ -657,12 +632,23 @@ const MobileAttendanceMonitoring = () => {
                                 {activeEmployees.length} PRESENT TODAY
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-full text-[9px] font-black uppercase">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                            </span>
-                            Live
+                        <div className="flex items-center gap-2">
+                            {statusFilter !== 'All' && (
+                                <button
+                                    onClick={() => setStatusFilter('All')}
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-500/20 rounded text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-500/30 transition-colors"
+                                >
+                                    <span>{statusFilter === 'total' ? 'Total' : statusFilter === 'present' ? 'Present' : statusFilter === 'late' ? 'Late' : statusFilter === 'absent' ? 'Absent' : statusFilter === 'active' ? 'Active' : statusFilter}</span>
+                                    <span>×</span>
+                                </button>
+                            )}
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-full text-[9px] font-black uppercase">
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                Live
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -703,24 +689,20 @@ const MobileAttendanceMonitoring = () => {
                                                         className="w-full pl-10 pr-4 py-3 bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-lg text-xs font-bold outline-none shadow-sm focus:ring-2 focus:ring-indigo-500/20 transition-all dark:text-white"
                                                     />
                                                 </div>
-                                                <button
-                                                    onClick={() => setIsFilterDrawerOpen(true)}
-                                                    className={`w-12 h-12 border rounded-lg flex items-center justify-center shadow-sm active:scale-90 transition-all ${
-                                                        selectedDept !== 'All' || statusFilter !== 'All'
-                                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400'
-                                                            : 'bg-white dark:bg-dark-card border-slate-100 dark:border-github-dark-border text-slate-400'
-                                                    }`}
-                                                >
+                                                <button className="w-12 h-12 bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-lg flex items-center justify-center text-slate-400 shadow-sm active:scale-90 transition-transform">
                                                     <Filter size={18} />
                                                 </button>
                                             </div>
 
                                             {/* Stats Grid */}
                                             <div className="grid grid-cols-2 gap-3">
-                                                <CompactStatCard label="Present" value={stats.present} color="emerald" icon={UserCheck} />
-                                                <CompactStatCard label="Late" value={stats.late} color="amber" icon={Clock} />
-                                                <CompactStatCard label="Active" value={stats.active} color="blue" icon={Activity} />
-                                                <CompactStatCard label="Absent" value={stats.absent} color="rose" icon={UserX} />
+                                                <div className="col-span-2">
+                                                    <CompactStatCard label="Total Employees" value={stats.total} color="indigo" icon={Users} isSelected={statusFilter === 'total'} onClick={() => setStatusFilter(statusFilter === 'total' ? 'All' : 'total')} />
+                                                </div>
+                                                <CompactStatCard label="Present" value={stats.present} color="emerald" icon={UserCheck} isSelected={statusFilter === 'present'} onClick={() => setStatusFilter(statusFilter === 'present' ? 'All' : 'present')} />
+                                                <CompactStatCard label="Late" value={stats.late} color="amber" icon={Clock} isSelected={statusFilter === 'late'} onClick={() => setStatusFilter(statusFilter === 'late' ? 'All' : 'late')} />
+                                                <CompactStatCard label="Active" value={stats.active} color="blue" icon={Activity} isSelected={statusFilter === 'active'} onClick={() => setStatusFilter(statusFilter === 'active' ? 'All' : 'active')} />
+                                                <CompactStatCard label="Absent" value={stats.absent} color="rose" icon={UserX} isSelected={statusFilter === 'absent'} onClick={() => setStatusFilter(statusFilter === 'absent' ? 'All' : 'absent')} />
                                             </div>
 
                                             {/* List Section */}
@@ -921,11 +903,11 @@ const MobileAttendanceMonitoring = () => {
                             {activeTab === 'requests' && (
                                 <div className="space-y-3">
                                     <div className="flex bg-slate-100 dark:bg-black/20 p-1 rounded-xl">
-                                        {['Pending', 'History'].map(f => (
+                                        {['PENDING', 'HISTORY'].map(f => (
                                             <button
                                                 key={f}
-                                                onClick={() => setRequestSubTab(f.toUpperCase())}
-                                                className={`flex-1 py-2.5 text-xs font-medium rounded-lg transition-all ${requestSubTab === f.toUpperCase()
+                                                onClick={() => setRequestSubTab(f)}
+                                                className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${requestSubTab === f
                                                     ? 'bg-white dark:bg-indigo-600 text-indigo-600 dark:text-white shadow-sm'
                                                     : 'text-slate-400 dark:text-github-dark-muted'
                                                     }`}
@@ -1009,17 +991,6 @@ const MobileAttendanceMonitoring = () => {
                     {selectedRequest && (
                         <RequestDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} onUpdate={fetchData} />
                     )}
-                    {isFilterDrawerOpen && (
-                        <FilterDrawer
-                            onClose={() => setIsFilterDrawerOpen(false)}
-                            selectedDept={selectedDept}
-                            setSelectedDept={setSelectedDept}
-                            statusFilter={statusFilter}
-                            setStatusFilter={setStatusFilter}
-                            departments={DEPARTMENTS}
-                            statusOptions={STATUS_OPTIONS}
-                        />
-                    )}
                 </AnimatePresence>
             </div>
         </MobileDashboardLayout>
@@ -1079,7 +1050,7 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp, orgTimezone })
                                         <div className="min-w-0">
                                             <p className="font-black text-[10px] text-slate-800 dark:text-github-dark-text truncate leading-tight">{item.name}</p>
                                             <p className="text-[8px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-tighter truncate">
-                                                {item.totalHours && item.totalHours.toLowerCase().includes('hrs') ? item.totalHours : `${item.totalHours} Hrs`}
+                                                {item.totalHours && (item.totalHours.toLowerCase().includes('hr') || item.totalHours.toLowerCase().includes('min') || item.totalHours === '-') ? item.totalHours : `${item.totalHours} Hrs`}
                                             </p>
                                         </div>
                                     </div>
@@ -1119,15 +1090,23 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp, orgTimezone })
     );
 };
 
-const CompactStatCard = ({ label, value, color, icon: Icon }) => {
+const CompactStatCard = ({ label, value, color, icon: Icon, isSelected, onClick }) => {
     const colors = {
         emerald: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600',
         amber: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600',
         rose: 'bg-rose-50 dark:bg-rose-500/10 text-rose-600',
         blue: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600',
+        indigo: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
     };
     return (
-        <div className="bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center gap-3">
+        <div
+            onClick={onClick}
+            className={`p-3 rounded-lg shadow-sm flex items-center gap-3 cursor-pointer select-none bg-white dark:bg-dark-card transition-all duration-300 border-2 ${
+                isSelected
+                    ? 'border-indigo-500 dark:border-indigo-500 scale-[1.01] shadow-md'
+                    : 'border-slate-100 dark:border-github-dark-border hover:border-slate-350 dark:hover:border-slate-700'
+            }`}
+        >
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colors[color]}`}>
                 <Icon size={16} strokeWidth={3} />
             </div>
@@ -1144,7 +1123,7 @@ const CompactEmployeeCard = ({ employee, onClick, avatarTimestamp }) => {
     return (
         <div
             onClick={onClick}
-            className={`bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all relative overflow-hidden ${isAbsentOrNonWorking ? 'opacity-70 grayscale-[0.5]' : ''}`}
+            className={`bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all relative overflow-hidden ${isAbsentOrNonWorking ? 'opacity-70 grayscale-[0.5]' : ''}`}
         >
             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200 dark:border-github-dark-border shrink-0">
                 {employee.avatar.length > 1 ? (
@@ -1183,111 +1162,6 @@ const CompactEmployeeCard = ({ employee, onClick, avatarTimestamp }) => {
                 )}
             </div>
         </div>
-    );
-};
-
-const FilterDrawer = ({
-    onClose,
-    selectedDept,
-    setSelectedDept,
-    statusFilter,
-    setStatusFilter,
-    departments,
-    statusOptions
-}) => {
-    return createPortal(
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-end">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
-            <motion.div
-                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-                className="relative w-full bg-slate-50 dark:bg-dark-card rounded-t-xl p-6 pb-12 max-h-[85vh] overflow-y-auto border-t border-slate-200 dark:border-github-dark-border"
-            >
-                <div className="w-12 h-1 bg-slate-200 dark:bg-white/10 rounded-full mx-auto mb-6" />
-
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-black text-slate-800 dark:text-white leading-none">Filters</h3>
-                    {(selectedDept !== 'All' || statusFilter !== 'All') && (
-                        <button
-                            onClick={() => {
-                                setSelectedDept('All');
-                                setStatusFilter('All');
-                            }}
-                            className="text-xs font-bold text-indigo-500 hover:text-indigo-650"
-                        >
-                            Reset Filters
-                        </button>
-                    )}
-                </div>
-
-                <div className="space-y-6">
-                    {/* Department Filter */}
-                    <div className="space-y-2.5">
-                        <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest block px-1">
-                            Department
-                        </span>
-                        <div className="grid grid-cols-2 gap-2">
-                            {departments.map((dept) => {
-                                const deptName = typeof dept === 'object' ? dept.value : dept;
-                                const deptLabel = typeof dept === 'object' ? dept.label : (dept === 'All' ? 'All Departments' : dept);
-                                const isSelected = selectedDept === deptName;
-                                return (
-                                    <button
-                                        key={deptName}
-                                        onClick={() => setSelectedDept(deptName)}
-                                        className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border text-center ${
-                                            isSelected
-                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400'
-                                                : 'bg-white dark:bg-[#0d1117] border-slate-200/60 dark:border-github-dark-border text-slate-600 dark:text-slate-300'
-                                        }`}
-                                    >
-                                        {deptLabel}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="space-y-2.5">
-                        <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest block px-1">
-                            Attendance Status
-                        </span>
-                        <div className="grid grid-cols-2 gap-2">
-                            {statusOptions.map((opt) => {
-                                const isSelected = statusFilter === opt.value;
-                                return (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => setStatusFilter(opt.value)}
-                                        className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border text-center ${
-                                            isSelected
-                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400'
-                                                : 'bg-white dark:bg-[#0d1117] border-slate-200/60 dark:border-github-dark-border text-slate-600 dark:text-slate-300'
-                                        }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-8">
-                    <button
-                        onClick={onClose}
-                        className="w-full py-4 bg-indigo-500 text-white font-black rounded-xl active:scale-95 transition-all shadow-lg shadow-indigo-500/20"
-                    >
-                        Apply Filters
-                    </button>
-                </div>
-
-                <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 active:scale-90 transition-all">
-                    <X size={24} />
-                </button>
-            </motion.div>
-        </motion.div>,
-        document.body
     );
 };
 

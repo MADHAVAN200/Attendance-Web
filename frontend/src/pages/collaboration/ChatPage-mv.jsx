@@ -4,10 +4,10 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { 
-    Send, Plus, Search, MessageSquare, Users, 
+    Send, Plus, Search, MessageSquare, Users, Hash, 
     Smile, CheckCheck, 
     ArrowLeft, UserPlus, X, Volume2, Info, Lock,
-    Paperclip, FileText, File, Clock, Calendar, ChevronDown, Eye, Pin, MapPin
+    Paperclip, FileText, Download, File, Clock, Calendar, MapPin, Pin, ChevronDown, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -46,6 +46,15 @@ const formatLastMessagePreview = (messageText) => {
             }
         }
     }
+    return messageText;
+};
+
+const formatFileSize = (bytes) => {
+    if (!bytes) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
 const formatDatePretty = (dateStr) => {
@@ -106,16 +115,12 @@ const playNotificationChime = () => {
 const renderParsedMessageContent = (text, isSelf) => {
     if (!text) return null;
 
-    // Matches http://, https://, or www. followed by domain and path/query characters,
-    // excluding trailing punctuation marks (.,!?;:()[]{}""'') so they don't break the hyperlink.
-    const urlRegex = /(https?:\/\/[^\s<>]*(?:[^\s<>.,!?;:()\[\]{}""''])|www\.[^\s<>]*(?:[^\s<>.,!?;:()\[\]{}""'']))/gi;
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
     const mentionRegex = /(@[a-zA-Z0-9._-]+)/g;
-    const testUrlRegex = /^(https?:\/\/[^\s]+|www\.[^\s]+)$/i;
-    const testMentionRegex = /^@[a-zA-Z0-9._-]+$/;
 
     const urlParts = text.split(urlRegex);
     return urlParts.map((urlPart, urlIdx) => {
-        if (testUrlRegex.test(urlPart)) {
+        if (urlPart.match(urlRegex)) {
             const href = urlPart.startsWith('http') ? urlPart : `https://${urlPart}`;
             return (
                 <a
@@ -136,7 +141,7 @@ const renderParsedMessageContent = (text, isSelf) => {
 
         const mentionParts = urlPart.split(mentionRegex);
         return mentionParts.map((part, mentIdx) => {
-            if (testMentionRegex.test(part)) {
+            if (part.match(mentionRegex)) {
                 return (
                     <span 
                         key={`mention-${urlIdx}-${mentIdx}`} 
@@ -231,48 +236,15 @@ const MobileChatPage = () => {
     const scrollContainerRef = useRef(null);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
 
+    // Mention Dropdown State
+    const [activeMention, setActiveMention] = useState(false);
+    const [mentionSearch, setMentionSearch] = useState('');
+    const chatInputRef = useRef(null);
+
     // Attachment Uploads State
     const [pendingAttachment, setPendingAttachment] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef(null);
-
-    const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const LIMIT_50_MB = 50 * 1024 * 1024;
-        if (file.size > LIMIT_50_MB) {
-            toast.error("File size exceeds the 50 MB limit.");
-            return;
-        }
-
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const res = await api.post(`/collaboration/rooms/${selectedRoom.room_id}/upload`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            if (res.data.success) {
-                setPendingAttachment(res.data.file);
-                toast.success("Attachment ready to send!");
-            }
-        } catch (err) {
-            toast.error(err.response?.data?.message || "Failed to upload attachment.");
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-    };
-
-    const formatFileSize = (bytes) => {
-        if (!bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    };
 
     // Layout States
     const [showMobileChatWindow, setShowMobileChatWindow] = useState(false);
@@ -552,14 +524,76 @@ const MobileChatPage = () => {
         } catch (err) {}
     };
 
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const LIMIT_50_MB = 50 * 1024 * 1024;
+        if (file.size > LIMIT_50_MB) {
+            toast.error("File size exceeds the 50 MB limit.");
+            return;
+        }
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await api.post(`/collaboration/rooms/${selectedRoom.room_id}/upload`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            if (res.data.success) {
+                setPendingAttachment(res.data.file);
+                toast.success("Attachment uploaded successfully!");
+            }
+        } catch (err) {
+            console.error("Attachment upload error:", err);
+            toast.error(err.response?.data?.message || "Failed to upload attachment to S3.");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    const handleInputChange = (val) => {
+        setNewMessageText(val);
+        startTypingIndicator();
+
+        // Mention autocomplete activation logic
+        const lastAtIndex = val.lastIndexOf('@');
+        if (lastAtIndex !== -1 && (lastAtIndex === 0 || val[lastAtIndex - 1] === ' ')) {
+            const search = val.substring(lastAtIndex + 1);
+            if (search.length < 20 && !search.includes(' ')) {
+                setActiveMention(true);
+                setMentionSearch(search);
+                return;
+            }
+        }
+        setActiveMention(false);
+    };
+
+    const handleMentionSelect = (colleague) => {
+        const val = newMessageText;
+        const lastAtIndex = val.lastIndexOf('@');
+        const prefix = val.substring(0, lastAtIndex);
+        setNewMessageText(`${prefix}@${colleague.user_name} `);
+        setActiveMention(false);
+        chatInputRef.current?.focus();
+    };
+
     const handleSend = async (e) => {
         if (e) e.preventDefault();
         if ((!newMessageText.trim() && !pendingAttachment) || !selectedRoom) return;
 
         const textToSend = newMessageText;
         const attachmentToSend = pendingAttachment;
+
         setNewMessageText('');
         setPendingAttachment(null);
+        setActiveMention(false);
         stopTypingIndicator();
 
         const optimisticId = `optimistic-${Date.now()}`;
@@ -590,6 +624,7 @@ const MobileChatPage = () => {
                 ));
             }
         } catch (err) {
+            console.error("Optimistic send error:", err);
             setMessages(prev => prev.map(m => 
                 m.message_id === optimisticId ? { ...m, status: 'failed' } : m
             ));
@@ -701,9 +736,27 @@ const MobileChatPage = () => {
     const formatLocalTime = (createdAt) => {
         if (!createdAt) return '';
         try {
-            let date = new Date(createdAt);
+            let date;
+            if (typeof createdAt === 'string') {
+                if (!createdAt.includes('Z') && !createdAt.includes('+') && !createdAt.includes('T')) {
+                    const normalized = createdAt.trim().replace(' ', 'T');
+                    date = new Date(normalized + 'Z');
+                } else if (!createdAt.includes('Z') && !createdAt.includes('+') && createdAt.includes('T')) {
+                    date = new Date(createdAt + 'Z');
+                } else {
+                    date = new Date(createdAt);
+                }
+            } else {
+                date = new Date(createdAt);
+            }
+            
             if (isNaN(date.getTime())) return '';
-            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            
+            return date.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit', 
+                hour12: true 
+            });
         } catch (e) {
             return '';
         }
@@ -797,11 +850,16 @@ const MobileChatPage = () => {
                                             )}
                                         </div>
 
-                                        {/* Meta Previews */}
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-black text-slate-800 dark:text-white truncate mb-1">{room.room_name}</h4>
-                                            
-                                            {/* Preview text */}
+                                            <div className="flex items-center justify-between mb-1">
+                                                <h4 className="text-sm font-black text-slate-800 dark:text-white truncate">{room.room_name}</h4>
+                                                {room.last_message && (
+                                                    <span className="text-[9px] text-slate-400 font-bold shrink-0">
+                                                        {formatLocalTime(room.last_message.created_at)}
+                                                    </span>
+                                                )}
+                                            </div>
+
                                             {typingNames.length > 0 ? (
                                                 <span className="text-[10px] text-indigo-500 font-bold animate-pulse truncate block">typing...</span>
                                             ) : room.last_message ? (
@@ -814,64 +872,26 @@ const MobileChatPage = () => {
                                             )}
                                         </div>
 
-                                        {/* Right Column: Time & Status Badges */}
-                                        <div className="flex flex-col items-end justify-between self-stretch shrink-0 ml-auto pl-1">
-                                            {/* Timestamp */}
-                                            {room.last_message ? (
-                                                <span className="text-[9px] text-slate-400 font-bold leading-none">
-                                                    {formatLocalTime(room.last_message.created_at)}
+                                        {/* Pin & Unread Row */}
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                            {room.unread_count > 0 && !(selectedRoom?.room_id === room.room_id && showMobileChatWindow) && (
+                                                <span className="w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-md shadow-indigo-600/10">
+                                                    {room.unread_count}
                                                 </span>
-                                            ) : (
-                                                <span className="h-3" />
                                             )}
                                             
-                                            {/* Badges & Actions */}
-                                            <div className="flex items-center gap-1.5 mt-auto">
-                                                {pinnedRoomIds.includes(room.room_id) ? (
-                                                    <>
-                                                        {room.unread_count > 0 && !(selectedRoom?.room_id === room.room_id && showMobileChatWindow) && (
-                                                            <span className="w-5 h-5 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-extrabold leading-none text-center shadow-md shadow-indigo-600/10">
-                                                                {room.unread_count}
-                                                            </span>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                            className="p-1.5 active:scale-95 transition-all rounded-xl border-none bg-transparent flex items-center justify-center text-indigo-600 dark:text-indigo-400 opacity-100 bg-indigo-50 dark:bg-indigo-500/10"
-                                                            title="Unpin Chat"
-                                                        >
-                                                            <Pin size={13} className="fill-current" />
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {room.unread_count > 0 && !(selectedRoom?.room_id === room.room_id && showMobileChatWindow) ? (
-                                                            <>
-                                                                <span className="w-5 h-5 shrink-0 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-extrabold leading-none text-center shadow-md shadow-indigo-600/10 group-hover:hidden">
-                                                                    {room.unread_count}
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                                    className="p-1.5 active:scale-95 transition-all rounded-xl border-none bg-transparent hidden group-hover:flex items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/5"
-                                                                    title="Pin Chat"
-                                                                >
-                                                                    <Pin size={13} />
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                                className="p-1.5 active:scale-95 transition-all rounded-xl border-none bg-transparent flex items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/5 opacity-0 group-hover:opacity-100"
-                                                                title="Pin Chat"
-                                                            >
-                                                                <Pin size={13} />
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => togglePinRoom(e, room.room_id)}
+                                                className={`p-1.5 active:scale-95 transition-all rounded-xl border-none bg-transparent flex items-center justify-center ${
+                                                    pinnedRoomIds.includes(room.room_id) 
+                                                    ? 'text-indigo-600 dark:text-indigo-400 opacity-100 bg-indigo-50 dark:bg-indigo-500/10' 
+                                                    : 'text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/5'
+                                                }`}
+                                                title={pinnedRoomIds.includes(room.room_id) ? "Unpin Chat" : "Pin Chat"}
+                                            >
+                                                <Pin size={13} className={pinnedRoomIds.includes(room.room_id) ? "fill-current" : ""} />
+                                            </button>
                                         </div>
                                     </button>
                                 );
@@ -961,132 +981,137 @@ const MobileChatPage = () => {
                                             </div>
                                         </div>
 
-                                        {messages.map((msg, idx) => {
-                                            const isSelf = Number(msg.sender_id) === Number(currentUserId);
-                                            
-                                            // Detect if this message mentions current user
-                                            const matchesMention = msg.message_text && msg.message_text.includes(`@${user?.user_name}`);
+                                        {(() => {
+                                            return messages.map((msg, idx) => {
+                                                const isSelf = Number(msg.sender_id) === Number(currentUserId);
+                                                const hasAvatar = msg.profile_image_url;
+                                                
+                                                const matchesMention = msg.message_text && msg.message_text.includes(`@${user?.user_name}`);
+                                                const isSystemCard = msg.message_text && msg.message_text.startsWith("[SYSTEM_CARD:");
+                                                let cardType = "";
+                                                let cardEntityId = "";
+                                                let cardStatus = "";
+                                                let cardPayload = null;
+                                                let cardTextTitle = "";
+                                                let cardTextDesc = "";
 
-                                            // System Card Alert Parser
-                                            const isSystemCard = msg.message_text && msg.message_text.startsWith("[SYSTEM_CARD:");
-                                            let cardType = "";
-                                            let cardEntityId = "";
-                                            let cardStatus = "";
-                                            let cardPayload = null;
-                                            let cardTextTitle = "";
-                                            let cardTextDesc = "";
-
-                                            if (isSystemCard) {
-                                                const endHeaderIndex = msg.message_text.indexOf("]");
-                                                if (endHeaderIndex !== -1) {
-                                                    const header = msg.message_text.substring(13, endHeaderIndex); // omit "[SYSTEM_CARD:"
-                                                    const parts = header.split(":");
-                                                    cardType = parts[0] || "";
-                                                    cardEntityId = parts[1] || "";
-                                                    cardStatus = parts[2] || "";
-                                                    
-                                                    const body = msg.message_text.substring(endHeaderIndex + 1).trim();
-                                                    try {
-                                                        cardPayload = JSON.parse(body);
-                                                    } catch (e) {
-                                                        // Fallback for legacy plain text messages
-                                                        const bodyLines = body.split("\n");
-                                                        cardTextTitle = bodyLines[0] || "";
-                                                        if (bodyLines.length > 1) {
-                                                            cardTextDesc = bodyLines.slice(1).join("\n").replace(/^"|"$/g, "").trim();
+                                                if (isSystemCard) {
+                                                    const endHeaderIndex = msg.message_text.indexOf("]");
+                                                    if (endHeaderIndex !== -1) {
+                                                        const header = msg.message_text.substring(13, endHeaderIndex);
+                                                        const parts = header.split(":");
+                                                        cardType = parts[0] || "";
+                                                        cardEntityId = parts[1] || "";
+                                                        cardStatus = parts[2] || "";
+                                                        
+                                                        const body = msg.message_text.substring(endHeaderIndex + 1).trim();
+                                                        try {
+                                                            cardPayload = JSON.parse(body);
+                                                        } catch (e) {
+                                                            const bodyLines = body.split("\n");
+                                                            cardTextTitle = bodyLines[0] || "";
+                                                            if (bodyLines.length > 1) {
+                                                                cardTextDesc = bodyLines.slice(1).join("\n").replace(/^"|"$/g, "").trim();
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
 
-                                            if (Number(msg.sender_id) === 0 || cardType === 'group_update') {
-                                                let cleanText = msg.message_text;
-                                                if (cleanText.startsWith("[SYSTEM_CARD:group_update:info]")) {
-                                                    cleanText = cleanText.substring(31).trim();
-                                                } else if (cleanText.startsWith("[SYSTEM_CARD:group_update:alert]")) {
-                                                    cleanText = cleanText.substring(32).trim();
-                                                } else if (cleanText.startsWith("[SYSTEM_CARD:")) {
-                                                    const closeBracketIdx = cleanText.indexOf("]");
-                                                    if (closeBracketIdx !== -1) {
-                                                        cleanText = cleanText.substring(closeBracketIdx + 1).trim();
+                                                if (Number(msg.sender_id) === 0 || cardType === 'group_update') {
+                                                    let cleanText = msg.message_text;
+                                                    if (cleanText.startsWith("[SYSTEM_CARD:group_update:info]")) {
+                                                        cleanText = cleanText.substring(31).trim();
+                                                    } else if (cleanText.startsWith("[SYSTEM_CARD:group_update:alert]")) {
+                                                        cleanText = cleanText.substring(32).trim();
+                                                    } else if (cleanText.startsWith("[SYSTEM_CARD:")) {
+                                                        const closeBracketIdx = cleanText.indexOf("]");
+                                                        if (closeBracketIdx !== -1) {
+                                                            cleanText = cleanText.substring(closeBracketIdx + 1).trim();
+                                                        }
+                                                    }
+                                                    return (
+                                                        <div key={msg.message_id || idx} className="flex justify-center w-full my-2.5">
+                                                            <span className="bg-[#f0f3f6] dark:bg-white/5 border border-slate-200/50 dark:border-white/5 text-slate-500 dark:text-slate-400 px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm max-w-[85%] text-center">
+                                                                {cleanText}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                const uColor = getUserColor(msg.sender_id);
+                                                const isMentionPreview = msg.message_text && msg.message_text.includes("Mentioned you in my Daily Activity");
+                                                let previewType = "";
+                                                let previewTitle = "Untitled Entry";
+                                                let previewDesc = "";
+
+                                                if (isMentionPreview) {
+                                                    previewType = msg.message_text.includes("Task") ? "Daily Activity Task" : "Daily Activity Meeting";
+                                                    const lines = msg.message_text.split("\n");
+                                                    if (lines.length > 1) {
+                                                        previewTitle = lines[1].replace(/^\*|\*$/g, "").trim();
+                                                    }
+                                                    if (lines.length > 2) {
+                                                        previewDesc = lines.slice(2).join("\n").replace(/^"|"$/g, "").trim();
                                                     }
                                                 }
+
                                                 return (
-                                                    <div key={msg.message_id || idx} className="flex justify-center w-full my-2.5">
-                                                        <span className="bg-[#f0f3f6] dark:bg-white/5 border border-slate-200/50 dark:border-white/5 text-slate-500 dark:text-slate-400 px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm max-w-[85%] text-center">
-                                                            {cleanText}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            }
-
-                                            const uColor = getUserColor(msg.sender_id);
-                                            return (
-                                                <motion.div 
-                                                    key={msg.message_id || idx}
-                                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                    className={`flex items-end gap-2 max-w-[85%] ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
-                                                >
-                                                    {!isSelf && (
-                                                        <div className="shrink-0 mb-0.5">
-                                                            {msg.profile_image_url ? (
-                                                                <img src={msg.profile_image_url} alt={msg.user_name} className="w-6 h-6 rounded-lg object-cover border border-slate-100 dark:border-white/5" />
-                                                            ) : (
-                                                                <div className={`w-6 h-6 rounded-lg ${uColor.bg} ${uColor.text} flex items-center justify-center font-bold text-[10px] border`}>
-                                                                    {msg.user_name?.charAt(0)}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    <div className={`rounded-[1.25rem] shadow-sm text-xs font-bold leading-relaxed border overflow-hidden ${
-                                                        isSystemCard
-                                                        ? cardType === 'leave_request'
-                                                            ? 'bg-gradient-to-br from-[#e0f2fe] to-[#c7d2fe] text-[#0550ae] dark:from-[#1e1b4b]/30 dark:to-[#312e81]/30 dark:text-[#8c959f] border border-[#a5b4fc]/40 dark:border-[#4338ca]/40 rounded-lg hover:shadow-md min-w-[240px]'
-                                                            : cardType === 'correction_request'
-                                                                ? 'bg-gradient-to-br from-[#fef3c7] to-[#fde68a] text-[#b45309] dark:from-[#451a03]/30 dark:to-[#78350f]/30 dark:text-[#ffedd5] border border-[#fcd34d]/40 dark:border-[#92400e]/40 rounded-lg hover:shadow-md min-w-[240px]'
-                                                                : cardType === 'shift_assign'
-                                                                    ? 'bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] text-[#047857] dark:from-[#064e3b]/30 dark:to-[#065f46]/30 dark:text-[#d1fae5] border border-[#6ee7b7]/40 dark:border-[#047857]/40 rounded-lg hover:shadow-md min-w-[240px]'
-                                                                    : 'bg-gradient-to-br from-[#f3e8ff] to-[#e9d5ff] text-[#6b21a8] dark:from-[#4a044e]/30 dark:to-[#581c87]/30 dark:text-[#f3e8ff] border border-[#d8b4fe]/40 dark:border-[#7e22ce]/40 rounded-lg hover:shadow-md min-w-[240px]'
-                                                        : isSelf 
-                                                        ? 'bg-indigo-600 text-white rounded-br-none border-indigo-500' 
-                                                        : selectedRoom.room_type === 'group'
-                                                            ? `${uColor.bg} text-slate-850 dark:text-white rounded-bl-none`
-                                                            : 'bg-white dark:bg-github-dark-bg text-slate-800 dark:text-white rounded-bl-none border-slate-100 dark:border-white/5'
-                                                    }`}>
-                                                        {/* WhatsApp-style image preview */}
-                                                        {msg.attachment && (msg.attachment.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(msg.attachment.name || msg.attachment.url || '')) && (
-                                                            <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer" className="block relative group">
-                                                                <img
-                                                                    src={msg.attachment.url}
-                                                                    alt={msg.attachment.name}
-                                                                    className="w-full max-w-[240px] max-h-[240px] object-cover group-hover:opacity-95 transition-opacity"
-                                                                />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all flex items-center justify-center">
-                                                                    <Eye size={20} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
-                                                                </div>
-                                                            </a>
+                                                    <motion.div 
+                                                        key={msg.message_id || idx}
+                                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                        className={`flex items-end gap-2 max-w-[85%] ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
+                                                    >
+                                                        {!isSelf && (
+                                                            <div className="shrink-0 mb-0.5">
+                                                                {msg.profile_image_url ? (
+                                                                    <img src={msg.profile_image_url} alt={msg.user_name} className="w-6 h-6 rounded-lg object-cover border border-slate-100 dark:border-white/5" />
+                                                                ) : (
+                                                                    <div className={`w-6 h-6 rounded-lg ${uColor.bg} ${uColor.text} flex items-center justify-center font-bold text-[10px] border`}>
+                                                                        {msg.user_name?.charAt(0)}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         )}
 
-                                                        <div className="p-3">
+                                                        <div className={`p-3 rounded-[1.25rem] shadow-sm text-xs font-bold leading-relaxed border transition-all duration-300 ${
+                                                            isSystemCard
+                                                            ? cardType === 'leave_request'
+                                                                ? 'bg-gradient-to-br from-[#e0f2fe] to-[#c7d2fe] text-[#0550ae] dark:from-[#1e1b4b]/30 dark:to-[#312e81]/30 dark:text-[#8c959f] border border-[#a5b4fc]/40 dark:border-[#4338ca]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                : cardType === 'correction_request'
+                                                                    ? 'bg-gradient-to-br from-[#fef3c7] to-[#fde68a] text-[#b45309] dark:from-[#451a03]/30 dark:to-[#78350f]/30 dark:text-[#ffedd5] border border-[#fcd34d]/40 dark:border-[#92400e]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                    : cardType === 'shift_assign'
+                                                                        ? 'bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] text-[#047857] dark:from-[#064e3b]/30 dark:to-[#065f46]/30 dark:text-[#d1fae5] border border-[#6ee7b7]/40 dark:border-[#047857]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                                        : 'bg-gradient-to-br from-[#f3e8ff] to-[#e9d5ff] text-[#6b21a8] dark:from-[#4a044e]/30 dark:to-[#581c87]/30 dark:text-[#f3e8ff] border border-[#d8b4fe]/40 dark:border-[#7e22ce]/40 rounded-lg hover:shadow-md min-w-[240px]'
+                                                            : isMentionPreview
+                                                            ? isSelf
+                                                                ? 'bg-gradient-to-br from-[#bae6fd] to-[#7dd3fc] dark:from-[#388bfd]/20 dark:to-[#1f6feb]/20 text-[#0550ae] dark:text-[#58a6ff] border border-[#7dd3fc]/30 dark:border-[#388bfd]/30 rounded-br-none hover:shadow-md'
+                                                                : 'bg-white dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] text-[#24292f] dark:text-[#c9d1d9] rounded-bl-none hover:shadow-md'
+                                                            : isSelf 
+                                                                ? 'bg-indigo-600 text-white rounded-br-none border-indigo-500' 
+                                                                : matchesMention
+                                                                    ? 'bg-[#fff8c5] dark:bg-[#382314] border border-[#d4a72c] dark:border-[#9e6a03] text-[#735c0f] dark:text-[#f1e05a] rounded-bl-none font-semibold'
+                                                                    : selectedRoom.room_type === 'group'
+                                                                        ? `${uColor.bg} text-slate-800 dark:text-white rounded-bl-none`
+                                                                        : 'bg-white dark:bg-github-dark-bg text-slate-800 dark:text-white rounded-bl-none border-slate-100 dark:border-white/5'
+                                                        }`}>
+                                                            {!isSelf && selectedRoom.room_type === 'group' && !isSystemCard && (
+                                                                <span className={`block text-[9px] font-extrabold mb-1 ${uColor.text}`}>{msg.user_name}</span>
+                                                            )}
+
                                                             {isSystemCard ? (
-                                                                <div className="flex flex-col gap-2.5 min-w-[210px] max-w-sm">
-                                                                    {/* Header Badge */}
-                                                                    <div className="flex items-center justify-between border-b border-slate-100/10 dark:border-white/10 pb-1.5">
+                                                                <div className="flex flex-col gap-2.5 min-w-[220px] max-w-sm">
+                                                                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/10 pb-1.5">
                                                                         <div className="flex items-center gap-1.5">
                                                                             {cardType === 'leave_request' && <Calendar size={12} className="shrink-0" />}
                                                                             {cardType === 'correction_request' && <Clock size={12} className="shrink-0" />}
                                                                             {cardType === 'shift_assign' && <Clock size={12} className="shrink-0" />}
                                                                             {cardType === 'geofence_assign' && <MapPin size={12} className="shrink-0" />}
                                                                             <span className={`text-[9px] font-black uppercase tracking-wider ${
-                                                                                cardType === 'leave_request'
-                                                                                    ? 'text-[#0369a1] dark:text-[#388bfd]'
-                                                                                    : cardType === 'correction_request'
-                                                                                        ? 'text-[#b45309] dark:text-[#f59e0b]'
-                                                                                        : cardType === 'shift_assign'
-                                                                                            ? 'text-[#047857] dark:text-[#34d399]'
-                                                                                            : 'text-[#6b21a8] dark:text-[#a78bfa]'
+                                                                                cardType === 'leave_request' ? 'text-[#0369a1] dark:text-[#388bfd]'
+                                                                                : cardType === 'correction_request' ? 'text-[#b45309] dark:text-[#f59e0b]'
+                                                                                : cardType === 'shift_assign' ? 'text-[#047857] dark:text-[#34d399]'
+                                                                                : 'text-[#6b21a8] dark:text-[#a78bfa]'
                                                                             }`}>
                                                                                 {cardType === 'leave_request' && `Leave: ${cardStatus}`}
                                                                                 {cardType === 'correction_request' && `Correction: ${cardStatus}`}
@@ -1101,8 +1126,7 @@ const MobileChatPage = () => {
                                                                         )}
                                                                     </div>
 
-                                                                    {/* Content Block */}
-                                                                    <div className="flex flex-col gap-1.5 text-left text-slate-850 dark:text-slate-200">
+                                                                    <div className="flex flex-col gap-1.5 text-left font-medium">
                                                                         {cardPayload ? (
                                                                             <>
                                                                                 {cardType === 'leave_request' && (
@@ -1110,11 +1134,11 @@ const MobileChatPage = () => {
                                                                                         <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
                                                                                             {cardPayload.employee_name || cardPayload.reviewer_name} : {cardPayload.leave_type}
                                                                                         </h5>
-                                                                                        <div className="text-[10px] space-y-0.5">
+                                                                                        <div className="text-[10px] space-y-0.5 opacity-90">
                                                                                             <div><span className="font-bold">Period:</span> {formatDatePretty(cardPayload.start_date)} to {formatDatePretty(cardPayload.end_date)}</div>
                                                                                             <div><span className="font-bold">Reason:</span> "{cardPayload.reason}"</div>
                                                                                             {cardPayload.admin_comment && cardPayload.admin_comment !== 'None' && (
-                                                                                                <div className="mt-1 border-t border-sky-950/10 dark:border-sky-50/10 pt-1">
+                                                                                                <div className="mt-1 border-t border-sky-950/10 dark:border-sky-50/10 pt-1 text-slate-800 dark:text-slate-200">
                                                                                                     <span className="font-bold">Comment:</span> "{cardPayload.admin_comment}"
                                                                                                 </div>
                                                                                             )}
@@ -1127,11 +1151,11 @@ const MobileChatPage = () => {
                                                                                         <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
                                                                                             {cardPayload.employee_name || cardPayload.reviewer_name} : {cardPayload.correction_type}
                                                                                         </h5>
-                                                                                        <div className="text-[10px] space-y-0.5">
+                                                                                        <div className="text-[10px] space-y-0.5 opacity-90">
                                                                                             <div><span className="font-bold">Target Date:</span> {formatDatePretty(cardPayload.request_date)}</div>
                                                                                             <div><span className="font-bold">Reason:</span> "{cardPayload.reason}"</div>
                                                                                             {cardPayload.review_comments && cardPayload.review_comments !== 'None' && (
-                                                                                                <div className="mt-1 border-t border-amber-950/10 dark:border-orange-50/10 pt-1">
+                                                                                                <div className="mt-1 border-t border-amber-950/10 dark:border-orange-50/10 pt-1 text-slate-800 dark:text-slate-200">
                                                                                                     <span className="font-bold">Comment:</span> "{cardPayload.review_comments}"
                                                                                                 </div>
                                                                                             )}
@@ -1139,8 +1163,9 @@ const MobileChatPage = () => {
                                                                                                 <div className="mt-1 space-y-1">
                                                                                                     <div className="font-bold text-[9px] uppercase tracking-wider opacity-85">Proposed Sessions:</div>
                                                                                                     {cardPayload.proposed_data.map((sess, sIdx) => (
-                                                                                                        <div key={sIdx} className="bg-black/5 dark:bg-black/20 p-1 rounded text-[9px] border border-black/5">
-                                                                                                            Session {sIdx + 1}: {sess.time_in ? formatTimePretty(sess.time_in) : '-'} to {sess.time_out ? formatTimePretty(sess.time_out) : '-'}
+                                                                                                        <div key={sIdx} className="bg-black/5 dark:bg-black/20 p-1 rounded text-[9px] border border-black/5 flex justify-between">
+                                                                                                            <span>In: {String(sess.time_in || '').substring(0, 5)}</span>
+                                                                                                            <span>Out: {String(sess.time_out || '').substring(0, 5)}</span>
                                                                                                         </div>
                                                                                                     ))}
                                                                                                 </div>
@@ -1154,7 +1179,7 @@ const MobileChatPage = () => {
                                                                                         <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
                                                                                             Shift Assigned
                                                                                         </h5>
-                                                                                        <div className="text-[10px] space-y-0.5">
+                                                                                        <div className="text-[10px] space-y-0.5 opacity-90">
                                                                                             <div><span className="font-bold">Assigner:</span> {cardPayload.admin_name}</div>
                                                                                             <div><span className="font-bold">Shift name:</span> {cardPayload.shift_name}</div>
                                                                                             <div><span className="font-bold">Timings:</span> {cardPayload.start_time} to {cardPayload.end_time}</div>
@@ -1168,7 +1193,7 @@ const MobileChatPage = () => {
                                                                                         <h5 className="font-extrabold text-[11px] uppercase tracking-wide">
                                                                                             Work Location Assigned
                                                                                         </h5>
-                                                                                        <div className="text-[10px] space-y-0.5">
+                                                                                        <div className="text-[10px] space-y-0.5 opacity-90">
                                                                                             <div><span className="font-bold">Assigner:</span> {cardPayload.admin_name}</div>
                                                                                             <div><span className="font-bold">Site:</span> {cardPayload.location_name}</div>
                                                                                             <div><span className="font-bold">Address:</span> {cardPayload.address}</div>
@@ -1177,10 +1202,9 @@ const MobileChatPage = () => {
                                                                                     </>
                                                                                 )}
 
-                                                                                {/* ATTACHMENTS (DOCUMENTS) */}
                                                                                 {cardPayload.attachments && cardPayload.attachments.length > 0 && (
                                                                                     <div className="mt-2 pt-1.5 border-t border-slate-400/20">
-                                                                                        <div className="font-bold text-[9px] uppercase tracking-wider mb-1 opacity-80">Documents:</div>
+                                                                                        <div className="font-bold text-[9px] uppercase tracking-wider mb-1 opacity-85">Documents:</div>
                                                                                         <div className="space-y-1">
                                                                                             {cardPayload.attachments.map((att, attIdx) => (
                                                                                                 <a 
@@ -1192,6 +1216,7 @@ const MobileChatPage = () => {
                                                                                                 >
                                                                                                     <Paperclip size={10} className="shrink-0" />
                                                                                                     <span className="truncate flex-1 font-semibold">{att.name}</span>
+                                                                                                    <Download size={10} className="shrink-0" />
                                                                                                 </a>
                                                                                             ))}
                                                                                         </div>
@@ -1212,7 +1237,6 @@ const MobileChatPage = () => {
                                                                         )}
                                                                     </div>
 
-                                                                    {/* Redirection Button */}
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => {
@@ -1227,14 +1251,11 @@ const MobileChatPage = () => {
                                                                                 navigate(isAdminOrHr ? '/geofencing' : '/attendance');
                                                                             }
                                                                         }}
-                                                                        className={`mt-1.5 py-1.5 px-3 rounded-xl text-[10px] font-bold text-center border active:scale-95 transition-all cursor-pointer ${
-                                                                            cardType === 'leave_request'
-                                                                                ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white border-transparent shadow-sm shadow-sky-600/10'
-                                                                                : cardType === 'correction_request'
-                                                                                    ? 'bg-[#d97706] hover:bg-[#b45309] text-white border-transparent shadow-sm shadow-amber-600/10'
-                                                                                    : cardType === 'shift_assign'
-                                                                                        ? 'bg-[#059669] hover:bg-[#047857] text-white border-transparent shadow-sm shadow-emerald-600/10'
-                                                                                        : 'bg-[#7c3aed] hover:bg-[#6d28d9] text-white border-transparent shadow-sm shadow-violet-600/10'
+                                                                        className={`mt-1.5 py-1.5 px-3 rounded text-[10px] font-black text-center border active:scale-95 transition-all cursor-pointer ${
+                                                                            cardType === 'leave_request' ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white border-transparent'
+                                                                            : cardType === 'correction_request' ? 'bg-[#d97706] hover:bg-[#b45309] text-white border-transparent'
+                                                                            : cardType === 'shift_assign' ? 'bg-[#059669] hover:bg-[#047857] text-white border-transparent'
+                                                                            : 'bg-[#7c3aed] hover:bg-[#6d28d9] text-white border-transparent'
                                                                         }`}
                                                                     >
                                                                         {cardType === 'leave_request' && 'View Leave Panel'}
@@ -1243,39 +1264,91 @@ const MobileChatPage = () => {
                                                                         {cardType === 'geofence_assign' && 'View Location Map'}
                                                                     </button>
                                                                 </div>
+                                                            ) : isMentionPreview ? (
+                                                                <div className="flex flex-col gap-2 min-w-[200px] max-w-sm">
+                                                                    <div className="flex items-center gap-1.5 border-b border-white/10 pb-1">
+                                                                        <span className="text-[9px] font-black uppercase tracking-wider text-white">
+                                                                            {previewType}
+                                                                        </span>
+                                                                    </div>
+                                                                    
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <h5 className="font-extrabold text-xs tracking-wide uppercase">
+                                                                            {previewTitle}
+                                                                        </h5>
+                                                                        {previewDesc && (
+                                                                            <p className={`text-[11px] leading-relaxed border-l-2 pl-2 mt-0.5 ${
+                                                                                isSelf ? 'border-white/20 text-indigo-100' : 'border-indigo-500/30 text-slate-500 dark:text-slate-400'
+                                                                            }`}>
+                                                                                {(() => {
+                                                                                    const parts = previewDesc.split(/(@[a-zA-Z0-9\s._-]+)/g);
+                                                                                    return parts.map((part, i) => {
+                                                                                        if (part.startsWith('@')) {
+                                                                                            return (
+                                                                                                <span key={i} className={`px-1 py-0.5 rounded font-bold ${
+                                                                                                    isSelf 
+                                                                                                    ? 'bg-indigo-700 text-white' 
+                                                                                                    : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                                                                                }`}>
+                                                                                                    {part}
+                                                                                                </span>
+                                                                                            );
+                                                                                        }
+                                                                                        return part;
+                                                                                    });
+                                                                                })()}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             ) : (
                                                                 <>
-                                                                    {!isSelf && selectedRoom.room_type === 'group' && (
-                                                                        <span className={`block text-[9px] font-extrabold mb-1 ${uColor.text}`}>{msg.user_name}</span>
-                                                                    )}
                                                                     {msg.message_text && (
                                                                         <p className="whitespace-pre-wrap break-all">{renderParsedMessageContent(msg.message_text, isSelf)}</p>
                                                                     )}
 
-                                                                    {/* Document/File chip */}
-                                                                    {msg.attachment && !(msg.attachment.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(msg.attachment.name || msg.attachment.url || '')) && (
-                                                                        <a
-                                                                            href={msg.attachment.url}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className={`mt-2 flex items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition-all active:scale-95 ${
-                                                                                isSelf
-                                                                                ? 'bg-indigo-700/50 border-indigo-400/30 text-indigo-100 hover:bg-indigo-700/80'
-                                                                                : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10'
-                                                                            }`}
-                                                                        >
-                                                                            <FileText size={18} className="shrink-0 opacity-80" />
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <span className="block text-[11px] font-bold truncate">{msg.attachment.name}</span>
-                                                                                <span className="block text-[9px] opacity-60 uppercase">{formatFileSize(msg.attachment.size)}</span>
+                                                                    {msg.attachment && (
+                                                                        <div className={`mt-2 mb-1 p-2 rounded-xl border flex items-center justify-between gap-3 min-w-[200px] max-w-sm ${
+                                                                            isSelf 
+                                                                            ? 'bg-indigo-700/30 border-indigo-500/30 text-white' 
+                                                                            : 'bg-slate-50 dark:bg-github-dark-bg border-slate-100 dark:border-white/5 text-slate-800 dark:text-white'
+                                                                        }`}>
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                {msg.attachment.type.startsWith('image/') ? (
+                                                                                    <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer" className="shrink-0 relative group overflow-hidden rounded-lg border border-white/10">
+                                                                                        <img src={msg.attachment.url} alt={msg.attachment.name} className="w-12 h-12 object-cover transition-transform group-hover:scale-110" />
+                                                                                    </a>
+                                                                                ) : (
+                                                                                    <FileText size={24} className="text-indigo-500 shrink-0" />
+                                                                                )}
+                                                                                <div className="truncate">
+                                                                                    <span className="text-[11px] font-bold block truncate">{msg.attachment.name}</span>
+                                                                                    <span className={`text-[9px] font-semibold uppercase ${isSelf ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                                                        {formatFileSize(msg.attachment.size)}
+                                                                                    </span>
+                                                                                </div>
                                                                             </div>
-                                                                        </a>
+                                                                            <a 
+                                                                                href={msg.attachment.url} 
+                                                                                target="_blank" 
+                                                                                rel="noopener noreferrer"
+                                                                                download={msg.attachment.name}
+                                                                                className={`p-1.5 rounded-lg border transition-all ${
+                                                                                    isSelf 
+                                                                                    ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white hover:scale-105' 
+                                                                                    : 'bg-white dark:bg-[#21262d] border-slate-200 dark:border-white/5 text-slate-500 dark:text-slate-450 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                                                }`}
+                                                                                title="Download File"
+                                                                            >
+                                                                                <Download size={14} />
+                                                                            </a>
+                                                                        </div>
                                                                     )}
                                                                 </>
                                                             )}
 
                                                             <div className="flex items-center justify-end gap-1 mt-1 opacity-70 text-[8px] font-bold">
-                                                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                <span>{formatLocalTime(msg.created_at)}</span>
                                                                 {isSelf && (
                                                                     msg.status === 'sending' ? (
                                                                         <div className="w-2.5 h-2.5 rounded-full border border-white border-t-transparent animate-spin shrink-0" />
@@ -1287,10 +1360,10 @@ const MobileChatPage = () => {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        })}
+                                                    </motion.div>
+                                                );
+                                            });
+                                        })()}
                                     </>
                                 )}
 
@@ -1330,70 +1403,113 @@ const MobileChatPage = () => {
                                     </span>
                                 </div>
                             ) : (
-                                <div className="bg-white dark:bg-github-dark-subtle border-t border-slate-100 dark:border-github-dark-border shrink-0">
-                                    {/* Pending attachment preview */}
-                                    {pendingAttachment && (
-                                        <div className="mx-3 mt-3 px-3 py-2 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/60 dark:border-indigo-500/30 rounded-2xl flex items-center justify-between gap-2 animate-in fade-in slide-in-from-bottom-2">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                {pendingAttachment.type?.startsWith('image/') ? (
-                                                    <img src={pendingAttachment.url} alt={pendingAttachment.name} className="w-8 h-8 rounded-lg object-cover border border-indigo-200/40" />
-                                                ) : (
-                                                    <FileText size={18} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                                                )}
-                                                <div className="truncate">
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-white block truncate">{pendingAttachment.name}</span>
-                                                    <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase">{formatFileSize(pendingAttachment.size)}</span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setPendingAttachment(null)}
-                                                className="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0 cursor-pointer border-none bg-transparent"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    )}
-                                    <form onSubmit={handleSend} className="p-3 flex gap-2 items-center">
-                                        {/* Attachment button */}
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            disabled={isUploading}
-                                            className="p-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 transition-all shrink-0 cursor-pointer active:scale-90 disabled:opacity-50"
-                                            title="Attach file (max 50MB)"
-                                        >
-                                            {isUploading ? (
-                                                <div className="w-4 h-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-                                            ) : (
-                                                <Paperclip size={16} />
+                                    <>
+                                        {/* Mention Suggestions Dropdown */}
+                                        <AnimatePresence>
+                                            {activeMention && (
+                                                (() => {
+                                                    const candidateUsers = (selectedRoom?.room_type === 'group' && selectedRoom?.members)
+                                                        ? selectedRoom.members.filter(m => Number(m.user_id) !== Number(currentUserId))
+                                                        : coworkers;
+                                                    const filtered = candidateUsers.filter(u => 
+                                                        u.user_name.toLowerCase().includes(mentionSearch.toLowerCase())
+                                                    ).slice(0, 5);
+   
+                                                    if (filtered.length === 0) return null;
+   
+                                                    return (
+                                                        <motion.div 
+                                                            initial={{ opacity: 0, y: 15 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: 15 }}
+                                                            className="absolute left-4 right-4 bottom-full mb-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-2xl z-50 overflow-hidden py-1 max-h-48 text-left"
+                                                        >
+                                                            <div className="px-3 py-1.5 text-[9px] font-black uppercase text-slate-400 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-bg border-b border-slate-100 dark:border-github-dark-border tracking-wider">
+                                                                Mention Team Member
+                                                            </div>
+                                                            {filtered.map(u => (
+                                                                <button
+                                                                    key={u.user_id}
+                                                                    type="button"
+                                                                    onClick={() => handleMentionSelect(u)}
+                                                                    className="w-full text-left px-3.5 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-github-dark-bg transition-colors border-none bg-transparent cursor-pointer"
+                                                                >
+                                                                    {u.profile_image_url ? (
+                                                                        <img src={u.profile_image_url} alt={u.user_name} className="w-6 h-6 rounded-lg object-cover border border-slate-100 dark:border-github-dark-border" />
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-[10px] border border-slate-200 dark:border-github-dark-border">
+                                                                            {u.user_name.charAt(0)}
+                                                                        </div>
+                                                                    )}
+                                                                    <div>
+                                                                        <div className="font-bold text-xs text-slate-800 dark:text-white">{u.user_name}</div>
+                                                                        <div className="text-[9px] text-slate-450 dark:text-slate-500">{u.dept_name || 'Staff'} • {u.desg_name || 'Member'}</div>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </motion.div>
+                                                    );
+                                                })()
                                             )}
-                                        </button>
-                                        <input
-                                            type="file"
-                                            ref={fileInputRef}
-                                            className="hidden"
-                                            onChange={handleFileUpload}
-                                        />
-                                        <input 
-                                            type="text"
-                                            placeholder="Type a message..."
-                                            value={newMessageText}
-                                            onChange={(e) => {
-                                                setNewMessageText(e.target.value);
-                                                startTypingIndicator();
-                                            }}
-                                            className="flex-1 px-4 py-3 bg-slate-50 dark:bg-github-dark-bg rounded-2xl border border-slate-200/60 dark:border-github-dark-border focus:outline-none text-xs font-bold text-slate-800 dark:text-github-dark-text placeholder-slate-400"
-                                        />
-                                        <button 
-                                            type="submit" 
-                                            disabled={!newMessageText.trim() && !pendingAttachment}
-                                            className="p-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
-                                        >
-                                            <Send size={16} />
-                                        </button>
-                                    </form>
-                                </div>
+                                        </AnimatePresence>
+   
+                                        {pendingAttachment && (
+                                            <div className="mx-3 my-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100/30 dark:border-white/5 rounded-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 text-left">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <FileText size={18} className="text-indigo-500 shrink-0" />
+                                                    <div className="truncate">
+                                                        <span className="text-xs font-bold text-slate-800 dark:text-white block truncate">{pendingAttachment.name}</span>
+                                                        <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase">{formatFileSize(pendingAttachment.size)}</span>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setPendingAttachment(null)}
+                                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-655 transition-colors border-none bg-transparent cursor-pointer"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
+   
+                                        <form onSubmit={handleSend} className="p-3 bg-white dark:bg-github-dark-subtle border-t border-slate-100 dark:border-github-dark-border flex gap-2 items-center shrink-0 relative w-full">
+                                            <button 
+                                                type="button"
+                                                disabled={isUploading}
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="p-3 text-slate-500 bg-slate-50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5 rounded-2xl active:scale-90 transition-all flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
+                                                title="Upload attachment"
+                                            >
+                                                {isUploading ? (
+                                                    <div className="w-4 h-4 rounded-full border border-indigo-600 border-t-transparent animate-spin" />
+                                                ) : (
+                                                    <Paperclip size={16} />
+                                                )}
+                                            </button>
+                                            <input 
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                onChange={handleFileUpload}
+                                            />
+   
+                                            <input 
+                                                ref={chatInputRef}
+                                                type="text"
+                                                placeholder="Type a message... Use @ to tag"
+                                                value={newMessageText}
+                                                onChange={(e) => handleInputChange(e.target.value)}
+                                                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-github-dark-bg rounded-2xl border border-slate-200/60 dark:border-github-dark-border focus:outline-none text-xs font-bold text-slate-800 dark:text-github-dark-text placeholder-slate-400"
+                                            />
+                                            <button 
+                                                type="submit" 
+                                                disabled={!newMessageText.trim() && !pendingAttachment}
+                                                className="p-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+                                            >
+                                                <Send size={16} />
+                                            </button>
+                                        </form>
+                                    </>
                             )}
                         </>
                     ) : (

@@ -7,7 +7,7 @@ import {
     Send, Plus, Search, MessageSquare, Users, Hash, 
     Smile, CheckCheck, 
     ArrowLeft, UserPlus, X, Volume2, Info, Lock,
-    Paperclip, FileText, Eye, File, Clock, Calendar, MapPin, Pin
+    Paperclip, FileText, Download, File, Clock, Calendar, MapPin, Pin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -64,16 +64,12 @@ const formatLastMessagePreview = (messageText) => {
 const renderParsedMessageContent = (text, isSelf) => {
     if (!text) return null;
 
-    // Matches http://, https://, or www. followed by domain and path/query characters,
-    // excluding trailing punctuation marks (.,!?;:()[]{}""'') so they don't break the hyperlink.
-    const urlRegex = /(https?:\/\/[^\s<>]*(?:[^\s<>.,!?;:()\[\]{}""''])|www\.[^\s<>]*(?:[^\s<>.,!?;:()\[\]{}""'']))/gi;
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
     const mentionRegex = /(@[a-zA-Z0-9._-]+)/g;
-    const testUrlRegex = /^(https?:\/\/[^\s]+|www\.[^\s]+)$/i;
-    const testMentionRegex = /^@[a-zA-Z0-9._-]+$/;
 
     const urlParts = text.split(urlRegex);
     return urlParts.map((urlPart, urlIdx) => {
-        if (testUrlRegex.test(urlPart)) {
+        if (urlPart.match(urlRegex)) {
             const href = urlPart.startsWith('http') ? urlPart : `https://${urlPart}`;
             return (
                 <a
@@ -83,8 +79,8 @@ const renderParsedMessageContent = (text, isSelf) => {
                     rel="noopener noreferrer"
                     className={`underline break-all font-bold ${
                         isSelf 
-                        ? 'text-blue-700 dark:text-[#79c0ff] hover:text-blue-900 dark:hover:text-white' 
-                        : 'text-blue-600 dark:text-[#58a6ff] hover:text-blue-800 dark:hover:text-[#79c0ff]'
+                        ? 'text-indigo-700 dark:text-[#58a6ff] hover:text-indigo-800 dark:hover:text-[#79c0ff]' 
+                        : 'text-indigo-600 dark:text-[#58a6ff] hover:text-indigo-700 dark:hover:text-[#79c0ff]'
                     }`}
                 >
                     {urlPart}
@@ -94,7 +90,7 @@ const renderParsedMessageContent = (text, isSelf) => {
 
         const mentionParts = urlPart.split(mentionRegex);
         return mentionParts.map((part, mentIdx) => {
-            if (testMentionRegex.test(part)) {
+            if (part.match(mentionRegex)) {
                 return (
                     <span 
                         key={`mention-${urlIdx}-${mentIdx}`} 
@@ -448,20 +444,12 @@ const ChatPage = () => {
 
         socket.on('connect', handleConnect);
 
-        // Periodically send a heartbeat to refresh online presence state in Redis
-        const heartbeatInterval = setInterval(() => {
-            if (socket.connected) {
-                socket.emit('heartbeat');
-            }
-        }, 30000);
-
         // If already connected when this effect runs, join the room immediately
         if (socket.connected && selectedRoomRef.current) {
             socket.emit('join_room', selectedRoomRef.current.room_id);
         }
 
         return () => {
-            clearInterval(heartbeatInterval);
             socket.off('message_received', handleIncomingMessage);
             socket.off('user_typing', handleUserTyping);
             socket.off('user_stop_typing', handleUserStopTyping);
@@ -985,8 +973,17 @@ const ChatPage = () => {
 
                                         {/* Meta Previews */}
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="text-xs font-bold text-[#24292f] dark:text-[#c9d1d9] truncate mb-1">{room.room_name}</h4>
-                                            
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <h4 className="text-xs font-bold text-[#24292f] dark:text-[#c9d1d9] truncate">{room.room_name}</h4>
+                                                
+                                                {/* Timestamp */}
+                                                {room.last_message && (
+                                                    <span className="text-[9px] text-[#57606a] dark:text-[#8b949e] shrink-0 font-medium">
+                                                        {formatLocalTime(room.last_message.created_at)}
+                                                    </span>
+                                                )}
+                                            </div>
+
                                             {/* Preview text */}
                                             {typingNames.length > 0 ? (
                                                 <span className="text-[10px] text-[#0550ae] dark:text-[#58a6ff] font-medium animate-pulse truncate block">
@@ -1002,64 +999,26 @@ const ChatPage = () => {
                                             )}
                                         </div>
 
-                                        {/* Right Column: Time & Status Badges */}
-                                        <div className="flex flex-col items-end justify-between self-stretch shrink-0 ml-auto pl-1">
-                                            {/* Timestamp */}
-                                            {room.last_message ? (
-                                                <span className="text-[9px] text-[#57606a] dark:text-[#8b949e] font-medium leading-none">
-                                                    {formatLocalTime(room.last_message.created_at)}
+                                        {/* Badges Column */}
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                            {room.unread_count > 0 && !isSelected && (
+                                                <span className="w-4 h-4 bg-[#7dd3fc] dark:bg-[#238636] text-[#0550ae] dark:text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                                                    {room.unread_count}
                                                 </span>
-                                            ) : (
-                                                <span className="h-3" />
                                             )}
                                             
-                                            {/* Badges & Actions */}
-                                            <div className="flex items-center gap-1.5 mt-auto">
-                                                {pinnedRoomIds.includes(room.room_id) ? (
-                                                    <>
-                                                        {room.unread_count > 0 && !isSelected && (
-                                                            <span className="w-5 h-5 shrink-0 bg-[#7dd3fc] dark:bg-[#238636] text-[#0550ae] dark:text-white rounded-full flex items-center justify-center text-[10px] font-extrabold leading-none text-center">
-                                                                {room.unread_count}
-                                                            </span>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                            className="w-5 h-5 shrink-0 hover:bg-slate-200/60 dark:hover:bg-[#30363d] rounded transition-all cursor-pointer border-none bg-transparent flex items-center justify-center text-[#0550ae] dark:text-[#58a6ff]"
-                                                            title="Unpin Chat"
-                                                        >
-                                                            <Pin size={12} className="fill-current" />
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {room.unread_count > 0 && !isSelected ? (
-                                                            <>
-                                                                <span className="w-5 h-5 shrink-0 bg-[#7dd3fc] dark:bg-[#238636] text-[#0550ae] dark:text-white rounded-full flex items-center justify-center text-[10px] font-extrabold leading-none text-center group-hover:hidden">
-                                                                    {room.unread_count}
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                                    className="w-5 h-5 shrink-0 hover:bg-slate-200/60 dark:hover:bg-[#30363d] rounded transition-all cursor-pointer border-none bg-transparent hidden group-hover:flex items-center justify-center text-slate-400 dark:text-slate-500"
-                                                                    title="Pin Chat"
-                                                                >
-                                                                    <Pin size={12} />
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => togglePinRoom(e, room.room_id)}
-                                                                className="w-5 h-5 shrink-0 hover:bg-slate-200/60 dark:hover:bg-[#30363d] rounded transition-all cursor-pointer border-none bg-transparent flex items-center justify-center text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100"
-                                                                title="Pin Chat"
-                                                            >
-                                                                <Pin size={12} />
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => togglePinRoom(e, room.room_id)}
+                                                className={`p-1 hover:bg-slate-200/60 dark:hover:bg-[#30363d] rounded transition-all cursor-pointer border-none bg-transparent flex items-center justify-center ${
+                                                    pinnedRoomIds.includes(room.room_id) 
+                                                    ? 'text-[#0550ae] dark:text-[#58a6ff] opacity-100' 
+                                                    : 'text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                                title={pinnedRoomIds.includes(room.room_id) ? "Unpin Chat" : "Pin Chat"}
+                                            >
+                                                <Pin size={12} className={pinnedRoomIds.includes(room.room_id) ? "fill-current" : ""} />
+                                            </button>
                                         </div>
                                     </button>
                                 );
@@ -1425,6 +1384,7 @@ const ChatPage = () => {
                                                                                                         >
                                                                                                             <Paperclip size={10} className="shrink-0" />
                                                                                                             <span className="truncate flex-1 font-semibold">{att.name}</span>
+                                                                                                            <Download size={10} className="shrink-0" />
                                                                                                         </a>
                                                                                                     ))}
                                                                                                 </div>
@@ -1525,53 +1485,41 @@ const ChatPage = () => {
                                                                             )}
  
                                                                             {msg.attachment && (
-                                                                                (() => {
-                                                                                    const isImage = msg.attachment.type?.startsWith('image/') || 
-                                                                                                    /\.(png|jpe?g|gif|webp|bmp)$/i.test(msg.attachment.name || msg.attachment.url || '');
-                                                                                    return isImage ? (
-                                                                                        /* WhatsApp-style full image preview */
-                                                                                        <a
-                                                                                            href={msg.attachment.url}
-                                                                                            target="_blank"
-                                                                                            rel="noopener noreferrer"
-                                                                                            className="mt-2 block relative group overflow-hidden rounded-md border border-white/10"
-                                                                                        >
-                                                                                            <img
-                                                                                                src={msg.attachment.url}
-                                                                                                alt={msg.attachment.name}
-                                                                                                className="w-full max-w-[300px] max-h-[300px] object-cover transition-transform group-hover:scale-[1.02]"
-                                                                                            />
-                                                                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-all flex items-center justify-center">
-                                                                                                <Eye size={20} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-opacity" />
-                                                                                            </div>
-                                                                                            <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                                <span className="text-white text-[9px] font-bold truncate block">{msg.attachment.name}</span>
-                                                                                            </div>
-                                                                                        </a>
-                                                                                    ) : (
-                                                                                        /* Document chip */
-                                                                                        <a 
-                                                                                            href={msg.attachment.url}
-                                                                                            target="_blank"
-                                                                                            rel="noopener noreferrer"
-                                                                                            className={`mt-2 mb-1 p-2 rounded-md border flex items-center justify-between gap-3 min-w-[200px] max-w-sm transition-all hover:opacity-90 hover:shadow-sm cursor-pointer ${
-                                                                                                isSelf 
-                                                                                                ? 'bg-[#bae6fd]/30 dark:bg-[#21262d] border-[#7dd3fc]/30 dark:border-[#30363d] text-[#0550ae] dark:text-[#f0f6fc]' 
-                                                                                                : 'bg-[#f6f8fa] dark:bg-[#161b22] border-[#d0d7de] dark:border-[#30363d] text-[#24292f] dark:text-[#c9d1d9]'
-                                                                                            }`}
-                                                                                        >
-                                                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                                                <FileText size={24} className="text-[#0550ae] dark:text-[#58a6ff] shrink-0" />
-                                                                                                <div className="truncate">
-                                                                                                    <span className="text-[11px] font-bold block truncate">{msg.attachment.name}</span>
-                                                                                                    <span className={`text-[9px] font-semibold uppercase ${isSelf ? 'text-[#0550ae]/70 dark:text-[#8b949e]' : 'text-[#57606a] dark:text-[#8b949e]'}`}>
-                                                                                                        {formatFileSize(msg.attachment.size)}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </a>
-                                                                                    );
-                                                                                })()
+                                                                                <div className={`mt-2 mb-1 p-2 rounded-md border flex items-center justify-between gap-3 min-w-[200px] max-w-sm ${
+                                                                                    isSelf 
+                                                                                    ? 'bg-[#bae6fd]/30 dark:bg-[#21262d] border-[#7dd3fc]/30 dark:border-[#30363d] text-[#0550ae] dark:text-[#f0f6fc]' 
+                                                                                    : 'bg-[#f6f8fa] dark:bg-[#161b22] border-[#d0d7de] dark:border-[#30363d] text-[#24292f] dark:text-[#c9d1d9]'
+                                                                                }`}>
+                                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                                        {msg.attachment.type.startsWith('image/') ? (
+                                                                                            <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer" className="shrink-0 relative group overflow-hidden rounded-md border border-white/10">
+                                                                                                <img src={msg.attachment.url} alt={msg.attachment.name} className="w-12 h-12 object-cover transition-transform group-hover:scale-110" />
+                                                                                            </a>
+                                                                                        ) : (
+                                                                                            <FileText size={24} className={isSelf ? 'text-[#0550ae] dark:text-[#58a6ff] shrink-0' : 'text-[#0550ae] dark:text-[#58a6ff] shrink-0'} />
+                                                                                        )}
+                                                                                        <div className="truncate">
+                                                                                            <span className="text-[11px] font-bold block truncate">{msg.attachment.name}</span>
+                                                                                            <span className={`text-[9px] font-semibold uppercase ${isSelf ? 'text-[#0550ae]/70 dark:text-[#8b949e]' : 'text-[#57606a] dark:text-[#8b949e]'}`}>
+                                                                                                {formatFileSize(msg.attachment.size)}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <a 
+                                                                                        href={msg.attachment.url} 
+                                                                                        target="_blank" 
+                                                                                        rel="noopener noreferrer"
+                                                                                        download={msg.attachment.name}
+                                                                                        className={`p-1.5 rounded-md border transition-all ${
+                                                                                            isSelf 
+                                                                                            ? 'bg-[#bae6fd] dark:bg-[#30363d] border-[#7dd3fc]/30 dark:border-[#8b949e]/30 text-[#0550ae] dark:text-[#c9d1d9] hover:bg-[#bde0fe] dark:hover:bg-[#21262d]' 
+                                                                                            : 'bg-white dark:bg-[#21262d] border-[#d0d7de] dark:border-[#30363d] text-[#57606a] dark:text-[#8b949e] hover:bg-[#eaeef2] dark:hover:bg-[#30363d]'
+                                                                                        }`}
+                                                                                        title="Download File"
+                                                                                    >
+                                                                                        <Download size={14} />
+                                                                                    </a>
+                                                                                </div>
                                                                             )}
                                                                         </>
                                                                     )}
@@ -1662,11 +1610,7 @@ const ChatPage = () => {
                                         {pendingAttachment && (
                                             <div className="px-3 py-2 bg-[#f0f9ff] dark:bg-[#388bfd]/10 border border-[#7dd3fc]/40 dark:border-[#388bfd]/30 rounded-md flex items-center justify-between gap-3 mb-3 animate-in fade-in slide-in-from-bottom-2">
                                                 <div className="flex items-center gap-2.5 min-w-0">
-                                                    {pendingAttachment.type?.startsWith('image/') ? (
-                                                        <img src={pendingAttachment.url} alt={pendingAttachment.name} className="w-9 h-9 rounded-md object-cover border border-[#7dd3fc]/40 shrink-0" />
-                                                    ) : (
-                                                        <FileText size={18} className="text-[#0550ae] dark:text-[#58a6ff] shrink-0" />
-                                                    )}
+                                                    <FileText size={18} className="text-[#0550ae] dark:text-[#58a6ff] shrink-0" />
                                                     <div className="truncate">
                                                         <span className="text-xs font-bold text-[#24292f] dark:text-[#c9d1d9] block truncate">{pendingAttachment.name}</span>
                                                         <span className="text-[9px] text-[#0550ae] dark:text-[#8b949e] font-semibold uppercase">{formatFileSize(pendingAttachment.size)}</span>
