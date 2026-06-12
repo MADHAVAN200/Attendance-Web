@@ -3,7 +3,7 @@ import multer from 'multer';
 import { authenticateJWT, requireActiveOrg } from '../../middleware/auth.js';
 import ensureAdmin from '../../middleware/ensureAdmin.js';
 import { attendanceDB } from '../../config/database.js';
-import { uploadFile, getFileUrl, deleteFile } from '../../services/s3/s3Service.js';
+import { uploadFile, getFileUrl, deleteFile, getFileStream } from '../../services/s3/s3Service.js';
 
 const router = express.Router();
 const upload = multer({
@@ -270,12 +270,38 @@ router.get('/document-url/:id', async (req, res) => {
         const { url } = await getFileUrl({
             key: doc.file_key,
             expiresIn: 3600,
-            filename: doc.file_name
+            filename: doc.file_name,
+            inline: true
         });
 
         res.json({ success: true, url });
     } catch (error) {
         console.error("Error generating signed download URL:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// GET /api/employee/onboarding/document-content/:id
+router.get('/document-content/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const doc = await attendanceDB('employee_uploaded_documents')
+            .where({ id })
+            .first();
+
+        if (!doc) {
+            return res.status(404).json({ success: false, message: "Document record not found" });
+        }
+
+        const stream = await getFileStream(doc.file_key);
+        
+        res.setHeader('Content-Type', doc.file_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name}"`);
+        
+        stream.pipe(res);
+    } catch (error) {
+        console.error("Error streaming onboarding document content:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

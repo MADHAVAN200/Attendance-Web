@@ -51,14 +51,14 @@ export async function uploadFile({ fileBuffer, filePath, key, directory = "", co
 }
 
 // 2. Get Signed URL to Fetch File
-export async function getFileUrl({ key, directory = "", expiresIn = 3600, filename = "" }) {
+export async function getFileUrl({ key, directory = "", expiresIn = 3600, filename = "", inline = false }) {
   try {
     const finalKey = directory ? `${directory}/${key}` : key;
 
     const cmd = new GetObjectCommand({
       Bucket: BUCKET,
       Key: finalKey,
-      ResponseContentDisposition: filename ? `attachment; filename="${filename}"` : undefined,
+      ResponseContentDisposition: filename ? (inline ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`) : undefined,
     });
 
     const url = await getSignedUrl(s3, cmd, { expiresIn });
@@ -145,4 +145,18 @@ export async function uploadCompressedImage({
   }
 }
 
-
+// 6. Get File Stream
+export async function getFileStream(key, directory = "") {
+  try {
+    const finalKey = directory ? `${directory}/${key}` : key;
+    const cmd = new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: finalKey,
+    });
+    const response = await s3.send(cmd);
+    return response.Body;
+  } catch (error) {
+    console.error("S3 Stream Error:", error);
+    throw error;
+  }
+}
