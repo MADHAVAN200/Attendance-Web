@@ -44,6 +44,8 @@ import EmployeeMaster from "./pages/employees/EmployeeMaster";
 import DocumentGenerator from "./pages/documents/DocumentGenerator";
 import Documentation from "./pages/documentation/Documentation";
 import EmployeeUnifiedMaster from "./pages/employees/EmployeeUnifiedMaster";
+import MyPerformance from "./pages/performance/MyPerformance";
+import MyPerformanceMobile from "./pages/performance/MyPerformance-mv";
 
 // Organization Pages Imports
 
@@ -304,6 +306,7 @@ function App() {
               <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
               <Route path="/collaboration" element={<ResponsiveRoute DesktopComponent={ChatPage} MobileComponent={MobileChatPage} />} />
               <Route path="/documentation" element={<Documentation />} />
+              <Route path="/performance" element={<ResponsiveRoute DesktopComponent={MyPerformance} MobileComponent={MyPerformanceMobile} />} />
 
               {/* Mobile-Only Pages fallback */}
               <Route path="/notifications" element={<MobileNotifications />} />

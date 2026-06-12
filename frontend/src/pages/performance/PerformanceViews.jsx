@@ -241,7 +241,7 @@ export const PerformanceHub = ({ employee, selectedCycleId }) => {
                 <div className="lg:col-span-8 space-y-4">
                     
                     {/* Goal Assignment Matrix */}
-                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-205 dark:border-github-dark-border rounded-xl p-4 space-y-4">
+                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
                         <div className="border-b border-slate-100 dark:border-github-dark-border pb-3 flex-wrap gap-2">
                             <h5 className="font-bold text-slate-800 dark:text-github-dark-text">Assigned Performance Goals</h5>
                             <p className="text-[10px] text-slate-400 mt-0.5">Establish targets, check completion status, and rate execution.</p>
@@ -255,7 +255,7 @@ export const PerformanceHub = ({ employee, selectedCycleId }) => {
                                         <div key={goal.id} className="p-4 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50/50 dark:bg-github-dark-subtle/5 space-y-3">
                                             <div className="flex justify-between items-start gap-4">
                                                 <div className="space-y-1.5 flex-1">
-                                                    <span className="font-bold text-slate-850 dark:text-github-dark-text text-[13px] block">{goal.title}</span>
+                                                    <span className="font-bold text-slate-800 dark:text-github-dark-text text-[13px] block">{goal.title}</span>
                                                     <div className="text-[10px] text-slate-400 flex items-center gap-3 font-mono">
                                                         <span>Due: {goal.deadline}</span>
                                                         <span>•</span>
@@ -303,10 +303,10 @@ export const PerformanceHub = ({ employee, selectedCycleId }) => {
 
                                             {/* Rating and comments output */}
                                             {goal.rating > 0 && !isEditing && (
-                                                <div className="p-3 bg-white dark:bg-dark-card border border-slate-150 dark:border-github-dark-border rounded-xl space-y-2">
+                                                <div className="p-3 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl space-y-2">
                                                     <div className="flex justify-between items-center text-[10px]">
-                                                        <span className="text-slate-450 uppercase font-black tracking-wider block">Goal Score</span>
-                                                        <span className="font-bold text-indigo-650 dark:text-indigo-400 flex items-center gap-0.5"><Star size={11} fill="currentColor" /> {goal.rating} / 10</span>
+                                                        <span className="text-slate-455 uppercase font-black tracking-wider block">Goal Score</span>
+                                                        <span className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5"><Star size={11} fill="currentColor" /> {goal.rating} / 10</span>
                                                     </div>
                                                     {goal.comments && (
                                                         <p className="text-slate-600 dark:text-slate-350 leading-relaxed font-semibold italic text-[11px]">
@@ -318,14 +318,14 @@ export const PerformanceHub = ({ employee, selectedCycleId }) => {
 
                                             {/* Interactive editing review panel */}
                                             {isEditing && (
-                                                <div className="p-3 bg-white dark:bg-dark-card border border-indigo-150 dark:border-indigo-950/40 rounded-xl space-y-3 shadow-inner">
+                                                <div className="p-3 bg-white dark:bg-dark-card border border-indigo-200 dark:border-indigo-950/40 rounded-xl space-y-3 shadow-inner">
                                                     <div className="grid grid-cols-2 gap-3">
                                                         <div className="space-y-1">
                                                             <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider block">Goal Score (1-10)</label>
                                                             <select
                                                                 value={goalRatingInput}
                                                                 onChange={(e) => setGoalRatingInput(e.target.value)}
-                                                                className="w-full px-2 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-250 dark:border-github-dark-border rounded focus:outline-none"
+                                                                className="w-full px-2 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded focus:outline-none"
                                                             >
                                                                 {[...Array(10)].map((_, i) => (
                                                                     <option key={i+1} value={i+1}>{i+1} / 10</option>
@@ -718,7 +718,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
     return (
         <div className="space-y-6 text-xs select-none">
             {/* Analyzer Controls Card */}
-            <div className="bg-slate-50/50 dark:bg-[#161b22]/30 border border-slate-205 dark:border-github-dark-border rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="bg-slate-50/50 dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl p-5 space-y-4 shadow-sm">
                 <div className="flex items-center justify-between">
                     <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-sm flex items-center gap-2">
                         <Sparkles size={16} className="text-indigo-550 dark:text-indigo-400" />
@@ -738,7 +738,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                                 <span className="text-slate-700 dark:text-slate-350">Appraisal Engine Audits in Progress</span>
                                 <span className="text-indigo-600 dark:text-indigo-400">{auditStep * 25}%</span>
                             </div>
-                            <div className="w-full bg-slate-200 dark:bg-slate-850 h-2 rounded-full overflow-hidden">
+                            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                                 <div 
                                     className="bg-indigo-600 dark:bg-indigo-400 h-full transition-all duration-300"
                                     style={{ width: `${auditStep * 25}%` }}
@@ -780,11 +780,11 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                 <motion.div
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white dark:bg-[#0d1117] border border-slate-205 dark:border-github-dark-border rounded-xl p-5 space-y-5 shadow-sm"
+                    className="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-github-dark-border rounded-xl p-5 space-y-5 shadow-sm"
                 >
                     {/* Visual Appraisal Dial & Rating Header */}
                     <div className="flex flex-col md:flex-row gap-5 items-stretch border-b border-slate-100 dark:border-github-dark-border pb-4">
-                        <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-github-dark-subtle/10 border border-slate-150 dark:border-github-dark-border/60 rounded-xl p-4 md:w-1/3 min-w-[160px] text-center">
+                        <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border/60 rounded-xl p-4 md:w-1/3 min-w-[160px] text-center">
                             <span className="text-[10px] text-slate-450 dark:text-github-dark-muted font-bold uppercase tracking-wider">Appraisal Index</span>
                             
                             {/* Dial Visual Circle */}
@@ -885,7 +885,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                             </div>
                             <div className="mt-3 space-y-1.5">
                                 <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div className="bg-indigo-650 dark:bg-indigo-400 h-full" style={{ width: `${aiResult.kpis.completionRate}%` }}></div>
+                                    <div className="bg-indigo-600 dark:bg-indigo-400 h-full" style={{ width: `${aiResult.kpis.completionRate}%` }}></div>
                                 </div>
                                 <div className="flex justify-between items-center text-[9px] font-mono text-slate-450 dark:text-github-dark-muted font-semibold">
                                     <span>Completed {aiResult.kpis.completed} of {aiResult.kpis.total}</span>
@@ -899,7 +899,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                             <div>
                                 <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 mb-2.5">
                                     <Award size={14} className="text-blue-500" />
-                                    <span>Evaluation Alignment</span>
+                                    <span><span>Evaluation Alignment</span></span>
                                 </div>
                                 <div className="flex items-baseline gap-1">
                                     <span className={`text-xl font-black ${
@@ -922,10 +922,10 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                     {/* Strengths & Weaknesses SWOT grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="border border-emerald-100 dark:border-emerald-950/20 bg-emerald-500/[0.02] dark:bg-emerald-950/5 p-4 rounded-xl space-y-3">
-                            <span className="font-black text-emerald-650 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                            <span className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
                                 <CheckCircle2 size={13} /> Audited Key Strengths
                             </span>
-                            <ul className="text-slate-655 dark:text-slate-300 space-y-2.5">
+                            <ul className="text-slate-600 dark:text-slate-300 space-y-2.5">
                                 {aiResult.strengths.map((str, i) => (
                                     <li key={i} className="flex gap-2 items-start font-semibold">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5"></span>
@@ -936,10 +936,10 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                         </div>
 
                         <div className="border border-amber-100 dark:border-amber-950/20 bg-amber-500/[0.02] dark:bg-amber-950/5 p-4 rounded-xl space-y-3">
-                            <span className="font-black text-amber-650 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                            <span className="font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
                                 <AlertCircle size={13} /> Areas for Improvement
                             </span>
-                            <ul className="text-slate-655 dark:text-slate-300 space-y-2.5">
+                            <ul className="text-slate-600 dark:text-slate-300 space-y-2.5">
                                 {aiResult.improvements.map((imp, i) => (
                                     <li key={i} className="flex gap-2 items-start font-semibold">
                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
@@ -962,7 +962,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                         
                         <button
                             onClick={() => setShowReportCardModal(true)}
-                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm shadow-indigo-150 transition-all active:scale-97"
+                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm shadow-indigo-500/10 transition-all active:scale-97"
                         >
                             <Printer size={14} />
                             <span>View & Print Official Report Card</span>
@@ -977,7 +977,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                     <div className="bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-github-dark-border rounded-xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh]">
                         {/* Header */}
                         <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/10">
-                            <h4 className="font-black text-slate-850 dark:text-github-dark-text flex items-center gap-1.5 text-xs">
+                            <h4 className="font-black text-slate-800 dark:text-github-dark-text flex items-center gap-1.5 text-xs">
                                 <Award size={15} className="text-indigo-600" />
                                 Appraisal Report Card Preview
                             </h4>
@@ -1039,7 +1039,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                                     {/* Auditor Section */}
                                     <div className="space-y-3">
                                         <h4 className="font-black text-indigo-900 border-b border-indigo-100 pb-1 text-[10px] uppercase">AI Appraisal Executive Assessment</h4>
-                                        <p className="text-[10px] leading-relaxed text-slate-655 italic font-medium">
+                                        <p className="text-[10px] leading-relaxed text-slate-600 italic font-medium">
                                             "{aiResult.summary}"
                                         </p>
                                     </div>
@@ -1047,7 +1047,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                                     {/* SWOT summary */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1 bg-emerald-50/30 p-3 border border-emerald-100 rounded-xl">
-                                            <span className="text-[9px] font-black text-emerald-850 flex items-center gap-1 uppercase"><CheckCircle2 size={11} /> Audited Strengths</span>
+                                            <span className="text-[9px] font-black text-emerald-800 flex items-center gap-1 uppercase"><CheckCircle2 size={11} /> Audited Strengths</span>
                                             <ul className="text-[9px] text-slate-700 space-y-1 font-semibold">
                                                 {aiResult.strengths.slice(0, 2).map((str, i) => (
                                                     <li key={i} className="flex gap-1 items-start">
@@ -1058,7 +1058,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                                             </ul>
                                         </div>
                                         <div className="space-y-1 bg-amber-50/30 p-3 border border-amber-100 rounded-xl">
-                                            <span className="text-[9px] font-black text-amber-850 flex items-center gap-1 uppercase"><AlertCircle size={11} /> Improvements</span>
+                                            <span className="text-[9px] font-black text-amber-800 flex items-center gap-1 uppercase"><AlertCircle size={11} /> Improvements</span>
                                             <ul className="text-[9px] text-slate-700 space-y-1 font-semibold">
                                                 {aiResult.improvements.slice(0, 2).map((imp, i) => (
                                                     <li key={i} className="flex gap-1 items-start">
@@ -1099,7 +1099,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                             </button>
                             <button
                                 onClick={handlePrint}
-                                className="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm active:scale-97"
+                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm active:scale-97"
                             >
                                 <Printer size={14} />
                                 <span>Print / Save as PDF</span>
@@ -1115,12 +1115,14 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
 // =====================================================================
 // BACKWARD COMPATIBILITY EXPORTS
 // =====================================================================
-export const KpiGoalSheets = ({ employeeId, cycleId }) => {
-    const mockEmployee = { id: employeeId, department: 'General' };
-    return <PerformanceHub employee={mockEmployee} selectedCycleId={cycleId} />;
+export const KpiGoalSheets = ({ employeeId, cycleId, employee, selectedCycleId }) => {
+    const emp = employee || { id: employeeId, department: 'General' };
+    const cid = selectedCycleId || cycleId;
+    return <PerformanceHub employee={emp} selectedCycleId={cid} />;
 };
 
-export const ReviewsAndRatings = ({ employeeId, cycleId }) => {
-    const mockEmployee = { id: employeeId, department: 'General' };
-    return <PerformanceHub employee={mockEmployee} selectedCycleId={cycleId} />;
+export const ReviewsAndRatings = ({ employeeId, cycleId, employee, selectedCycleId }) => {
+    const emp = employee || { id: employeeId, department: 'General' };
+    const cid = selectedCycleId || cycleId;
+    return <PerformanceHub employee={emp} selectedCycleId={cid} />;
 };
